@@ -1,0 +1,36 @@
+[gd_scene load_steps=7 format=3 uid="uid://b8enmerg00001"]
+
+[ext_resource type="Script" path="res://scenes/enemies/RangedEnemy.gd" id="1_ranged"]
+[ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/components/SpriteRig.gd" id="3_rig"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Arrow.tscn" id="4_arrow"]
+[ext_resource type="PackedScene" path="res://scenes/effects/AimLaser.tscn" id="5_aimlaser"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_renemy"]
+radius = 0.224
+height = 0.84
+
+[node name="RangedEnemy" type="CharacterBody3D"]
+script = ExtResource("1_ranged")
+sprite_rig_path = NodePath("SpriteRig")
+arrow_scene = ExtResource("4_arrow")
+aim_laser_scene = ExtResource("5_aimlaser")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("CapsuleShape3D_renemy")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_hp = 1
+
+[node name="SpriteRig" type="Node3D" parent="."]
+script = ExtResource("3_rig")
+sprite_3d_path = NodePath("Sprite3D")
+fallback_color = Color(1, 0.75, 0.25, 1)
+
+[node name="Sprite3D" type="Sprite3D" parent="SpriteRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+pixel_size = 0.02
+billboard = 1
+texture_filter = 0

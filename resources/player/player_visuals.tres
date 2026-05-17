@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CharacterVisuals" load_steps=3 format=3 uid="uid://b8plrvis0001"]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterVisuals.gd" id="1_vis"]
+[ext_resource type="Texture2D" path="res://resources/player/PC.png" id="2_pc"]
+
+[resource]
+script = ExtResource("1_vis")
+idle = ExtResource("2_pc")
+pixel_size = 0.02
+placeholder_tint = Color(1, 1, 1, 1)
+flip_h_on_facing = true
+default_facing_right = false

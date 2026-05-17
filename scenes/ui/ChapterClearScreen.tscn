@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/ChapterClearScreen.gd" id="1_clear"]
+
+[node name="ChapterClearScreen" type="CanvasLayer"]
+script = ExtResource("1_clear")

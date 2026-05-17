@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://cjx2ieq4m3rfj"]
+
+[ext_resource type="Script" uid="uid://bk4vf4kuvqgyp" path="res://scripts/resources/EnemyData.gd" id="1_lv2"]
+
+[resource]
+script = ExtResource("1_lv2")
+max_hp = 2

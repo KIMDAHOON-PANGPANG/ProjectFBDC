@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/effects/BossSignal.gd" id="1_bsignal"]
+
+[node name="BossSignal" type="Node3D"]
+script = ExtResource("1_bsignal")

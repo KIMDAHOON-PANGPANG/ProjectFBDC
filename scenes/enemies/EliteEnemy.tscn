@@ -1,0 +1,47 @@
+[gd_scene load_steps=7 format=3 uid="uid://b8elite00001"]
+
+[ext_resource type="Script" path="res://scenes/enemies/EliteEnemy.gd" id="1_elite"]
+[ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_elite"]
+size = Vector3(0.63, 1.05, 0.63)
+
+[sub_resource type="BoxMesh" id="BoxMesh_elite"]
+size = Vector3(0.9, 1.5, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_elite"]
+shading_mode = 0
+albedo_color = Color(0.45, 0.25, 0.7, 1)
+roughness = 0.9
+
+[node name="EliteEnemy" type="CharacterBody3D"]
+script = ExtResource("1_elite")
+number_label_path = NodePath("NumberLabel")
+mesh_path = NodePath("Visual")
+effect_type = 1
+max_hp = 3
+telegraph_scene = ExtResource("3_fantel")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("BoxShape3D_elite")
+
+[node name="Visual" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+mesh = SubResource("BoxMesh_elite")
+surface_material_override/0 = SubResource("StandardMaterial3D_elite")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_hp = 3
+
+[node name="NumberLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.95, 0)
+billboard = 1
+pixel_size = 0.012
+text = "1"
+font_size = 96
+outline_size = 12
+outline_modulate = Color(0, 0, 0, 1)
+modulate = Color(1, 0.7, 0.2, 1)

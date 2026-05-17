@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://bsx2g2b0qghh6"]
+
+[ext_resource type="Script" uid="uid://iejgvc1glra5" path="res://scenes/main/Testplay.gd" id="1_testplay"]
+[ext_resource type="PackedScene" uid="uid://b8plr000001" path="res://scenes/player/Player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://b8enmem00001" path="res://scenes/enemies/MeleeEnemy.tscn" id="3_melee"]
+[ext_resource type="PackedScene" uid="uid://b8elite00001" path="res://scenes/enemies/EliteEnemy.tscn" id="4_elite"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss.tscn" id="5_boss"]
+[ext_resource type="PackedScene" uid="uid://b8hd2dcam0001" path="res://scenes/main/HD2DCamera.tscn" id="6_cam"]
+[ext_resource type="PackedScene" uid="uid://bo0wkpp4fk441" path="res://scenes/effects/ExplosionBurst.tscn" id="7_burst"]
+[ext_resource type="PackedScene" uid="uid://b8cslash00001" path="res://scenes/effects/CircularSlash.tscn" id="8_cslash"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ExpBar.tscn" id="9_expbar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/LevelUpScreen.tscn" id="10_lvlup"]
+
+[node name="Testplay" type="Node3D" unique_id=350878978]
+script = ExtResource("1_testplay")
+player_scene = ExtResource("2_player")
+melee_enemy_scene = ExtResource("3_melee")
+elite_enemy_scene = ExtResource("4_elite")
+boss_scene = ExtResource("5_boss")
+camera_scene = ExtResource("6_cam")
+explosion_burst_scene = ExtResource("7_burst")
+circular_slash_scene = ExtResource("8_cslash")
+exp_bar_scene = ExtResource("9_expbar")
+level_up_screen_scene = ExtResource("10_lvlup")

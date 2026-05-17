@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8aim4rrow0001"]
+
+[ext_resource type="Script" path="res://scenes/ui/AimArrow.gd" id="1_aimarw"]
+
+[node name="AimArrow" type="Node3D"]
+script = ExtResource("1_aimarw")

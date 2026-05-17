@@ -1,0 +1,34 @@
+[gd_scene load_steps=6 format=3 uid="uid://b8enmem00001"]
+
+[ext_resource type="Script" path="res://scenes/enemies/MeleeEnemy.gd" id="1_melee"]
+[ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/components/SpriteRig.gd" id="3_rig"]
+[ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="4_fantel"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
+radius = 0.224
+height = 0.84
+
+[node name="MeleeEnemy" type="CharacterBody3D"]
+script = ExtResource("1_melee")
+sprite_rig_path = NodePath("SpriteRig")
+telegraph_scene = ExtResource("4_fantel")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("CapsuleShape3D_enemy")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_hp = 1
+
+[node name="SpriteRig" type="Node3D" parent="."]
+script = ExtResource("3_rig")
+sprite_3d_path = NodePath("Sprite3D")
+fallback_color = Color(1, 0.45, 0.4, 1)
+
+[node name="Sprite3D" type="Sprite3D" parent="SpriteRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+pixel_size = 0.02
+billboard = 1
+texture_filter = 0

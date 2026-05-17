@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8explode00001"]
+
+[ext_resource type="Script" path="res://scenes/effects/ExplosionBurst.gd" id="1_burst"]
+
+[node name="ExplosionBurst" type="Area3D"]
+script = ExtResource("1_burst")

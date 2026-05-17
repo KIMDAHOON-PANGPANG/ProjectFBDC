@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/effects/AimLaser.gd" id="1_aimlaser"]
+
+[node name="AimLaser" type="Node3D"]
+script = ExtResource("1_aimlaser")

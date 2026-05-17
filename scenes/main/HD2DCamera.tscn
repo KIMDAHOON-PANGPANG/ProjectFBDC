@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8hd2dcam0001"]
+
+[ext_resource type="Script" path="res://scenes/main/HD2DCamera.gd" id="1_hd2dcam"]
+
+[node name="HD2DCamera" type="Node3D"]
+script = ExtResource("1_hd2dcam")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+fov = 38.0
