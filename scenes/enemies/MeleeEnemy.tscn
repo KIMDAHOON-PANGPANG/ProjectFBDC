@@ -10,6 +10,7 @@ radius = 0.224
 height = 0.84
 
 [node name="MeleeEnemy" type="CharacterBody3D"]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
 script = ExtResource("1_melee")
 sprite_rig_path = NodePath("SpriteRig")
 telegraph_scene = ExtResource("4_fantel")

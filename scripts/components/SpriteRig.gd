@@ -27,7 +27,15 @@ func _ready() -> void:
 		_sprite = get_node(sprite_3d_path) as Sprite3D
 	if _sprite == null:
 		return
-	_sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	# BILLBOARD_ENABLED (full billboard) instead of FIXED_Y: with the HD-2D
+	# camera pitched ~49° down, FIXED_Y leaves sprites as world-vertical planes
+	# that get visually compressed by cos(pitch) ≈ 0.66× in height. For art
+	# drawn upright (PC) that still reads OK; for art drawn in a horizontal
+	# pose (PoisonSkeleton lunge) the compression makes it look like a flat
+	# decal on the ground — a "too top-down" feel. ENABLED keeps the sprite's
+	# plane parallel to the camera plane so the pixel art is always shown at
+	# its native aspect, restoring the quarter-view HD-2D presence.
+	_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_sprite.shaded = false
 	# Why transparent=true here: opaque + ALPHA_CUT_DISCARD is cheaper, but on
 	# d3d12 backends some imported pixel-art textures end up rendering their

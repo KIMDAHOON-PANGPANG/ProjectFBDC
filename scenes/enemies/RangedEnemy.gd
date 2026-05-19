@@ -11,6 +11,8 @@ extends CharacterBody3D
 @export var aim_laser_scene: PackedScene
 @export var aim_lock_duration: float = 1.0
 
+const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/ranged_visuals.tres")
+
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
 ## Mob level — for EXP awarding parity with MeleeEnemy.
@@ -29,8 +31,7 @@ func _ready() -> void:
 		data = EnemyData.new()
 		data.type = EnemyData.EnemyType.RANGED
 	if data.visuals == null:
-		data.visuals = CharacterVisuals.new()
-		data.visuals.placeholder_tint = Color(1.0, 0.75, 0.25)
+		data.visuals = DEFAULT_VISUALS
 
 	add_to_group("enemies")
 	collision_layer = 1 << 2  # Enemy
