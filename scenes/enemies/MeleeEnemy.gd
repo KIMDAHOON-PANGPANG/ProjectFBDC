@@ -22,6 +22,8 @@ extends CharacterBody3D
 ## Shared FanTelegraph PackedScene wired in MeleeEnemy.tscn.
 @export var telegraph_scene: PackedScene
 
+const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/melee_visuals.tres")
+
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
 ## Mob level. WaveManager bumps this to 2 past the 1:00 mark; EXP system
@@ -45,8 +47,7 @@ func _ready() -> void:
 		data = EnemyData.new()
 		data.type = EnemyData.EnemyType.MELEE
 	if data.visuals == null:
-		data.visuals = CharacterVisuals.new()
-		data.visuals.placeholder_tint = Color(1.0, 0.45, 0.4)
+		data.visuals = DEFAULT_VISUALS
 
 	add_to_group("enemies")
 	# Opt-in to the melee category — FanTelegraph attacks live here.

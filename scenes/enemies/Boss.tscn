@@ -20,6 +20,7 @@ emission_energy_multiplier = 0.3
 roughness = 0.9
 
 [node name="Boss" type="CharacterBody3D"]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
 script = ExtResource("1_boss")
 number_label_path = NodePath("HPLabel")
 mesh_path = NodePath("Visual")
