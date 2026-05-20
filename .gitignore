@@ -19,5 +19,7 @@ mono_crash.*.json
 # Build artifacts (too large for GitHub, regeneratable)
 build/
 
-# Claude Code local state
-.claude/
+# Claude Code local state (skills 디렉토리는 프로젝트와 함께 트래킹)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
