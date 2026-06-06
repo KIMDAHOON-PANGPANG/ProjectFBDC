@@ -37,6 +37,14 @@ extends Resource
 @export var max_spawn_per_tick: int = 4
 ## Probability a single drip-spawn is a ranged mob (≈1/6 → 5:1 melee:ranged).
 @export var ranged_ratio: float = 0.16
+## 원거리 몹이 등장하기 시작하는 경과 시간(초). 이 시간 전의 드립 스폰은 전부
+## 근접(WaveManager.ranged_ratio() 가 0 반환). 0 = 처음부터(게이트 없음).
+## 요청: 2분대 웨이브부터 원거리 → 120.0.
+@export var ranged_start_time: float = 0.0
+## 리퍼(리프 전용 몹) 드립 스폰 확률(0~1). 0 = 미등장. 요청: ≈0.1.
+@export var leaper_ratio: float = 0.0
+## 리퍼가 등장하기 시작하는 경과 시간(초). 요청: 1분대 웨이브부터 → 60.0.
+@export var leaper_start_time: float = 0.0
 
 
 ## Defensive lookup — caller passes elapsed time, gets back the active

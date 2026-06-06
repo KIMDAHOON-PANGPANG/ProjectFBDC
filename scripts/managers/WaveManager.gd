@@ -113,7 +113,19 @@ func current_lv() -> int:
 func ranged_ratio() -> float:
 	if curve == null:
 		return 0.16
+	# 원거리 등장 게이트 — ranged_start_time 전에는 0(전부 근접). 요청: 2분대부터.
+	if _elapsed < curve.ranged_start_time:
+		return 0.0
 	return curve.ranged_ratio
+
+
+## 리퍼(리프 전용 몹) 드립 비율 — leaper_start_time 전에는 0. 요청: 1분대부터 ≈10%.
+func leaper_ratio() -> float:
+	if curve == null:
+		return 0.0
+	if _elapsed < curve.leaper_start_time:
+		return 0.0
+	return curve.leaper_ratio
 
 
 ## Test/debug helper: jump the clock forward. Resets the one-shot guards

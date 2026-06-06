@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_lv2")
-max_hp = 2
+max_hp = 3

@@ -10,6 +10,13 @@ extends CharacterBody3D
 @export var data: EnemyData
 @export var sprite_rig_path: NodePath
 
+## 행동 타입 — CHASER = 추적 후 근접(부채) 공격 전용. LEAPER = 리프(곡선 점프
+## + 빨간 원형 슬램) 전용. Leaper.tscn 이 LEAPER 로 설정해 베리에이션2 가 된다.
+enum Behavior { CHASER, LEAPER }
+@export var behavior: int = Behavior.CHASER
+## 비주얼 교체(리퍼 색 구분 등). null 이면 DEFAULT_VISUALS 사용.
+@export var visuals_override: CharacterVisuals
+
 ## Distance at which the enemy stops and begins the fan-swing telegraph.
 ## Sized a touch beyond the combined capsule radii so the wind-up
 ## triggers from a readable stand-off rather than from a body-mash.
@@ -21,6 +28,18 @@ extends CharacterBody3D
 @export var fan_angle_deg: float = 70.0
 ## Shared FanTelegraph PackedScene wired in MeleeEnemy.tscn.
 @export var telegraph_scene: PackedScene
+
+## ── 리프(내려찍기) 어택 ── 중거리에서 확률적으로 곡선 점프 후 슬램.
+## leap_chance / leap_radius / leap_damage 는 enemy.csv(근접몹)에서 조절.
+@export var leap_chance: float = 0.3
+@export var leap_range: float = 6.0
+@export var leap_radius: float = 2.2
+@export var leap_damage: int = 1
+@export var leap_duration: float = 0.7
+@export var leap_height: float = 2.6
+@export var leap_recheck: float = 0.6
+## 빨간 원형 데칼 텔레그래프(LeapTelegraph) — MeleeEnemy.tscn 에서 주입.
+@export var leap_telegraph_scene: PackedScene
 
 const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/melee_visuals.tres")
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
@@ -46,16 +65,24 @@ var _attack_cd: float = 0.0
 ## In-flight FanTelegraph ref (spawn-and-forget, but tracked so a
 ## preemptive kill can cancel it — ⏱ M3 후속). Cleared on telegraph done.
 var _active_telegraph: Node = null
+## 리프 상태 — true 동안 곡선 점프 중(추격/공격 잠금).
+var _leaping: bool = false
+var _leap_start: Vector3
+var _leap_end: Vector3
+var _leap_elapsed: float = 0.0
+var _active_leap_decal: Node = null
 
 func _ready() -> void:
 	if data == null:
 		data = EnemyData.new()
 		data.type = EnemyData.EnemyType.MELEE
-	if data.visuals == null:
+	if visuals_override != null:
+		data.visuals = visuals_override
+	elif data.visuals == null:
 		data.visuals = DEFAULT_VISUALS
 
-	# 데이터 관리 — enemy_combat.json(근접몹) 행동 파라미터 적용(HP 제외).
-	_CombatDataScript.apply_to_enemy(self, "melee")
+	# 데이터 관리 — 행동 타입에 맞는 CSV 행 적용 (melee=101 / leaper=104).
+	_CombatDataScript.apply_to_enemy(self, "leaper" if behavior == Behavior.LEAPER else "melee")
 
 	add_to_group("enemies")
 	# Opt-in to the melee category — FanTelegraph attacks live here.
@@ -84,6 +111,11 @@ func _physics_process(delta: float) -> void:
 	if _attack_cd > 0.0:
 		_attack_cd -= delta
 
+	# 리프 점프 중 — 곡선 이동만 처리(추격/공격 잠금).
+	if _leaping:
+		_update_leap(delta)
+		return
+
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
 		velocity = Vector3.ZERO
@@ -103,9 +135,19 @@ func _physics_process(delta: float) -> void:
 	to_player.y = 0.0
 	var dist := to_player.length()
 
-	if dist <= attack_range and _attack_cd <= 0.0:
-		_begin_telegraph(to_player)
-		return
+	# CHASER — 추적 후 근접(부채) 공격 전용.
+	if behavior == Behavior.CHASER:
+		if dist <= attack_range and _attack_cd <= 0.0:
+			_begin_telegraph(to_player)
+			return
+	# LEAPER — 리프(곡선 점프 + 빨간 원형 슬램) 전용. leap_range 안에서 확률 발동.
+	# 실패하면 leap_recheck 동안 재굴림을 막아 매 프레임 굴리지 않는다.
+	elif behavior == Behavior.LEAPER:
+		if leap_telegraph_scene != null and _attack_cd <= 0.0 and dist <= leap_range:
+			if randf() < leap_chance:
+				_begin_leap(to_player, dist)
+				return
+			_attack_cd = leap_recheck
 
 	# No detection_range gate — the mob always chases the PC regardless
 	# of distance, so the player can never "outrun" the swarm by sprinting
@@ -153,6 +195,45 @@ func _on_telegraph_done() -> void:
 	_attacking = false
 	_active_telegraph = null
 
+## 리프 시작 — 착지 지점에 빨간 원형 데칼을 깔고 곡선 점프를 건다.
+func _begin_leap(to_player_xz: Vector3, dist: float) -> void:
+	var dir := to_player_xz
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else Vector3(1, 0, 0)
+	var travel: float = min(dist, leap_range)
+	_leap_start = global_position
+	_leap_end = global_position + dir * travel
+	_leap_end.y = _leap_start.y
+	_leap_elapsed = 0.0
+	_leaping = true
+	# 점프 + 슬램 + 회복 동안 다음 공격 잠금.
+	_attack_cd = data.melee_attack_cooldown + leap_duration + 0.4
+	var decal = leap_telegraph_scene.instantiate()
+	get_tree().current_scene.add_child(decal)
+	if decal.has_method("configure"):
+		# windup = 점프 시간 → 데칼이 착지 순간에 슬램 데미지 판정.
+		decal.call("configure", _leap_end, leap_radius, leap_damage, leap_duration)
+	_active_leap_decal = decal
+	velocity = Vector3.ZERO
+	if _sprite_rig != null:
+		_sprite_rig.set_state(SpriteRig.State.ATTACK)
+		_sprite_rig.set_facing(dir.x)
+
+## 곡선 점프 진행 — 포물선(t=0.5 정점)으로 착지 지점까지. 슬램 데미지는 데칼이
+## 자기 windup 타이머로 착지 순간에 처리한다.
+func _update_leap(delta: float) -> void:
+	_leap_elapsed += delta
+	var t: float = clamp(_leap_elapsed / max(leap_duration, 0.0001), 0.0, 1.0)
+	var flat: Vector3 = _leap_start.lerp(_leap_end, t)
+	var h: float = leap_height * 4.0 * t * (1.0 - t)
+	global_position = Vector3(flat.x, _leap_start.y + h, flat.z)
+	if _sprite_rig != null:
+		_sprite_rig.set_state(SpriteRig.State.ATTACK)
+	if t >= 1.0:
+		global_position = _leap_end
+		_leaping = false
+		_active_leap_decal = null
+
 ## Called by SlashAttack when this enemy is inside its volume.
 ## 1 damage per slash so LV2 mobs (max_hp=2) take 2 hits, LV1 (max_hp=1) dies
 ## in one. WaveManager / spawn upgrades the EnemyData to bump max_hp.
@@ -169,8 +250,10 @@ func take_hit() -> void:
 			_active_telegraph.call("cancel")
 		_active_telegraph = null
 		_attacking = false
+	# 슬래시(PC)는 잡몹/리퍼를 한 방에 정리한다(시그니처 유지). 비도는 Kunai 가
+	# 자체 데미지로 HealthComponent 를 직접 깎으므로 이 경로와 무관.
 	if _health != null:
-		_health.take_damage(1)
+		_health.take_damage(999)
 	else:
 		_on_died()
 
@@ -178,6 +261,12 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# 리프 중 사망 — 펜딩 슬램 데칼 취소(유령 데미지 방지).
+	_leaping = false
+	if _active_leap_decal != null and is_instance_valid(_active_leap_decal) \
+			and _active_leap_decal.has_method("cancel"):
+		_active_leap_decal.call("cancel")
+	_active_leap_decal = null
 	# Stash the death position NOW — by the time tree_exited fires (where
 	# Main drops the EXP gem) the node is detaching and global_position
 	# reads as origin.

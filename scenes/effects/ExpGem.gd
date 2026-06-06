@@ -11,8 +11,10 @@ extends Node3D
 ## and ignoring them costs you. The PC's slash-dash sweeps gems up as a
 ## side effect of moving through the corpse pile, which feels great.
 
-@export var magnet_radius: float = 4.0
-@export var pickup_radius: float = 0.8
+# 자석 반경 축소(사용자 밸런스) — 사실상 붙어야 먹힘. 슬래시 대시로 젬 위를
+# 지나가며 줍는 플레이를 유도.
+@export var magnet_radius: float = 1.0
+@export var pickup_radius: float = 0.6
 @export var magnet_speed: float = 14.0
 ## Despawn if never collected so abandoned gems don't pile up forever.
 @export var lifetime: float = 30.0

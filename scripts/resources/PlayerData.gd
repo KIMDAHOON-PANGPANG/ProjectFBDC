@@ -31,12 +31,16 @@ extends Resource
 @export var slash_cooldown: float = 0.15
 
 @export_group("Evade Dash")
-## Distance covered by a Shift-dash, in world units.
-@export var evade_distance: float = 3.5
+## Distance covered by a Shift-dash, in world units. (CSV: evade_distance)
+@export var evade_distance: float = 2.5
 ## Time to traverse the dash distance (seconds).
 @export var evade_duration: float = 0.18
-## Cooldown between dashes (seconds).
-@export var evade_cooldown: float = 0.7
+## 연속 대시 사이 최소 간격(초) — 스택이 남아도 이만큼 텀을 둔다. (CSV: evade_cooldown)
+@export var evade_cooldown: float = 0.25
+## 회피 스택 수(연속으로 쓸 수 있는 대시 횟수). (CSV: evade_max_stacks)
+@export var evade_max_stacks: int = 2
+## 스택을 전부 소진하면 가득(=max) 차기까지 걸리는 시간(초). (CSV: evade_refill_time)
+@export var evade_refill_time: float = 5.0
 
 # ── 4안 — 비도(Kunai) 기본 공격 ──
 @export_group("Kunai (기본 공격)")
@@ -46,15 +50,21 @@ extends Resource
 @export var reload_time: float = 1.5
 ## Min interval between shots (sec).
 @export var fire_cooldown: float = 0.25
-## Damage per kunai (raised by the "예리한 비도" level-up).
-@export var kunai_damage: int = 1
-## Projectile speed (units/sec).
-@export var kunai_speed: float = 20.0
+## 수동 조준 비도 데미지 — 초반 밸런스 기준 잡몹(HP 2) 한 방. (CSV: kunai_damage)
+@export var kunai_damage: int = 2
+## 자동락온(SPACE ON) 비도 데미지 — 더 낮아 한 방에 안 죽음. (CSV: kunai_autoaim_damage)
+@export var kunai_autoaim_damage: int = 1
+## 자동락온 시 투사체 속도 배수(더 느림). (CSV: kunai_autoaim_speed_mult)
+@export var kunai_autoaim_speed_mult: float = 0.6
+## Projectile speed (units/sec). (CSV: kunai_speed)
+@export var kunai_speed: float = 6.5
 ## Kunai despawn time (sec).
-@export var kunai_lifetime: float = 1.5
+@export var kunai_lifetime: float = 2.0
 ## Auto-aim lock-on radius (units). SPACE toggles auto-aim; the nearest
 ## enemy inside this circle is targeted (ties broken randomly).
-@export var autoaim_radius: float = 12.0
+@export var autoaim_radius: float = 9.0
+## 이동 중 발사 시 탄도 분산 각도(±도). 멈춰서 쏘면 분산 없음. (CSV: kunai_move_spread_deg)
+@export var kunai_move_spread_deg: float = 8.0
 
 # ── 4안 — 일섬 게이지 ──
 @export_group("Slash Gauge (일섬)")

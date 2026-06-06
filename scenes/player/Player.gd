@@ -51,7 +51,12 @@ var _evade_dir: Vector3 = Vector3.ZERO
 var _evade_start: Vector3
 var _evade_end: Vector3
 var _evade_elapsed: float = 0.0
+## 연속 대시 사이 최소 간격 타이머(data.evade_cooldown).
 var _evade_cd: float = 0.0
+## 회피 스택 — _ready 에서 data.evade_max_stacks 로 채움. 대시마다 1 소비,
+## 전부(0) 소진되면 _evade_refill_t(=evade_refill_time) 후 한 번에 가득 찬다.
+var _evade_stacks: int = 2
+var _evade_refill_t: float = 0.0
 
 # Post-hit i-frame timer. While > 0, take_hit is suppressed. 4안 — 0.5s.
 # 값은 data.hit_iframe 으로 이관(CombatData/pc_combat.json 구동). iframe_bonus
@@ -175,6 +180,7 @@ func _ready() -> void:
 		_sprite_rig.set_visuals(data.visuals)
 
 	_ammo = data.max_ammo  # 4안 — start with a full magazine
+	_evade_stacks = data.evade_max_stacks  # 회피 스택 가득 시작
 
 	_health = get_node_or_null("HealthComponent") as HealthComponent
 	if _health != null:
@@ -195,6 +201,11 @@ func _physics_process(delta: float) -> void:
 	# slash / cooldown / etc.
 	if _evade_cd > 0.0:
 		_evade_cd -= delta
+	# 회피 스택 리필 — 전부 소진(0)일 때만 카운트, 다 차면 한 번에 max 로 복구.
+	if _evade_stacks <= 0 and _evade_refill_t > 0.0:
+		_evade_refill_t -= delta
+		if _evade_refill_t <= 0.0:
+			_evade_stacks = data.evade_max_stacks
 	if _iframe_t > 0.0:
 		_iframe_t -= delta
 	match _state:
@@ -485,6 +496,8 @@ func is_invincible() -> bool:
 func _check_evade_start() -> void:
 	if _evade_cd > 0.0:
 		return
+	if _evade_stacks <= 0:
+		return  # 스택 소진 — 리필 대기 중(차오르는 데 evade_refill_time 초)
 	if not Input.is_action_just_pressed("dash"):
 		return
 	# Direction priority: current WASD input, else last aim direction, else
@@ -504,6 +517,10 @@ func _check_evade_start() -> void:
 	_evade_end = global_position + dir * data.evade_distance
 	_evade_elapsed = 0.0
 	_evade_cd = data.evade_cooldown
+	# 스택 1 소비 — 전부 소진되면 리필 타이머 시작(가득 차기까지 refill_time 초).
+	_evade_stacks -= 1
+	if _evade_stacks <= 0:
+		_evade_refill_t = data.evade_refill_time
 	_perfect_dodge_fired = false  # ⏱ fresh evade — re-arm the perfect-dodge reward
 	_set_state(State.EVADING)
 	if _sprite_rig != null:
@@ -609,10 +626,19 @@ func _fire_kunai() -> void:
 		dir = _mouse_to_world_dir()
 	if dir.length() < 0.01:
 		dir = _aim_dir
+	dir = dir.normalized()
+	# 이동하면서 쏘면 탄도가 약간 튄다(멈춰서 쏘면 정확). 수평 속도로 이동 판정.
+	var moving: bool = Vector2(velocity.x, velocity.z).length() > 0.5
+	if moving and data.kunai_move_spread_deg > 0.0:
+		var spread := deg_to_rad(randf_range(-data.kunai_move_spread_deg, data.kunai_move_spread_deg))
+		dir = dir.rotated(Vector3.UP, spread)
 	_aim_dir = dir
+	# 자동락온(SPACE ON) = 데미지↓ + 속도↓(한 방에 안 죽음). 수동 = 풀 데미지(한 방).
+	var _kdmg: int = data.kunai_autoaim_damage if _autoaim else data.kunai_damage
+	var _kspd: float = data.kunai_speed * (data.kunai_autoaim_speed_mult if _autoaim else 1.0)
 	var kunai := kunai_scene.instantiate()
 	if kunai.has_method("configure"):
-		kunai.call("configure", dir, data.kunai_speed, data.kunai_damage, data.kunai_lifetime)
+		kunai.call("configure", dir, _kspd, _kdmg, data.kunai_lifetime)
 	get_tree().current_scene.add_child(kunai)
 	(kunai as Node3D).global_position = global_position + dir * 0.6
 	_ammo -= 1

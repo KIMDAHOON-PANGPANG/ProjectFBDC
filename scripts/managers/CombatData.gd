@@ -171,6 +171,7 @@ static func apply_to_enemy(enemy: Node, kind: String) -> void:
 		"melee": id = 101
 		"ranged": id = 102
 		"elite": id = 103
+		"leaper": id = 104
 		"boss": id = 200 + (int(enemy.boss_id) if "boss_id" in enemy else 1)
 		_: return
 	if not _enemy.has(id):
@@ -178,6 +179,7 @@ static func apply_to_enemy(enemy: Node, kind: String) -> void:
 	var row: Dictionary = _enemy[id]
 	match kind:
 		"melee": _apply_melee(enemy, row)
+		"leaper": _apply_melee(enemy, row)  # 리퍼도 동일 필드(이동/쿨/리프) 매핑
 		"ranged": _apply_ranged(enemy, row)
 		"elite": _apply_elite(enemy, row)
 		"boss": _apply_boss(enemy, row)
@@ -191,6 +193,13 @@ static func _apply_melee(e, row: Dictionary) -> void:
 	e.attack_damage = _ri(row, "attack_damage", e.attack_damage)
 	e.fan_radius = _rf(row, "fan_radius", e.fan_radius)
 	e.fan_angle_deg = _rf(row, "fan_angle_deg", e.fan_angle_deg)
+	# 리프(내려찍기) 어택 파라미터.
+	if "leap_chance" in e:
+		e.leap_chance = _rf(row, "leap_chance", e.leap_chance)
+	if "leap_radius" in e:
+		e.leap_radius = _rf(row, "leap_radius", e.leap_radius)
+	if "leap_damage" in e:
+		e.leap_damage = _ri(row, "leap_damage", e.leap_damage)
 	# max_hp 미적용 (WaveManager 레벨업이 관리).
 
 

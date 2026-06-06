@@ -7,7 +7,9 @@ extends Resource
 enum EnemyType { MELEE, RANGED }
 
 @export var type: EnemyType = EnemyType.MELEE
-@export var max_hp: int = 1
+## 잡몹 기본 HP. 2 = 수동 비도(2뎀) 한 방 / 자동락온 비도(1뎀) 두 방.
+## (슬래시는 잡몹을 항상 한 방에 정리 — MeleeEnemy.take_hit 치명타.)
+@export var max_hp: int = 2
 @export var move_speed: float = 2.5
 
 ## Distance at which the enemy starts engaging the player.

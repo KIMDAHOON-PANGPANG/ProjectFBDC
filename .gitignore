@@ -11,6 +11,9 @@ export_credentials.cfg
 # Imported translations (automatically generated from CSV files)
 *.translation
 
+# Office(엑셀) 임시 잠금 파일 — combat_table.xlsx 편집 중 생성
+~$*
+
 # Mono-specific ignores
 .mono/
 data_*/

@@ -21,12 +21,14 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="19_boss3"]
 [ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="20_expgem"]
 [ext_resource type="PackedScene" path="res://scenes/ui/AimCursor.tscn" id="21_aim"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Leaper.tscn" id="22_leaper"]
 
 [node name="Main" type="Node3D" unique_id=2118304026]
 script = ExtResource("1_main")
 player_scene = ExtResource("2_player")
 melee_enemy_scene = ExtResource("3_melee")
 ranged_enemy_scene = ExtResource("4_ranged")
+leaper_enemy_scene = ExtResource("22_leaper")
 elite_enemy_scene = ExtResource("6_elite")
 camera_scene = ExtResource("5_cam")
 explosion_burst_scene = ExtResource("7_burst")

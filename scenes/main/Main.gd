@@ -10,6 +10,8 @@ extends Node3D
 @export var player_scene: PackedScene
 @export var melee_enemy_scene: PackedScene
 @export var ranged_enemy_scene: PackedScene
+## 베리에이션2 — 리프(곡선 점프 슬램) 전용 근접몹. 1분대부터 ~10% 등장.
+@export var leaper_enemy_scene: PackedScene
 @export var elite_enemy_scene: PackedScene
 @export var camera_scene: PackedScene
 
@@ -678,12 +680,20 @@ func _build_chapter_systems() -> void:
 ## uses LV2 data once `lv >= 2`. Ranged mobs stay LV1 (no LV2 ranged
 ## data resource yet).
 func _request_spawn(lv: int) -> void:
-	var ratio: float = 0.16
-	if _wave_mgr != null and _wave_mgr.has_method("ranged_ratio"):
-		ratio = float(_wave_mgr.call("ranged_ratio"))
-	var spawn_ranged: bool = randf() < ratio
-	if spawn_ranged:
+	var rr: float = 0.0
+	var lr: float = 0.0
+	if _wave_mgr != null:
+		if _wave_mgr.has_method("ranged_ratio"):
+			rr = float(_wave_mgr.call("ranged_ratio"))
+		if _wave_mgr.has_method("leaper_ratio"):
+			lr = float(_wave_mgr.call("leaper_ratio"))
+	var roll: float = randf()
+	# 원거리(2분대~) → 리퍼(1분대~, ≈10%) → 일반 근접 순으로 확률 분배.
+	if roll < rr:
 		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
+		return
+	if leaper_enemy_scene != null and roll < rr + lr:
+		_spawn_one(leaper_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 		return
 	if lv >= 2:
 		_spawn_one_lv2(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
