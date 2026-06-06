@@ -12,6 +12,8 @@ extends CharacterBody3D
 @export var aim_lock_duration: float = 1.0
 
 const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/ranged_visuals.tres")
+## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
+const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -32,6 +34,9 @@ func _ready() -> void:
 		data.type = EnemyData.EnemyType.RANGED
 	if data.visuals == null:
 		data.visuals = DEFAULT_VISUALS
+
+	# 데이터 관리 — enemy_combat.json(원거리몹) 행동 파라미터 적용(HP 제외).
+	_CombatDataScript.apply_to_enemy(self, "ranged")
 
 	add_to_group("enemies")
 	collision_layer = 1 << 2  # Enemy

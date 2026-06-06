@@ -1010,6 +1010,17 @@ func _build_hud() -> void:
 	_hp_box.add_theme_constant_override("separation", 5)
 	vbox.add_child(_hp_box)
 
+	# 4안 — 장탄수(비도) 텍스트. `_refresh_ammo` 가 매 프레임 get_ammo()/
+	# get_max_ammo()/is_reloading() 로 갱신. 머리 위 ReloadBar3D(진행바)와
+	# 역할 분담(여긴 숫자, 저긴 리로드 진행). Testplay 에도 미러됨.
+	_ammo_label = Label.new()
+	_ammo_label.text = "비도: - / -"
+	_ammo_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_ammo_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_ammo_label.add_theme_constant_override("outline_size", 4)
+	_ammo_label.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(_ammo_label)
+
 	_kill_label = Label.new()
 	_kill_label.text = "Kills: 0"
 	_kill_label.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1082,7 +1093,23 @@ func _update_hud() -> void:
 		return
 	_kill_label.text = "Kills: %d" % _kill_count
 	_refresh_hp_cells()
+	_refresh_ammo()
 	_refresh_slash_gauge()
+
+## 장탄수(비도) 텍스트 갱신. 리로드 중이면 앰버색 "리로드 중…", 아니면 현재/최대
+## 탄약 수. Testplay 에도 동일 코드가 미러됨 (동기화 규칙).
+func _refresh_ammo() -> void:
+	if _ammo_label == null or not _player.has_method("get_ammo"):
+		return
+	var reloading: bool = _player.has_method("is_reloading") and bool(_player.call("is_reloading"))
+	if reloading:
+		_ammo_label.text = "비도: 리로드 중…"
+		_ammo_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.25))
+	else:
+		var ammo: int = int(_player.call("get_ammo"))
+		var maxa: int = int(_player.call("get_max_ammo")) if _player.has_method("get_max_ammo") else ammo
+		_ammo_label.text = "비도: %d / %d" % [ammo, maxa]
+		_ammo_label.add_theme_color_override("font_color", Color(1, 1, 1))
 
 ## 좌상단 칸 단위 HP 갱신. 칸 수가 바뀌면(메타 강건 등) 재구성하고, 현재 HP
 ## 만큼 빨강(_HP_FULL), 나머지는 어두운색(_HP_EMPTY)으로 칠한다. Testplay 에도

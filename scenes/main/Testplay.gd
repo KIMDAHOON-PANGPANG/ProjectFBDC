@@ -89,6 +89,8 @@ var _slash_gauge_label: Label
 # 좌상단 칸 단위 HP (Main HUD 미러).
 var _hp_box: HBoxContainer
 var _hp_cells: Array = []
+# 장탄수(비도) 텍스트 (Main HUD 미러).
+var _ammo_label: Label
 
 func _ready() -> void:
 	_warm_placeholder_cache()
@@ -113,6 +115,7 @@ func _process(_delta: float) -> void:
 		get_tree().reload_current_scene()
 		return
 	_refresh_hp_cells()
+	_refresh_ammo()
 	_refresh_slash_gauge()
 
 ## --- Procedural arena (mirrors Main; intentional duplication so this
@@ -529,11 +532,39 @@ func _build_help_label() -> void:
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	label.add_theme_constant_override("outline_size", 4)
 	label.add_theme_font_size_override("font_size", 16)
-	# HP 칸이 좌상단(20,16)을 차지하므로 도움말은 한 줄 아래로 내린다.
-	label.position = Vector2(20, 50)
+	# HP 칸(20,16) + 장탄수(20,46)이 좌상단을 차지하므로 도움말은 더 아래로.
+	label.position = Vector2(20, 72)
 	canvas.add_child(label)
 	_build_hp_cells(canvas)
+	_build_ammo_label(canvas)
 	_build_slash_gauge(canvas)
+
+## 장탄수(비도) 텍스트 (Main._build_hud 의 _ammo_label 미러).
+func _build_ammo_label(canvas: CanvasLayer) -> void:
+	_ammo_label = Label.new()
+	_ammo_label.text = "비도: - / -"
+	_ammo_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_ammo_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_ammo_label.add_theme_constant_override("outline_size", 4)
+	_ammo_label.add_theme_font_size_override("font_size", 16)
+	_ammo_label.position = Vector2(20, 46)
+	canvas.add_child(_ammo_label)
+
+## 장탄수 갱신 (Main._refresh_ammo 미러).
+func _refresh_ammo() -> void:
+	if _ammo_label == null or _player == null or not is_instance_valid(_player):
+		return
+	if not _player.has_method("get_ammo"):
+		return
+	var reloading: bool = _player.has_method("is_reloading") and bool(_player.call("is_reloading"))
+	if reloading:
+		_ammo_label.text = "비도: 리로드 중…"
+		_ammo_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.25))
+	else:
+		var ammo: int = int(_player.call("get_ammo"))
+		var maxa: int = int(_player.call("get_max_ammo")) if _player.has_method("get_max_ammo") else ammo
+		_ammo_label.text = "비도: %d / %d" % [ammo, maxa]
+		_ammo_label.add_theme_color_override("font_color", Color(1, 1, 1))
 
 ## 좌상단 칸 단위 HP (Main._build_hud 의 _hp_box 미러). 빈 컨테이너만 만들고
 ## `_refresh_hp_cells` 가 매 프레임 채운다.

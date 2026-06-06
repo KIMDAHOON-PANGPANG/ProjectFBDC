@@ -23,19 +23,24 @@ scenes/player/      — Player (이아이도 슬래시 + Shift 회피)
 scenes/enemies/     — MeleeEnemy / RangedEnemy / EliteEnemy / Boss
 scenes/effects/     — FanTelegraph / AimLaser / BossSignal / CircularSlash / ExplosionBurst
 scenes/attack/      — SlashAttack (PC 슬래시 trail) / Kunai (비도 기본공격 투사체)
-scenes/ui/          — ExpBar / HpBar3D / ReloadBar3D / LevelUpScreen / ChapterClearScreen / AimArrow
+scenes/ui/          — ExpBar / HpBar3D / ReloadBar3D / LevelUpScreen / ChapterClearScreen / AimArrow / AimCursor (마우스 십자선)
 scripts/managers/   — ExpSystem / UpgradeSystem / WaveManager / InfiniteGround / SaveSystem / MetaProgressionSystem / ZenSystem / SoundManager (Autoload) / EliteEffectService · BulletTimeService (Main+Testplay 공유)
 scripts/resources/  — PlayerData / EnemyData / CharacterVisuals / WaveCurve / MetaPassive (튜닝용 Resource)
 scripts/components/ — HealthComponent / SpriteRig / MonsterCollision
 resources/          — .tres 데이터 파일 (player/enemies/visuals/chapters/meta)
 resources/chapters/ — chapter_1.tres, chapter_2.tres, chapter_3.tres (WaveCurve)
 resources/meta/passives/ — hp_bonus / move_speed / slash_width / exp_gain / evade_cooldown / iframe_extra / free_card (MetaPassive)
+data/               — 전투 데이터 테이블: combat_table.xlsx(편집용, README/PC/ENEMY 시트) + pc.csv / enemy.csv(런타임, CombatData 로더가 읽음)
 ```
 
 ## 기능별 인덱스 — "어디를 봐야 하나"
 
 | 만지고 싶은 것 | 핵심 파일 (1~2개) | 보조 파일 |
 |---|---|---|
+| ⭐ 전투 데이터 관리 (엑셀/CSV, 폴리싱) | `data/combat_table.xlsx`(README/PC/ENEMY 시트, 1행=영문컬럼·2행=한글주석·ENUM셀메모) → `data/pc.csv` / `data/enemy.csv`(런타임) | `scripts/managers/CombatData.gd` 로더가 CSV 읽어 적용 |
+| 전투 CSV 로더 (적용 지점) | `CombatData.apply_to_player` (`Player._ready`) · `apply_to_enemy(self, kind)` (Melee/Ranged/Elite/Boss `_ready`) | CSV 2행(한글주석) 스킵 · 빈칸=기본값 폴백. ⚠ 잡몹/엘리트 HP 미적용(레벨링/타입표), 보스 HP 는 enemy.csv id(201~203)로 적용 |
+| 적 종류 코드 (enemy.csv ENUM) | 101=근접 102=원거리 103=엘리트 · 201/202/203=보스1/2/3 | `CombatData.apply_to_enemy` 의 kind→id 매핑 · `Boss.boss_id` export |
+| PC 전투 상수 (이관됨) | `PlayerData.gd` Combat Tuning 그룹 (hit_iframe/knockback/overcharge/perfect_dodge/zen_burst/boss_slash_damage 등) | 기존 `Player.gd` const 에서 이관 — CSV 구동 |
 | PC 슬래시 거리/폭/쿨/충전 | `resources/player/player_data.tres` | `scenes/player/Player.gd` |
 | PC 이동/회피/i-frame | `scenes/player/Player.gd` | `PlayerData` |
 | PC HP / 피격 / 사망 | `Player.gd` + `scripts/components/HealthComponent.gd` | — |
@@ -43,6 +48,8 @@ resources/meta/passives/ — hp_bonus / move_speed / slash_width / exp_gain / ev
 | 피격 연출 (넉백 / 0.5s 무적 / 플래시) | `Player.take_hit` (`_knockback_nearby_enemies` · `HIT_IFRAME`/`_iframe_t`/`is_invincible` · `SpriteRig.flash`/`start_iframe_blink`) | `scripts/components/SpriteRig.gd` |
 | 기본 공격 비도 (LB 발사 / 탄약 / 자동리로드 / SPACE 자동조준) | `Player.gd` (`_update_kunai` / `_fire_kunai` / `_lock_on_target`) + `scenes/attack/Kunai.gd` | `player_data.tres` (Kunai 그룹) · 입력맵 `fire`(LB) / `autoaim`(SPACE) |
 | 리로드 진행바 (캐릭터 위) | `scenes/ui/ReloadBar3D.gd` (`Player.is_reloading()`/`reload_frac()` 덕타이핑) | `Player.tscn` 자식 → Main/Testplay 자동 반영 |
+| 장탄수 텍스트 HUD (좌상단) | `Main.gd` `_build_hud`(`_ammo_label`) + `_refresh_ammo` (`get_ammo`/`get_max_ammo`/`is_reloading`) · `Testplay.gd` 미러 | 머리 위 진행바는 `ReloadBar3D` |
+| 마우스 십자선 (에임 커서) | `scenes/ui/AimCursor.gd` (`_draw` 원+십자, OS커서 숨김/복원, process ALWAYS) | `Main.tscn`/`Testplay.tscn` 인스턴스 (OutGame 제외) |
 | 일섬(RMB) + 게이지 (100% 게이트 / 사용 후 0) | `Player.gd` (`_check_attack_start` 게이트 · `_fire_slash` 리셋 · `add_slash_gauge` / `gain_gauge_on_*`) | 입력맵 `slash`(RMB) · `player_data.tres` (Slash Gauge 그룹) |
 | 일섬 게이지 획득 배선 | 처치/젬 → `Main.gd`+`Testplay.gd` (`gain_gauge_on_kill`/`gain_gauge_on_gem`) · 저스트회피 → `Player.take_hit` | `slash_gauge_on_kill/gem/perfect_dodge` |
 | 일섬 게이지바 HUD (하단 중앙) | `Main.gd` `_build_slash_gauge`/`_refresh_slash_gauge` (+`Testplay.gd` 미러) | `slash_gauge_frac()`/`is_slash_ready()` |

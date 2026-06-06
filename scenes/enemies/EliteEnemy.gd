@@ -41,6 +41,9 @@ extends CharacterBody3D
 ## Shared FanTelegraph PackedScene wired in EliteEnemy.tscn.
 @export var telegraph_scene: PackedScene
 
+## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
+const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
 
@@ -61,6 +64,10 @@ func _ready() -> void:
 	add_to_group("melee_enemies")
 	collision_layer = 1 << 2  # Enemy
 	collision_mask = (1 << 0) | (1 << 1)  # World + Player (bump only, no damage)
+
+	# 데이터 관리 — enemy_combat.json(엘리트) 행동 파라미터 적용. HP 는 미적용
+	# (아래 _hp_for_type 의 effect_type 표가 관리).
+	_CombatDataScript.apply_to_enemy(self, "elite")
 
 	# Effect_type dictates HP — stronger payload, more hits to kill.
 	max_hp = _hp_for_type(effect_type)

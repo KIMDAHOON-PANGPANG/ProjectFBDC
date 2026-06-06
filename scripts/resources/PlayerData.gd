@@ -66,4 +66,28 @@ extends Resource
 @export var slash_gauge_on_gem: float = 2.0
 @export var slash_gauge_on_perfect_dodge: float = 20.0
 
+# ── 4안 — 전투 상수 이관 (Player.gd const → 데이터) ──
+# CombatData(pc_combat.json) 가 이 값들을 덮어쓴다. 기본값은 기존 코드 상수와
+# 동일하므로 JSON/로더가 없어도 동작 불변.
+@export_group("Combat Tuning (이관)")
+## 피격 후 무적 시간(초). 기존 Player.HIT_IFRAME.
+@export var hit_iframe: float = 0.5
+## 피격 넉백 반경 / 세기. 기존 Player.KNOCKBACK_RADIUS / KNOCKBACK_FORCE.
+@export var knockback_radius: float = 4.0
+@export var knockback_force: float = 5.0
+## 저스트 회피 판정 창(초). 기존 Player.PERFECT_DODGE_WINDOW.
+@export var perfect_dodge_window: float = 0.12
+## 오버차지 유예 / 불발 잠금(초). 기존 Player.OVERCHARGE_GRACE / OVERCHARGE_LOCKOUT.
+@export var overcharge_grace: float = 0.45
+@export var overcharge_lockout: float = 1.0
+## 퍼펙트 차징 판정 비율(0~1). 기존 _fire_slash 의 0.9 리터럴.
+@export var perfect_charge_threshold: float = 0.9
+## 젠 버스트 일섬 강화 배수. 기존 _fire_slash 의 ×3 / ×1.5 리터럴.
+@export var zen_burst_width_mult: float = 3.0
+@export var zen_burst_range_mult: float = 1.5
+## 일섬이 보스에게 주는 데미지(일반/패리보상/젠버스트). 기존 SlashAttack 의 1/3/5.
+@export var boss_slash_damage_normal: int = 1
+@export var boss_slash_damage_parry: int = 3
+@export var boss_slash_damage_zen: int = 5
+
 @export var visuals: CharacterVisuals

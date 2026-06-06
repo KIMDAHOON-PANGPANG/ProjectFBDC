@@ -20,6 +20,10 @@ signal perfect_dodge
 
 enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING }
 
+## 데이터 관리 로더 — pc_combat.json 값을 PlayerData 에 적용. class_name 캐시
+## 미스를 피하려 preload + 정적 호출(헤드리스 안전).
+const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
 ## 4안 — 비도 투사체 씬 (기본 공격). Player.tscn에 Kunai.tscn 주입.
@@ -49,9 +53,9 @@ var _evade_end: Vector3
 var _evade_elapsed: float = 0.0
 var _evade_cd: float = 0.0
 
-# Post-hit i-frame timer. While > 0, take_hit is suppressed. 4안 — 0.5s
-# (사용자 지정). iframe_bonus(메타)가 더해지지만 메타 효과는 현재 초기화됨.
-const HIT_IFRAME: float = 0.5
+# Post-hit i-frame timer. While > 0, take_hit is suppressed. 4안 — 0.5s.
+# 값은 data.hit_iframe 으로 이관(CombatData/pc_combat.json 구동). iframe_bonus
+# (메타)가 더해지지만 메타 효과는 현재 초기화됨.
 var _iframe_t: float = 0.0
 
 # ── 4안 — 비도(Kunai) 기본 공격 상태 ──
@@ -73,15 +77,14 @@ var _slash_gauge: float = 0.0
 var slash_gauge_gain_mult: float = 1.0
 
 ## 4안 — knockback on hit: shove nearby enemies away when the PC is struck.
-const KNOCKBACK_RADIUS: float = 4.0
-const KNOCKBACK_FORCE: float = 5.0
+## 반경/세기는 data.knockback_radius / knockback_force 로 이관.
 
 ## ⏱ Perfect dodge (M3 후속). If an attack would have hit within
 ## PERFECT_DODGE_WINDOW seconds of the evade STARTING, it counts as a
 ## perfect dodge → emit `perfect_dodge` (Main turns it into a short
 ## self-bullet-time) + Zen +1. `_perfect_dodge_fired` latches per evade
 ## so a flurry of attacks in one window only rewards once.
-const PERFECT_DODGE_WINDOW: float = 0.12
+## 판정 창은 data.perfect_dodge_window 로 이관.
 var _perfect_dodge_fired: bool = false
 
 ## ⏱ Charge grade (M3 후속). Charge time maps to grades:
@@ -92,8 +95,7 @@ var _perfect_dodge_fired: bool = false
 ## exceeds OVERCHARGE_GRACE the charge FIZZLES — the slash is wasted and
 ## all charging is locked for 1s. Punishes holding the button "just in
 ## case", which the linear ramp alone never discouraged.
-const OVERCHARGE_GRACE: float = 0.45
-const OVERCHARGE_LOCKOUT: float = 1.0
+# 유예/잠금은 data.overcharge_grace / overcharge_lockout 로 이관.
 var _overcharge_t: float = 0.0
 
 ## ⏱ Perfect-parry chain reward — Boss._on_parried stamps this with
@@ -158,6 +160,10 @@ func _ready() -> void:
 	if data.visuals == null:
 		data.visuals = CharacterVisuals.new()
 		data.visuals.placeholder_tint = Color(0.85, 0.9, 1.0)
+
+	# 데이터 관리 — pc_combat.json 값으로 PlayerData 를 덮어쓴다(파일/값 없으면
+	# 기존 기본값 유지). max_hp / max_ammo 를 읽기 전에 적용해야 반영됨.
+	_CombatDataScript.apply_to_player(self)
 
 	collision_layer = 1 << 1  # Player
 	collision_mask = (1 << 0) | (1 << 2)  # World + Enemy (block on enemies optional; we still pass over)
@@ -276,7 +282,7 @@ func _update_aim(delta: float) -> void:
 	# is actively punished.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
-		if _overcharge_t >= OVERCHARGE_GRACE:
+		if _overcharge_t >= data.overcharge_grace:
 			_fizzle_charge()
 			return
 	var dir := _mouse_to_world_dir()
@@ -297,7 +303,7 @@ func _update_aim(delta: float) -> void:
 func _fizzle_charge() -> void:
 	_charge_t = 0.0
 	_overcharge_t = 0.0
-	_cooldown_t = OVERCHARGE_LOCKOUT
+	_cooldown_t = data.overcharge_lockout
 	if _aim_arrow != null:
 		_aim_arrow.hide_arrow()
 	if _sprite_rig != null:
@@ -319,8 +325,8 @@ func _fire_slash() -> void:
 	var slash_range: float = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
 	var slash_width_now: float = data.slash_width
 	if burst_active:
-		slash_range = data.max_slash_range * 1.5
-		slash_width_now = data.slash_width * 3.0
+		slash_range = data.max_slash_range * data.zen_burst_range_mult
+		slash_width_now = data.slash_width * data.zen_burst_width_mult
 		if _zen_system != null and _zen_system.has_method("consume_burst"):
 			_zen_system.call("consume_burst")
 	_dash_start = global_position
@@ -336,7 +342,7 @@ func _fire_slash() -> void:
 	_spawn_slash_attack(_dash_start, _dash_end, slash_width_now, burst_active)
 	# ⏱ Perfect-charge zen reward — full charge (>= 0.9 of max) feeds
 	# the meter. Burst slashes don't double-dip (they consumed the meter).
-	if not burst_active and _zen_system != null and charge_frac >= 0.9 \
+	if not burst_active and _zen_system != null and charge_frac >= data.perfect_charge_threshold \
 			and _zen_system.has_method("add"):
 		_zen_system.call("add", 1)
 	# M7 — slash SFX cue. SoundManager silently no-ops if no .ogg yet.
@@ -422,7 +428,7 @@ func take_hit(amount: int = 1) -> void:
 	# evade. Reward fires BEFORE the is_invincible early-return swallows
 	# the hit. Latched per evade so multiple attacks only reward once.
 	if _state == State.EVADING and not _perfect_dodge_fired \
-			and _evade_elapsed <= PERFECT_DODGE_WINDOW:
+			and _evade_elapsed <= data.perfect_dodge_window:
 		_perfect_dodge_fired = true
 		perfect_dodge.emit()
 		if _zen_system != null and _zen_system.has_method("add"):
@@ -442,7 +448,7 @@ func take_hit(amount: int = 1) -> void:
 	# as a defensive "ting" instead of a free pass.
 	if shield_charges > 0:
 		shield_charges -= 1
-		var sh_iframe: float = HIT_IFRAME + iframe_bonus
+		var sh_iframe: float = data.hit_iframe + iframe_bonus
 		_iframe_t = sh_iframe
 		if _sprite_rig != null and _sprite_rig.has_method("start_iframe_blink"):
 			_sprite_rig.call("start_iframe_blink", sh_iframe)
@@ -459,7 +465,7 @@ func take_hit(amount: int = 1) -> void:
 		_health.take_damage(amount)
 	# Hit feedback — i-frame + strobe blink + camera shake. Runs even if
 	# the hit was fatal (the strobe blends naturally into the death fade).
-	var total_iframe: float = HIT_IFRAME + iframe_bonus
+	var total_iframe: float = data.hit_iframe + iframe_bonus
 	_iframe_t = total_iframe
 	if _sprite_rig != null and _sprite_rig.has_method("start_iframe_blink"):
 		_sprite_rig.call("start_iframe_blink", total_iframe)
@@ -676,8 +682,8 @@ func _knockback_nearby_enemies() -> void:
 		var to_e: Vector3 = (e as Node3D).global_position - global_position
 		to_e.y = 0.0
 		var d: float = to_e.length()
-		if d < KNOCKBACK_RADIUS and d > 0.01:
-			var push: float = KNOCKBACK_FORCE * (1.0 - d / KNOCKBACK_RADIUS)
+		if d < data.knockback_radius and d > 0.01:
+			var push: float = data.knockback_force * (1.0 - d / data.knockback_radius)
 			(e as Node3D).global_position += to_e.normalized() * push
 
 

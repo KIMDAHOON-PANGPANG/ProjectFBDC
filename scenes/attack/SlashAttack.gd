@@ -137,17 +137,30 @@ func _try_kill(node: Node) -> void:
 ## Otherwise the normal 1 dmg. We resolve here so neither Boss nor
 ## Player need to know the multiplier values.
 func _resolve_boss_damage() -> int:
+	# 데미지 값은 PC 의 PlayerData(boss_slash_damage_*)에서 읽는다 — CombatData/
+	# pc_combat.json 가 구동. data 가 없으면 기존 1/3/5 로 폴백.
+	var pc := get_tree().get_first_node_in_group("player")
+	var dmg_normal: int = 1
+	var dmg_parry: int = 3
+	var dmg_zen: int = 5
+	if pc != null and is_instance_valid(pc) and "data" in pc and pc.data != null:
+		var d = pc.data
+		if "boss_slash_damage_normal" in d:
+			dmg_normal = d.boss_slash_damage_normal
+		if "boss_slash_damage_parry" in d:
+			dmg_parry = d.boss_slash_damage_parry
+		if "boss_slash_damage_zen" in d:
+			dmg_zen = d.boss_slash_damage_zen
 	# Zen burst takes precedence over the parry boost.
 	if has_meta("zen_burst") and bool(get_meta("zen_burst", false)):
-		return 5
-	var pc := get_tree().get_first_node_in_group("player")
+		return dmg_zen
 	if pc == null or not is_instance_valid(pc):
-		return 1
+		return dmg_normal
 	if not ("parry_boost_until_msec" in pc):
-		return 1
+		return dmg_normal
 	if Time.get_ticks_msec() > pc.parry_boost_until_msec:
-		return 1
-	return 3
+		return dmg_normal
+	return dmg_parry
 
 func _disable_collision() -> void:
 	monitoring = false

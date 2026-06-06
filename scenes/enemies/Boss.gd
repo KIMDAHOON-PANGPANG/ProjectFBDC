@@ -23,6 +23,13 @@ signal boss_defeated
 ## Attack-type enum used by the critical-hit signal. Picked at attack start.
 enum AttackType { YELLOW, RED }
 
+## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
+const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+
+## 보스 변형 식별자 (1=Boss / 2=Boss2 / 3=Boss3). 각 .tscn 에서 지정.
+## CombatData 가 enemy_combat.json 의 "보스_<id>" 섹션을 적용하는 키.
+@export var boss_id: int = 1
+
 @export var move_speed: float = 1.5
 @export var detection_range: float = 30.0
 @export var attack_range: float = 2.4
@@ -136,6 +143,10 @@ func _ready() -> void:
 	add_to_group("melee_enemies")
 	collision_layer = 1 << 2  # Enemy
 	collision_mask = (1 << 0) | (1 << 1)  # World + Player (bump only, no damage)
+
+	# 데이터 관리 — enemy_combat.json(보스_공통 + 보스_<boss_id>) 적용. 보스 HP 는
+	# 변형별 고정값이라 여기서 적용되고, 아래 _health.setup(max_hp) 가 그 값을 쓴다.
+	_CombatDataScript.apply_to_enemy(self, "boss")
 
 	_health = get_node_or_null("HealthComponent") as HealthComponent
 	if _health != null:

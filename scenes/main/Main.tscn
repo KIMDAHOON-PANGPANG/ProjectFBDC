@@ -20,6 +20,7 @@
 [ext_resource type="Resource" path="res://resources/chapters/chapter_3.tres" id="18_ch3"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="19_boss3"]
 [ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="20_expgem"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AimCursor.tscn" id="21_aim"]
 
 [node name="Main" type="Node3D" unique_id=2118304026]
 script = ExtResource("1_main")
@@ -39,3 +40,5 @@ boss_scene = ExtResource("12_boss")
 chapter_curves = Array[Resource]([ExtResource("15_ch1"), ExtResource("16_ch2"), ExtResource("18_ch3")])
 boss_scenes = Array[PackedScene]([ExtResource("12_boss"), ExtResource("17_boss2"), ExtResource("19_boss3")])
 melee_enemy_data_lv2 = ExtResource("13_lv2")
+
+[node name="AimCursor" parent="." instance=ExtResource("21_aim")]

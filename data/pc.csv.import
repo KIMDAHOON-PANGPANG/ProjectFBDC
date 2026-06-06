@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bpysfamsqacwl"
+
+[deps]
+
+files=["res://data/pc.move.translation", "res://data/pc.max.translation", "res://data/pc.hit.translation", "res://data/pc.knockback.translation", "res://data/pc.knockback.translation", "res://data/pc.perfect.translation", "res://data/pc.evade.translation", "res://data/pc.evade.translation", "res://data/pc.evade.translation", "res://data/pc.max.translation", "res://data/pc.reload.translation", "res://data/pc.fire.translation", "res://data/pc.kunai.translation", "res://data/pc.kunai.translation", "res://data/pc.kunai.translation", "res://data/pc.autoaim.translation", "res://data/pc.min.translation", "res://data/pc.max.translation", "res://data/pc.max.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.dash.translation", "res://data/pc.overcharge.translation", "res://data/pc.overcharge.translation", "res://data/pc.perfect.translation", "res://data/pc.boss.translation", "res://data/pc.boss.translation", "res://data/pc.boss.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.zen.translation", "res://data/pc.zen.translation"]
+
+source_file="res://data/pc.csv"
+dest_files=["res://data/pc.move.translation", "res://data/pc.max.translation", "res://data/pc.hit.translation", "res://data/pc.knockback.translation", "res://data/pc.knockback.translation", "res://data/pc.perfect.translation", "res://data/pc.evade.translation", "res://data/pc.evade.translation", "res://data/pc.evade.translation", "res://data/pc.max.translation", "res://data/pc.reload.translation", "res://data/pc.fire.translation", "res://data/pc.kunai.translation", "res://data/pc.kunai.translation", "res://data/pc.kunai.translation", "res://data/pc.autoaim.translation", "res://data/pc.min.translation", "res://data/pc.max.translation", "res://data/pc.max.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.dash.translation", "res://data/pc.overcharge.translation", "res://data/pc.overcharge.translation", "res://data/pc.perfect.translation", "res://data/pc.boss.translation", "res://data/pc.boss.translation", "res://data/pc.boss.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.slash.translation", "res://data/pc.zen.translation", "res://data/pc.zen.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true
