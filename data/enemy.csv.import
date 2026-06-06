@@ -1,19 +1,4 @@
 [remap]
 
-importer="csv_translation"
-type="Translation"
+importer="keep"
 uid="uid://de7nehcn7dig6"
-
-[deps]
-
-files=["res://data/enemy.name.translation", "res://data/enemy.move.translation", "res://data/enemy.max.translation", "res://data/enemy.attack.translation", "res://data/enemy.attack.translation", "res://data/enemy.attack.translation", "res://data/enemy.fan.translation", "res://data/enemy.fan.translation", "res://data/enemy.separation.translation", "res://data/enemy.separation.translation", "res://data/enemy.keep.translation", "res://data/enemy.arrow.translation", "res://data/enemy.aim.translation", "res://data/enemy.parry.translation", "res://data/enemy.parry.translation", "res://data/enemy.parry.translation", "res://data/enemy.block.translation", "res://data/enemy.parry.translation", "res://data/enemy.parry.translation", "res://data/enemy.enable.translation", "res://data/enemy.white.translation", "res://data/enemy.enable.translation", "res://data/enemy.purple.translation", "res://data/enemy.enable.translation", "res://data/enemy.green.translation"]
-
-source_file="res://data/enemy.csv"
-dest_files=["res://data/enemy.name.translation", "res://data/enemy.move.translation", "res://data/enemy.max.translation", "res://data/enemy.attack.translation", "res://data/enemy.attack.translation", "res://data/enemy.attack.translation", "res://data/enemy.fan.translation", "res://data/enemy.fan.translation", "res://data/enemy.separation.translation", "res://data/enemy.separation.translation", "res://data/enemy.keep.translation", "res://data/enemy.arrow.translation", "res://data/enemy.aim.translation", "res://data/enemy.parry.translation", "res://data/enemy.parry.translation", "res://data/enemy.parry.translation", "res://data/enemy.block.translation", "res://data/enemy.parry.translation", "res://data/enemy.parry.translation", "res://data/enemy.enable.translation", "res://data/enemy.white.translation", "res://data/enemy.enable.translation", "res://data/enemy.purple.translation", "res://data/enemy.enable.translation", "res://data/enemy.green.translation"]
-
-[params]
-
-compress=1
-delimiter=0
-unescape_keys=false
-unescape_translations=true
