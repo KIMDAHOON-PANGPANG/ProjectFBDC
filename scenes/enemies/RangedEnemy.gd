@@ -163,6 +163,8 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# Stash death position for the EXP gem drop (tree_exited is too late).
+	set_meta("death_position", global_position)
 	set_physics_process(false)
 	collision_layer = 0
 	collision_mask = 0

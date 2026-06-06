@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://b8plr000001"]
+[gd_scene load_steps=12 format=3 uid="uid://b8plr000001"]
 
 [ext_resource type="Script" path="res://scenes/player/Player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://scenes/attack/SlashAttack.tscn" id="5_slash"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HpBar3D.tscn" id="6_hpbar"]
 [ext_resource type="Resource" path="res://resources/player/player_data.tres" id="7_pd"]
+[ext_resource type="PackedScene" path="res://scenes/attack/Kunai.tscn" id="8_kunai"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ReloadBar3D.tscn" id="9_reloadbar"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
@@ -22,6 +24,7 @@ data = ExtResource("7_pd")
 aim_arrow_path = NodePath("AimArrow")
 sprite_rig_path = NodePath("SpriteRig")
 slash_attack_scene = ExtResource("5_slash")
+kunai_scene = ExtResource("8_kunai")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
@@ -29,7 +32,7 @@ shape = SubResource("CapsuleShape3D_player")
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
-max_hp = 5
+max_hp = 3
 
 [node name="SpriteRig" type="Node3D" parent="."]
 script = ExtResource("3_rig")
@@ -46,3 +49,6 @@ texture_filter = 0
 
 [node name="HpBar3D" parent="." instance=ExtResource("6_hpbar")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
+
+[node name="ReloadBar3D" parent="." instance=ExtResource("9_reloadbar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.18, 0)

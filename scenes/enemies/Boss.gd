@@ -45,6 +45,27 @@ enum AttackType { YELLOW, RED }
 @export var boss_signal_scene: PackedScene
 ## Chance an attack rolls YELLOW (parryable). User-tuned baseline 0.7.
 @export var parry_yellow_ratio: float = 0.7
+## When true, a fraction `white_ratio` of attacks roll WHITE instead of
+## YELLOW/RED. WHITE behaves like RED (no parry, must dodge) but signals
+## a future "grab pattern" — currently a visual-only distinction so
+## Chapter 2's boss reads differently. PURPLE / GREEN added in M6 for
+## Boss 3 (also RED semantics, visual only — real grab/AoE/multi-hit
+## mechanics are post-M6).
+@export var enable_white_signal: bool = false
+@export var white_ratio: float = 0.0
+## M6 — PURPLE: 광역 텔레그래프 (현재 RED 의미, 시각만 보라). Boss 3 도입.
+@export var enable_purple_signal: bool = false
+@export var purple_ratio: float = 0.0
+## M6 — GREEN: 다단히트 (현재 RED 의미, 시각만 녹색). Boss 3 도입.
+@export var enable_green_signal: bool = false
+@export var green_ratio: float = 0.0
+@export_group("Parry Reward")
+## ⏱ Perfect-parry chain reward window. A successful parry sets the PC's
+## `parry_boost_until_msec` to `now + parry_boost_window_ms`; the next
+## SlashAttack that lands on the boss in that window deals
+## `parry_boost_dmg` instead of the normal 1.
+@export var parry_boost_window_ms: int = 1000
+@export var parry_boost_dmg: int = 3
 ## Parry window opens this long BEFORE the sweep starts (i.e. at
 ## telegraph_time - parry_window_pre_sweep), and stays open until
 ## parry_window_post_sweep seconds AFTER the sweep starts.
@@ -88,6 +109,11 @@ var _dead: bool = false
 var _attacking: bool = false
 ## Current attack's critical-hit type. Only meaningful while _attacking.
 var _attack_type: int = AttackType.YELLOW
+## M6 — visual override for the head icon. 0 = standard YELLOW/RED, 1 =
+## WHITE (Boss 2), 2 = PURPLE (Boss 3 광역), 3 = GREEN (Boss 3 다단).
+## Override types all carry RED semantics today (no parry, must dodge).
+## Cleared at the start of every telegraph in `_begin_telegraph`.
+var _color_override: int = 0
 ## True only during the short parry window (yellow attacks only). When
 ## true, an incoming take_hit triggers _on_parried instead of damage.
 var _parry_open: bool = false
@@ -130,6 +156,15 @@ func _ready() -> void:
 			_mesh.set_surface_override_material(0, src_mat.duplicate())
 
 	_player = get_tree().get_first_node_in_group("player")
+
+	# Parry Master card was picked BEFORE this boss spawned — pick up
+	# the boosted window + counter damage here so per-chapter boss
+	# rolls inherit the player's accumulated upgrades.
+	if _player != null and "has_parry_master" in _player and _player.has_parry_master:
+		parry_window_pre_sweep += 0.05
+		parry_window_post_sweep += 0.05
+		parry_boost_dmg += 1
+
 
 func _physics_process(delta: float) -> void:
 	if _dead:
@@ -194,9 +229,31 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 	if telegraph_scene == null:
 		_attack_cd = attack_cooldown
 		return
-	# Pick this swing's critical-hit color first so the signal and fan
-	# can share the same _attack_type for parry-eligibility checks.
-	_attack_type = AttackType.YELLOW if randf() < parry_yellow_ratio else AttackType.RED
+	# Pick this swing's critical-hit color. Override family rolls first
+	# (WHITE / PURPLE / GREEN — all RED semantics, visual only), in
+	# probability order; whatever probability mass is left flows to the
+	# standard YELLOW/RED split. Single `randf()` keeps the distribution
+	# clean without compounding rolls.
+	_color_override = 0
+	var roll: float = randf()
+	var consumed: float = 0.0
+	if enable_white_signal and roll < consumed + white_ratio:
+		_color_override = 1
+		_attack_type = AttackType.RED
+	consumed += (white_ratio if enable_white_signal else 0.0)
+	if _color_override == 0 and enable_purple_signal and roll < consumed + purple_ratio:
+		_color_override = 2
+		_attack_type = AttackType.RED
+	consumed += (purple_ratio if enable_purple_signal else 0.0)
+	if _color_override == 0 and enable_green_signal and roll < consumed + green_ratio:
+		_color_override = 3
+		_attack_type = AttackType.RED
+	consumed += (green_ratio if enable_green_signal else 0.0)
+	if _color_override == 0:
+		# Standard split over the remaining probability mass.
+		var remaining: float = max(1.0 - consumed, 0.01)
+		var split_roll: float = (roll - consumed) / remaining
+		_attack_type = AttackType.YELLOW if split_roll < parry_yellow_ratio else AttackType.RED
 
 	# Floating head-icon — visible the whole wind-up, plus a brief grace
 	# so it doesn't pop out the same frame the sweep ends. cancel() on
@@ -210,18 +267,44 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 			signal_node.call("configure", self, color, lifetime, 3.4)
 		_active_signal = signal_node
 
-	# The actual swing visual / damage source — unchanged sharing with
-	# every melee enemy via FanTelegraph.
+	# post-M6 — color override morphs the swing's payload, not just the
+	# head-icon color:
+	#   WHITE  (잡기)  = double damage (single big hit)
+	#   PURPLE (광역)  = ×1.5 radius, ×1.3 angle (wide AoE)
+	#   GREEN  (다단)  = standard fan + scheduled followup sweep
+	# GREEN's followup is fired below after the first fan spawns.
+	var fan_radius_now: float = fan_radius
+	var fan_angle_now: float = fan_angle_deg
+	var dmg_now: int = attack_damage
+	match _color_override:
+		1:
+			dmg_now = attack_damage * 2
+		2:
+			fan_radius_now = fan_radius * 1.5
+			fan_angle_now = fan_angle_deg * 1.3
+		# GREEN's first swing is normal — followup is the second hit.
+
 	var fan := telegraph_scene.instantiate()
 	get_tree().current_scene.add_child(fan)
 	if fan.has_method("configure"):
 		# Boss uses a slightly longer sweep so the wider swing reads.
 		fan.call("configure", global_position, to_player_xz,
-			fan_radius, fan_angle_deg, attack_damage,
+			fan_radius_now, fan_angle_now, dmg_now,
 			_FAN_TELEGRAPH_TIME, _FAN_SWEEP_TIME)
 	if fan.has_signal("tree_exited"):
 		fan.tree_exited.connect(_on_telegraph_done, CONNECT_ONE_SHOT)
 	_active_telegraph = fan
+
+	# GREEN — schedule a second sweep 0.35s after the first one finishes.
+	# Position + direction snapshotted at telegraph time; the followup
+	# doesn't re-aim because the player would already be reacting to the
+	# first swing.
+	if _color_override == 3:
+		var followup_pos: Vector3 = global_position
+		var followup_dir: Vector3 = to_player_xz
+		var followup_delay: float = _FAN_TELEGRAPH_TIME + _FAN_SWEEP_TIME + 0.35
+		get_tree().create_timer(followup_delay).timeout.connect(
+			_spawn_green_followup.bind(followup_pos, followup_dir))
 
 	_attacking = true
 	_attack_cd = attack_cooldown + 0.5
@@ -236,6 +319,13 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 		get_tree().create_timer(open_delay + window_len).timeout.connect(_close_parry_window)
 
 func _signal_color_for(t: int) -> Color:
+	match _color_override:
+		1:
+			return Color(0.97, 0.97, 1.0, 1.0)   # WHITE — 잡기 (시각만)
+		2:
+			return Color(0.78, 0.42, 0.95, 1.0)  # PURPLE — 광역 (시각만)
+		3:
+			return Color(0.42, 0.92, 0.45, 1.0)  # GREEN — 다단 (시각만)
 	if t == AttackType.YELLOW:
 		return Color(1.0, 0.85, 0.15, 1.0)
 	return Color(0.95, 0.15, 0.15, 1.0)
@@ -255,17 +345,35 @@ func _on_telegraph_done() -> void:
 	_active_telegraph = null
 	# If the signal is still around (lifetime tail), let it self-fade.
 
+
+## GREEN signal followup — spawn a second fan at the snapshotted
+## position/direction. Uses a faster telegraph so the second hit reads
+## as a quick chain rather than a separate attack.
+func _spawn_green_followup(pos: Vector3, dir: Vector3) -> void:
+	if _dead:
+		return
+	if telegraph_scene == null:
+		return
+	var fan := telegraph_scene.instantiate()
+	get_tree().current_scene.add_child(fan)
+	if fan.has_method("configure"):
+		fan.call("configure", pos, dir,
+			fan_radius, fan_angle_deg, attack_damage,
+			_FAN_TELEGRAPH_TIME * 0.5, _FAN_SWEEP_TIME)
+
 ## take_hit fires when SlashAttack's volume overlaps the boss. During an
 ## open YELLOW parry window this is a parry — cancel the swing instead
-## of taking damage. Otherwise normal damage path.
-func take_hit() -> void:
+## of taking damage. Otherwise normal damage path. `amount` defaults to 1
+## so legacy callers (every non-boss take_hit was 1-shot lethal) keep
+## working; SlashAttack passes 3 during the post-parry chain window.
+func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
 	if _parry_open and _attack_type == AttackType.YELLOW:
 		_on_parried()
 		return
 	if _health != null:
-		_health.take_damage(1)
+		_health.take_damage(amount)
 
 func _on_parried() -> void:
 	_parry_open = false
@@ -288,6 +396,18 @@ func _on_parried() -> void:
 	_blocked = true
 	_attack_cd = block_duration
 	get_tree().create_timer(block_duration).timeout.connect(_end_block)
+	# ⏱ Perfect-parry chain — open a short reward window where the next
+	# slash on this (or any) boss deals `parry_boost_dmg` instead of 1.
+	# SlashAttack reads `parry_boost_until_msec` off the player group;
+	# we stamp it here and let it expire naturally without explicit clear.
+	if _player != null and is_instance_valid(_player) \
+			and "parry_boost_until_msec" in _player:
+		_player.parry_boost_until_msec = Time.get_ticks_msec() + parry_boost_window_ms
+	# Notify the PC so parry-triggered cards (Counter Step today; Zen
+	# meter / etc. later) can branch off a single integration point.
+	if _player != null and is_instance_valid(_player) \
+			and _player.has_method("on_parry_success"):
+		_player.on_parry_success()
 
 func _end_block() -> void:
 	# Defensive: if the boss died mid-block, just stay dead.
@@ -351,6 +471,8 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# Stash death position for the EXP gem drop (tree_exited is too late).
+	set_meta("death_position", global_position)
 	set_physics_process(false)
 	collision_layer = 0
 	collision_mask = 0

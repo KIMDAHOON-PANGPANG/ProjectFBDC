@@ -5,9 +5,12 @@
 [ext_resource type="PackedScene" uid="uid://b8enmem00001" path="res://scenes/enemies/MeleeEnemy.tscn" id="3_melee"]
 [ext_resource type="PackedScene" uid="uid://b8elite00001" path="res://scenes/enemies/EliteEnemy.tscn" id="4_elite"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/Boss.tscn" id="5_boss"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss2.tscn" id="11_boss2"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="12_boss3"]
 [ext_resource type="PackedScene" uid="uid://b8hd2dcam0001" path="res://scenes/main/HD2DCamera.tscn" id="6_cam"]
 [ext_resource type="PackedScene" uid="uid://bo0wkpp4fk441" path="res://scenes/effects/ExplosionBurst.tscn" id="7_burst"]
 [ext_resource type="PackedScene" uid="uid://b8cslash00001" path="res://scenes/effects/CircularSlash.tscn" id="8_cslash"]
+[ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="12_expgem"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ExpBar.tscn" id="9_expbar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/LevelUpScreen.tscn" id="10_lvlup"]
 
@@ -17,8 +20,11 @@ player_scene = ExtResource("2_player")
 melee_enemy_scene = ExtResource("3_melee")
 elite_enemy_scene = ExtResource("4_elite")
 boss_scene = ExtResource("5_boss")
+boss_scene_2 = ExtResource("11_boss2")
+boss_scene_3 = ExtResource("12_boss3")
 camera_scene = ExtResource("6_cam")
 explosion_burst_scene = ExtResource("7_burst")
 circular_slash_scene = ExtResource("8_cslash")
+exp_gem_scene = ExtResource("12_expgem")
 exp_bar_scene = ExtResource("9_expbar")
 level_up_screen_scene = ExtResource("10_lvlup")

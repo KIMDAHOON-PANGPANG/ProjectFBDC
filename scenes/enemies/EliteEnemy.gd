@@ -2,12 +2,13 @@ class_name EliteEnemy
 extends CharacterBody3D
 
 ## Elite enemy: square (cube) silhouette, slightly larger than regular mobs.
-## Carries an `effect_type` (1/2/3) that determines BOTH the death payload
+## Carries an `effect_type` (1/2/3/4) that determines BOTH the death payload
 ## AND the hit-points required to kill it — heavier payloads need more hits:
 ##
 ##   type 1 = Explosion             →  1 HP (cheapest, smallest payoff)
 ##   type 2 = Bonus PC action       →  3 HP
 ##   type 3 = Bullet-time monochrome →  5 HP (hardest, biggest payoff)
+##   type 4 = PC shield charge      →  7 HP (M6, defensive payoff)
 ##
 ## Movement is a chaser with a Boid-style separation force so elites don't
 ## clump on top of each other (which would let one slash kill two and stack
@@ -205,6 +206,8 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# Stash death position for the EXP gem drop (tree_exited is too late).
+	set_meta("death_position", global_position)
 	set_physics_process(false)
 	collision_layer = 0
 	collision_mask = 0
@@ -236,11 +239,13 @@ func _play_death_fade() -> void:
 func _color_for_type(t: int) -> Color:
 	match t:
 		1:
-			return Color(0.90, 0.18, 0.18)  # Red   — Explosion
+			return Color(0.90, 0.18, 0.18)  # Red    — Explosion
 		2:
-			return Color(0.18, 0.75, 0.22)  # Green — Bonus action
+			return Color(0.18, 0.75, 0.22)  # Green  — Bonus action
 		3:
-			return Color(0.22, 0.38, 0.95)  # Blue  — Bullet-time
+			return Color(0.22, 0.38, 0.95)  # Blue   — Bullet-time
+		4:
+			return Color(0.98, 0.85, 0.25)  # Yellow — PC shield (M6)
 	return Color(1, 1, 1)
 
 ## Hit-points required to kill an elite of the given effect_type.
@@ -254,6 +259,8 @@ func _hp_for_type(t: int) -> int:
 			return 3  # Bonus PC action
 		3:
 			return 5  # Bullet-time — hardest to earn
+		4:
+			return 7  # Shield — even rarer than bullet-time
 	return 3
 
 ## Local separation: scan the "elites" group, sum up repulsion vectors from

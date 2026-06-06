@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/Boss.gd" id="1_boss"]
+[ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
+[ext_resource type="PackedScene" path="res://scenes/effects/BossSignal.tscn" id="4_bsignal"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_boss2"]
+size = Vector3(2.1, 2.1, 2.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_boss2"]
+size = Vector3(3.0, 3.0, 3.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_boss2"]
+shading_mode = 0
+albedo_color = Color(0.18, 0.1, 0.22, 1)
+emission_enabled = true
+emission = Color(0.55, 0.1, 0.75, 1)
+emission_energy_multiplier = 0.4
+roughness = 0.9
+
+[node name="Boss" type="CharacterBody3D"]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
+script = ExtResource("1_boss")
+number_label_path = NodePath("HPLabel")
+mesh_path = NodePath("Visual")
+max_hp = 22
+attack_cooldown = 1.4
+fan_radius = 3.3
+parry_yellow_ratio = 0.6
+enable_white_signal = true
+white_ratio = 0.2
+telegraph_scene = ExtResource("3_fantel")
+boss_signal_scene = ExtResource("4_bsignal")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("BoxShape3D_boss2")
+
+[node name="Visual" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+mesh = SubResource("BoxMesh_boss2")
+surface_material_override/0 = SubResource("StandardMaterial3D_boss2")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_hp = 22
+
+[node name="HPLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 0)
+billboard = 1
+pixel_size = 0.018
+text = "22"
+font_size = 128
+outline_size = 16
+outline_modulate = Color(0, 0, 0, 1)
+modulate = Color(0.95, 0.7, 1, 1)

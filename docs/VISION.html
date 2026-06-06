@@ -1,0 +1,2294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProjectFBDC — 비전 & 타이밍 액션 뱀써 대시보드</title>
+<style>
+  :root {
+    --bg-deep:       #0a0a10;
+    --bg-base:       #11111a;
+    --bg-surface:    #181822;
+    --bg-elevated:   #20202e;
+    --bg-hover:      #2a2a3a;
+
+    --ink-100:       #f4f4f8;
+    --ink-200:       #d4d4dc;
+    --ink-400:       #8e8e9c;
+    --ink-600:       #5a5a68;
+    --ink-line:      #2a2a36;
+
+    --crimson:       #c8332a;
+    --crimson-dim:   #8a221c;
+    --gold:          #c89b3c;
+    --gold-dim:      #8a6a28;
+    --jade:          #4ea672;
+    --azure:         #4a82d6;
+    --telegraph-y:   #f5c542;
+    --telegraph-r:   #e34a3a;
+
+    --shadow-1:      0 1px 2px rgba(0,0,0,0.4);
+    --shadow-2:      0 4px 16px rgba(0,0,0,0.5);
+    --shadow-3:      0 12px 48px rgba(0,0,0,0.6);
+
+    --radius:        10px;
+    --radius-sm:     6px;
+
+    --t-fast:        120ms;
+    --t-med:         240ms;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: var(--bg-deep);
+    color: var(--ink-200);
+    line-height: 1.65;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ───── 배경 텍스처 ───── */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(200,51,42,0.08), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 90% 80%, rgba(200,155,60,0.04), transparent 60%);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* ───── 헤더 / 히어로 ───── */
+  .hero {
+    position: relative;
+    padding: 80px 32px 60px;
+    text-align: center;
+    border-bottom: 1px solid var(--ink-line);
+    background:
+      linear-gradient(180deg, rgba(200,51,42,0.04) 0%, transparent 60%),
+      var(--bg-base);
+  }
+
+  .hero-tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    font-weight: 600;
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 900;
+    color: var(--ink-100);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 24px;
+  }
+
+  .hero h1 .accent { color: var(--crimson); }
+  .hero h1 .kanji {
+    color: var(--gold);
+    font-weight: 800;
+    margin: 0 6px;
+  }
+
+  .hero-quote {
+    font-size: clamp(15px, 1.8vw, 19px);
+    color: var(--ink-400);
+    max-width: 720px;
+    margin: 0 auto 40px;
+    font-style: italic;
+  }
+
+  .hero-meta {
+    display: flex;
+    justify-content: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--ink-400);
+  }
+
+  .hero-meta .pill {
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: var(--ink-200);
+  }
+
+  .hero-meta .pill strong { color: var(--gold); font-weight: 600; }
+
+  /* ───── 네비게이션 ───── */
+  nav.tabs {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10, 10, 16, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--ink-line);
+    padding: 0 24px;
+  }
+
+  .tabs-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs-inner::-webkit-scrollbar { display: none; }
+
+  .tab {
+    background: none;
+    border: none;
+    color: var(--ink-400);
+    padding: 16px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all var(--t-fast);
+    font-weight: 500;
+  }
+
+  .tab:hover { color: var(--ink-200); }
+  .tab.active { color: var(--crimson); border-bottom-color: var(--crimson); }
+
+  /* ───── 메인 컨테이너 ───── */
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+
+  section.panel { display: none; animation: fadein 320ms ease; }
+  section.panel.active { display: block; }
+
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ───── 섹션 타이포 ───── */
+  h2.section-title {
+    font-size: 28px;
+    color: var(--ink-100);
+    margin-bottom: 8px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  h2.section-title .num {
+    color: var(--crimson);
+    font-family: "Georgia", serif;
+    margin-right: 12px;
+    font-weight: 400;
+  }
+
+  .section-subtitle {
+    color: var(--ink-400);
+    margin-bottom: 36px;
+    max-width: 720px;
+    font-size: 15px;
+  }
+
+  h3 {
+    color: var(--ink-100);
+    font-size: 19px;
+    margin: 32px 0 14px;
+    font-weight: 700;
+  }
+
+  h4 {
+    color: var(--gold);
+    font-size: 14px;
+    margin: 20px 0 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ───── 카드 / 그리드 ───── */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: all var(--t-med);
+  }
+
+  .card:hover {
+    border-color: var(--ink-600);
+    background: var(--bg-elevated);
+  }
+
+  .grid { display: grid; gap: 18px; }
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+  /* ───── 비전 — 세 기둥 ───── */
+  .pillar {
+    position: relative;
+    padding: 28px;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  .pillar .pillar-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    display: inline-block;
+  }
+
+  .pillar .pillar-title {
+    font-size: 18px;
+    color: var(--ink-100);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .pillar .pillar-jp {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .pillar p { color: var(--ink-400); font-size: 14px; }
+
+  .pillar::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--crimson);
+    opacity: 0.7;
+  }
+
+  .pillar:nth-child(2)::before { background: var(--gold); }
+  .pillar:nth-child(3)::before { background: var(--azure); }
+
+  /* ───── 루프 다이어그램 ───── */
+  .loop-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin: 32px 0;
+    flex-wrap: wrap;
+  }
+
+  .loop-step {
+    flex: 1 1 200px;
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-radius: var(--radius-sm);
+    padding: 20px 18px;
+    position: relative;
+  }
+
+  .loop-step .step-num {
+    color: var(--crimson);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    margin-bottom: 8px;
+  }
+
+  .loop-step .step-title {
+    color: var(--ink-100);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .loop-step .step-desc { color: var(--ink-400); font-size: 13px; }
+
+  .loop-step:not(:last-child)::after {
+    content: "→";
+    position: absolute;
+    right: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--crimson);
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 1;
+  }
+
+  /* ───── 타이밍 액션 섹션 ───── */
+  .timing-hero {
+    background: linear-gradient(135deg, rgba(200,51,42,0.08), rgba(200,155,60,0.04));
+    border: 1px solid var(--crimson-dim);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin-bottom: 36px;
+  }
+
+  .timing-hero .label {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 0.25em;
+    margin-bottom: 8px;
+  }
+
+  .timing-hero h3 {
+    font-size: 24px;
+    color: var(--ink-100);
+    margin: 0 0 12px;
+  }
+
+  .timing-hero p { color: var(--ink-200); font-size: 15px; }
+
+  /* 게임 비교 표 */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 14px;
+  }
+
+  .compare-table th, .compare-table td {
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--ink-line);
+  }
+
+  .compare-table th {
+    background: var(--bg-surface);
+    color: var(--gold);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .compare-table tr:hover td { background: var(--bg-surface); }
+
+  .compare-table .yes { color: var(--jade); font-weight: 600; }
+  .compare-table .no  { color: var(--ink-600); }
+  .compare-table .mid { color: var(--gold); }
+
+  /* 타이밍 메커닉 카드 */
+  .mechanic {
+    border-left: 3px solid var(--ink-line);
+    padding: 4px 0 4px 18px;
+    margin-bottom: 22px;
+  }
+
+  .mechanic.implemented { border-left-color: var(--jade); }
+  .mechanic.proposed    { border-left-color: var(--telegraph-y); }
+  .mechanic.future      { border-left-color: var(--azure); }
+
+  .mechanic-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .mechanic-name {
+    color: var(--ink-100);
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .status-chip {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  .status-chip.impl    { background: rgba(78,166,114,0.15); color: var(--jade); }
+  .status-chip.prop    { background: rgba(245,197,66,0.15); color: var(--telegraph-y); }
+  .status-chip.future  { background: rgba(74,130,214,0.15); color: var(--azure); }
+
+  .mechanic-desc { color: var(--ink-400); font-size: 14px; line-height: 1.7; }
+  .mechanic-desc .kw { color: var(--gold); font-weight: 600; }
+
+  /* ───── 차트 / 미터 ───── */
+  .meter {
+    background: var(--bg-elevated);
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--crimson), var(--gold));
+    border-radius: 999px;
+    transition: width 800ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+
+  .meter-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 60px;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  .meter-row .label { color: var(--ink-200); font-size: 13px; }
+  .meter-row .value { text-align: right; color: var(--gold); font-weight: 600; font-size: 13px; }
+
+  /* ───── 챕터 타임라인 ───── */
+  .timeline-wrap {
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-radius: var(--radius);
+    padding: 28px 24px 20px;
+    margin: 24px 0;
+    overflow-x: auto;
+  }
+
+  .timeline {
+    position: relative;
+    min-width: 720px;
+    padding-top: 56px;
+    padding-bottom: 36px;
+  }
+
+  .timeline-line {
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--crimson) 0%, var(--gold) 50%, var(--telegraph-r) 100%);
+    border-radius: 999px;
+  }
+
+  .timeline-event {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+  }
+
+  .timeline-marker {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ink-100);
+    border: 3px solid var(--bg-deep);
+    box-shadow: 0 0 0 2px var(--gold);
+  }
+
+  .timeline-event.boss .timeline-marker {
+    background: var(--telegraph-r);
+    box-shadow: 0 0 0 2px var(--telegraph-r), 0 0 16px var(--telegraph-r);
+  }
+
+  .timeline-event.elite .timeline-marker {
+    background: var(--gold);
+    box-shadow: 0 0 0 2px var(--gold);
+  }
+
+  .timeline-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .timeline-event .timeline-label.above { bottom: 24px; }
+  .timeline-event .timeline-label.below { top: 24px; }
+
+  .timeline-label .time { color: var(--gold); font-weight: 700; display: block; }
+  .timeline-label .desc { color: var(--ink-400); font-size: 10px; }
+
+  /* ───── 마일스톤 ───── */
+  .milestone-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    color: var(--ink-200);
+    padding: 8px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all var(--t-fast);
+  }
+
+  .filter-btn:hover { background: var(--bg-elevated); }
+  .filter-btn.active {
+    background: var(--crimson);
+    border-color: var(--crimson);
+    color: white;
+  }
+
+  .milestones { display: grid; gap: 16px; }
+
+  .milestone {
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-left: 4px solid var(--ink-line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    cursor: pointer;
+    transition: all var(--t-fast);
+  }
+
+  .milestone.done { border-left-color: var(--jade); }
+  .milestone.next { border-left-color: var(--telegraph-y); }
+  .milestone.future { border-left-color: var(--azure); }
+  .milestone.optional { border-left-color: var(--ink-600); }
+
+  .milestone:hover { background: var(--bg-elevated); }
+
+  .milestone-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .milestone-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .milestone-num {
+    font-family: "Georgia", serif;
+    color: var(--gold);
+    font-size: 22px;
+    font-weight: 400;
+    min-width: 32px;
+  }
+
+  .milestone-title {
+    color: var(--ink-100);
+    font-weight: 700;
+    font-size: 17px;
+  }
+
+  .progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 160px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-elevated);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--jade), var(--gold));
+    border-radius: 999px;
+    transition: width 600ms ease;
+  }
+
+  .progress-label {
+    font-size: 11px;
+    color: var(--ink-400);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .milestone-goal {
+    color: var(--ink-400);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .milestone-body {
+    display: none;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--ink-line);
+  }
+
+  .milestone.open .milestone-body { display: block; }
+
+  .checklist { list-style: none; }
+  .checklist li {
+    padding: 6px 0 6px 28px;
+    position: relative;
+    color: var(--ink-200);
+    font-size: 14px;
+  }
+
+  .checklist li::before {
+    content: "☐";
+    position: absolute;
+    left: 4px;
+    color: var(--ink-600);
+    font-size: 16px;
+  }
+
+  .checklist li.done::before { content: "☑"; color: var(--jade); }
+  .checklist li.done { color: var(--ink-400); }
+
+  /* ───── 카드 풀 ───── */
+  .card-filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .game-card {
+    background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated));
+    border: 1px solid var(--ink-line);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: all var(--t-med);
+    cursor: pointer;
+  }
+
+  .game-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--crimson);
+  }
+  .game-card.t-numeric::before     { background: var(--azure); }
+  .game-card.t-mechanic::before    { background: var(--gold); }
+  .game-card.t-timing::before      { background: var(--telegraph-y); box-shadow: 0 0 8px var(--telegraph-y); }
+  .game-card.t-numeric-future::before  { background: linear-gradient(90deg, var(--azure), var(--ink-line)); }
+  .game-card.t-mechanic-future::before { background: linear-gradient(90deg, var(--gold), var(--ink-line)); }
+
+  .game-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+    border-color: var(--ink-600);
+  }
+
+  .gc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .gc-name { color: var(--ink-100); font-weight: 700; font-size: 16px; }
+  .gc-rarity { color: var(--gold); font-size: 11px; letter-spacing: 0.1em; }
+  .gc-desc { color: var(--ink-400); font-size: 13px; line-height: 1.6; }
+  .gc-tag {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .gc-tag.impl { background: rgba(78,166,114,0.15); color: var(--jade); }
+  .gc-tag.prop { background: rgba(245,197,66,0.15); color: var(--telegraph-y); }
+
+  /* ───── 적/보스 ───── */
+  .bestiary { display: grid; gap: 14px; }
+
+  .enemy-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px 1fr 80px;
+    gap: 16px;
+    align-items: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    transition: all var(--t-fast);
+  }
+  .enemy-row:hover { background: var(--bg-elevated); }
+
+  .enemy-glyph {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .enemy-name { color: var(--ink-100); font-weight: 700; }
+  .enemy-sub { color: var(--ink-400); font-size: 12px; }
+
+  .stat-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-block .stat-label { color: var(--ink-600); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .stat-block .stat-value { color: var(--ink-100); font-weight: 700; }
+
+  .behavior { color: var(--ink-400); font-size: 13px; }
+
+  .enemy-row.boss { border-color: var(--telegraph-r); }
+  .enemy-row.boss .enemy-glyph { background: rgba(227,74,58,0.15); color: var(--telegraph-r); }
+  .enemy-row.elite { border-left: 3px solid var(--gold); }
+
+  @media (max-width: 720px) {
+    .enemy-row {
+      grid-template-columns: 50px 1fr;
+      grid-template-rows: auto auto auto;
+    }
+    .enemy-row .stat-block, .enemy-row .behavior { grid-column: 2; }
+  }
+
+  /* ───── 의사결정 / 위험 ───── */
+  .decision-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-left: 4px solid var(--telegraph-y);
+    border-radius: var(--radius-sm);
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+
+  .decision-card .dq {
+    color: var(--ink-100);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .decision-card .dq-detail { color: var(--ink-400); font-size: 13px; }
+
+  .risk-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .risk-table th, .risk-table td {
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ink-line);
+  }
+
+  .risk-table th {
+    color: var(--gold);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .risk-id {
+    font-family: "Georgia", serif;
+    color: var(--crimson);
+    font-weight: 700;
+  }
+
+  /* ───── 메타 진행 ───── */
+  .meta-passive {
+    display: grid;
+    grid-template-columns: 1fr 120px 80px;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--bg-surface);
+    border: 1px solid var(--ink-line);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+  }
+
+  .meta-passive .mp-name { color: var(--ink-100); font-weight: 700; }
+  .meta-passive .mp-desc { color: var(--ink-400); font-size: 13px; margin-top: 2px; }
+  .meta-passive .mp-stages {
+    display: flex;
+    gap: 4px;
+  }
+  .meta-passive .stage {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--ink-600);
+  }
+  .meta-passive .stage.unlocked { background: var(--gold); border-color: var(--gold); }
+  .meta-passive .mp-cost {
+    color: var(--gold);
+    font-weight: 700;
+    font-size: 13px;
+    text-align: right;
+  }
+
+  /* ───── 푸터 ───── */
+  footer {
+    margin-top: 80px;
+    padding: 32px;
+    text-align: center;
+    color: var(--ink-600);
+    font-size: 12px;
+    border-top: 1px solid var(--ink-line);
+  }
+
+  footer a {
+    color: var(--gold);
+    text-decoration: none;
+  }
+  footer a:hover { text-decoration: underline; }
+
+  /* ───── 유틸 ───── */
+  .kbd {
+    background: var(--bg-elevated);
+    border: 1px solid var(--ink-line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 12px;
+    color: var(--gold);
+  }
+
+  .code {
+    background: var(--bg-elevated);
+    border: 1px solid var(--ink-line);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 12px;
+    color: var(--ink-200);
+  }
+
+  .callout {
+    background: rgba(245,197,66,0.06);
+    border: 1px solid rgba(245,197,66,0.3);
+    border-left: 4px solid var(--gold);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+
+  .callout strong { color: var(--gold); }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .badge.done { background: rgba(78,166,114,0.15); color: var(--jade); }
+  .badge.wip { background: rgba(245,197,66,0.15); color: var(--telegraph-y); }
+  .badge.todo { background: rgba(74,130,214,0.15); color: var(--azure); }
+  .badge.opt { background: var(--bg-elevated); color: var(--ink-400); }
+
+  /* ───── 모션 약화 ───── */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-tag">ProjectFBDC · v0.1 Vision Dashboard</div>
+  <h1>한 손으로 30분, <span class="kanji">居合</span> 한 번에<br>
+    <span class="accent">영원히 살아남는</span> 사무라이.</h1>
+  <p class="hero-quote">HD-2D 핵앤슬래시 × Vampire Survivors 메타 진행 × 인왕(Nioh) 풍 텔레그래프 전투.<br>
+    자동공격 없이 — 차징, 조준, 결단으로 베는 <strong>타이밍 액션 뱀써</strong>.</p>
+  <div class="hero-meta">
+    <span class="pill">엔진 <strong>Godot 4.7</strong></span>
+    <span class="pill">렌더 <strong>d3d12 / Forward Mobile</strong></span>
+    <span class="pill">현재 <strong>Milestone 0 ✓</strong></span>
+    <span class="pill">목표 세션 <strong>2~5분 / 챕터</strong></span>
+    <span class="pill">최종 갱신 <strong>2026-06-03</strong></span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tabs-inner">
+    <button class="tab active" data-tab="vision">비전</button>
+    <button class="tab" data-tab="timing">타이밍 액션</button>
+    <button class="tab" data-tab="current">현재 상태</button>
+    <button class="tab" data-tab="roadmap">로드맵</button>
+    <button class="tab" data-tab="cards">카드 풀</button>
+    <button class="tab" data-tab="bestiary">적 / 보스</button>
+    <button class="tab" data-tab="meta">메타 진행</button>
+    <button class="tab" data-tab="decisions">의사결정 / 위험</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ════════════════════ 비전 ════════════════════ -->
+  <section id="vision" class="panel active">
+    <h2 class="section-title"><span class="num">01</span>비전</h2>
+    <p class="section-subtitle">
+      ProjectFBDC는 자동공격 뱀써가 아니다. 매 슬래시가 <strong>플레이어의 결정</strong>이고,
+      매 보스 패턴이 <strong>읽고 대응해야 하는 시그널</strong>이며, 죽음마저 <strong>영구 성장</strong>으로
+      환원되는 — 30초 안에 손맛을 이해하고, 30분 후엔 빌드 다양성에 빠지는 게임.
+    </p>
+
+    <h3>세 기둥</h3>
+    <div class="grid grid-3">
+      <div class="card pillar">
+        <span class="pillar-icon">⚔️</span>
+        <div class="pillar-jp">居合 · Iaido</div>
+        <div class="pillar-title">차징 · 조준 · 결단</div>
+        <p>VS류의 자동공격이 아닌 <strong>이아이도(거합)</strong>. LMB 홀드로 차징, 방향 조준, 릴리즈로 대시-슬래시. 한 번의 결단으로 다수를 베는 손맛.</p>
+      </div>
+      <div class="card pillar">
+        <span class="pillar-icon">🌸</span>
+        <div class="pillar-jp">仁王 · Nioh-style</div>
+        <div class="pillar-title">텔레그래프 · 패리 · 회피</div>
+        <p>보스/엘리트는 <strong>색 시그널 → 패턴 → 응답</strong>. 노랑이면 패리, 빨강이면 회피. 잡몹은 VS처럼 그냥 베지만 보스는 읽어야 한다.</p>
+      </div>
+      <div class="card pillar">
+        <span class="pillar-icon">🏯</span>
+        <div class="pillar-jp">HD-2D</div>
+        <div class="pillar-title">3D 월드 + 2D 빌보드</div>
+        <p>옥토패스 트래블러 스타일. 3D 그라운드와 카메라 깊이감 위에 2D 픽셀 스프라이트가 살아 움직이는 도트 비주얼.</p>
+      </div>
+    </div>
+
+    <h3>플레이 루프</h3>
+    <div class="loop-flow">
+      <div class="loop-step">
+        <div class="step-num">STEP 01</div>
+        <div class="step-title">아웃게임 선택</div>
+        <div class="step-desc">챕터 선택 + 메타 패시브로 시작 능력치 보정 + 시작 카드 1장(언락 시)</div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">STEP 02</div>
+        <div class="step-title">인게임 생존</div>
+        <div class="step-desc">웨이브 처리 → 레벨업 → 3장 카드 → 빌드. 보스까지 ~2~5분</div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">STEP 03</div>
+        <div class="step-title">정산 / 사망</div>
+        <div class="step-desc">보스 격파 시 클리어 / 사망 시 그 시점까지 EXP·시간 기록. 둘 다 혼(魂) 적립</div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">STEP 04</div>
+        <div class="step-title">메타 성장</div>
+        <div class="step-desc">혼으로 패시브 강화 + 카드 풀 언락 → 다시 STEP 01. 매 회 더 강해진 상태로 도전</div>
+      </div>
+    </div>
+
+    <h3>차별점 한 줄</h3>
+    <div class="callout">
+      <strong>VS</strong>: "자동공격 + 무한 패시브 스택" → 멍 때리는 손맛 · <strong>Soulslike</strong>: "패턴 학습 + 어려운 보스" → 죽음의 무게 ·
+      <strong>본 프로젝트</strong>: <strong>그 사이의 빈 공간</strong> — 30분 단위로 끝나는 뱀써의 흡입력 위에, 보스마다 다른 시그널을 읽고 패리하는 인왕의 손맛을 얹는다.
+    </div>
+
+    <h3>세션 / 챕터 타이밍</h3>
+    <div class="timeline-wrap">
+      <div class="timeline">
+        <div class="timeline-line"></div>
+        <div class="timeline-event" style="left: 0%;">
+          <div class="timeline-label above"><span class="time">t=0s</span><span class="desc">시작 · pop 18</span></div>
+          <div class="timeline-marker"></div>
+        </div>
+        <div class="timeline-event" style="left: 25%;">
+          <div class="timeline-label below"><span class="time">t=30s</span><span class="desc">pop 39 · 압박↑</span></div>
+          <div class="timeline-marker"></div>
+        </div>
+        <div class="timeline-event elite" style="left: 50%;">
+          <div class="timeline-label above"><span class="time">t=60s</span><span class="desc">LV2 + 엘리트 3종</span></div>
+          <div class="timeline-marker"></div>
+        </div>
+        <div class="timeline-event" style="left: 75%;">
+          <div class="timeline-label below"><span class="time">t=90s</span><span class="desc">pop 55 · 최대 압박</span></div>
+          <div class="timeline-marker"></div>
+        </div>
+        <div class="timeline-event boss" style="left: 100%;">
+          <div class="timeline-label above"><span class="time">t=120s</span><span class="desc">⚠ BOSS · pop 9</span></div>
+          <div class="timeline-marker"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ 타이밍 액션 ════════════════════ -->
+  <section id="timing" class="panel">
+    <h2 class="section-title"><span class="num">02</span>타이밍 액션 뱀써 — 핵심 정체성</h2>
+    <p class="section-subtitle">
+      "타이밍 액션 뱀써"는 본 프로젝트의 <strong>유일무이한 차별점</strong>이자 모든 시스템이 정렬해야 할 북극성이다.
+      이 섹션은 현재 살아있는 타이밍 메커닉을 정리하고, 정체성을 강화할 다음 단계 후보를 우선순위 순서로 나열한다.
+    </p>
+
+    <div class="timing-hero">
+      <div class="label">DESIGN NORTH STAR</div>
+      <h3>"매 입력이 결단이다 — 자동은 없다."</h3>
+      <p>플레이어가 화면을 본다. 시그널을 읽는다. 차징·조준·릴리즈한다. 회피한다. 패리한다. 잘 했으면 보상받고 못 했으면 죽는다. <strong>타이밍이 곧 게임플레이</strong>다.</p>
+    </div>
+
+    <h3>장르 비교 — 우리는 어디에 있는가</h3>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>장르 / 게임</th>
+          <th>자동공격</th>
+          <th>차징·조준</th>
+          <th>패리</th>
+          <th>완벽 회피</th>
+          <th>메타 진행</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Vampire Survivors</td>
+          <td class="yes">완전 자동</td>
+          <td class="no">없음</td>
+          <td class="no">없음</td>
+          <td class="no">없음</td>
+          <td class="yes">강함</td>
+        </tr>
+        <tr>
+          <td>Hades</td>
+          <td class="no">없음</td>
+          <td class="mid">제한적</td>
+          <td class="mid">대시 무적만</td>
+          <td class="mid">대시 i-frame</td>
+          <td class="yes">강함</td>
+        </tr>
+        <tr>
+          <td>Sekiro</td>
+          <td class="no">없음</td>
+          <td class="mid">강공격</td>
+          <td class="yes">핵심 메커닉</td>
+          <td class="yes">미카리</td>
+          <td class="no">없음 (3D 액션 어드벤처)</td>
+        </tr>
+        <tr>
+          <td>Nioh 2</td>
+          <td class="no">없음</td>
+          <td class="yes">강공격 + 스탠스</td>
+          <td class="yes">버스트 카운터</td>
+          <td class="yes">기 펄스</td>
+          <td class="mid">소울즈식</td>
+        </tr>
+        <tr style="background: rgba(200,51,42,0.06);">
+          <td><strong style="color: var(--crimson);">ProjectFBDC</strong></td>
+          <td class="no">의도적으로 제거</td>
+          <td class="yes">이아이도 차징 + 방향 조준</td>
+          <td class="yes">YELLOW 시그널 0.3s 윈도우</td>
+          <td class="mid">Shift 대시 i-frame 0.18s</td>
+          <td class="yes">VS식 단순 메타</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>현재 살아있는 타이밍 메커닉</h3>
+
+    <div class="mechanic implemented">
+      <div class="mechanic-head">
+        <span class="mechanic-name">이아이도 차징 (Iaido Charge)</span>
+        <span class="status-chip impl">Implemented</span>
+      </div>
+      <div class="mechanic-desc">
+        LMB 홀드 — <span class="kw">0초</span>에서 <span class="kw">0.72초</span>까지 차징하면 사거리 <span class="kw">3 → 11</span>, 폭은 일정. 릴리즈 시 대시-슬래시.
+        대시 중 무적, 일반 적 즉사. 차징량 시각화는 <strong>AimArrow</strong>로. <span class="code">Player.gd</span> / <span class="code">player_data.tres</span>.
+      </div>
+    </div>
+
+    <div class="mechanic implemented">
+      <div class="mechanic-head">
+        <span class="mechanic-name">보스 노랑 패리 (Yellow Parry Window)</span>
+        <span class="status-chip impl">Implemented</span>
+      </div>
+      <div class="mechanic-desc">
+        보스가 휘두르기 전 <span class="kw">머리 위 색 시그널</span> + 지면 부채꼴. 노랑일 때 sweep 직전 <span class="kw">0.3초</span> 윈도우 안에 슬래시로 맞히면
+        패턴 캔슬 + 카메라 강쉐이크 + 보스 1초 스턴. 빨강일 땐 못 막음 — 회피 필수. <span class="code">Boss.gd</span>.
+      </div>
+    </div>
+
+    <div class="mechanic implemented">
+      <div class="mechanic-head">
+        <span class="mechanic-name">대시 회피 i-frame</span>
+        <span class="status-chip impl">Implemented</span>
+      </div>
+      <div class="mechanic-desc">
+        Shift — <span class="kw">0.18초</span> 무적, 거리 3.5, 쿨 0.7초. 화살·잡몹 부채꼴 모두 통과. Wind Walker 카드로 쿨 -25% 스택.
+      </div>
+    </div>
+
+    <div class="mechanic implemented">
+      <div class="mechanic-head">
+        <span class="mechanic-name">엘리트 처치 불릿타임 (Type 3)</span>
+        <span class="status-chip impl">Implemented</span>
+      </div>
+      <div class="mechanic-desc">
+        파란 엘리트 처치 시 <span class="kw">3초간 모든 적 시간 25% 슬로우</span> + 환경 채도 깜빡임. 보상으로서의 시간 조작 — <strong>플레이어가 만든 윈도우</strong>.
+      </div>
+    </div>
+
+    <h3>다음 단계 — 타이밍 액션 강화 제안</h3>
+    <p class="section-subtitle">우선순위 순. 각 항목은 <strong>"이걸 넣었을 때 게임이 더 타이밍 게임으로 느껴지는가"</strong>를 기준으로 정렬됨.</p>
+
+    <div class="mechanic proposed">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 퍼펙트 패리 보상 사슬 (Perfect Parry Chain)</span>
+        <span class="status-chip prop">Proposed · Milestone 2~3</span>
+      </div>
+      <div class="mechanic-desc">
+        보스 패리 성공 직후 <span class="kw">1초 윈도우</span>에 한해 다음 슬래시가 <span class="kw">3중첩</span>으로 들어감 (= 3뎀).
+        연속 패리 성공 시 카메라 줌인 + 음 한 박. <strong>왜?</strong> 현재 패리 보상은 "보스 1초 스턴"뿐 — 카운터가 약하다. 보상을 키워야 노랑이 보일 때마다 욕망이 생긴다.
+        <br>구현: <span class="code">Boss._on_parried</span>에서 PC <span class="code">parry_boost_until</span> 설정 → <span class="code">SlashAttack</span>이 그 시간에 보스 hit 시 dmg×3.
+      </div>
+    </div>
+
+    <div class="mechanic proposed">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 퍼펙트 닷지 → 카운터 윈도우 (Perfect Dodge → Counter)</span>
+        <span class="status-chip prop">Proposed · Milestone 3</span>
+      </div>
+      <div class="mechanic-desc">
+        피격 직전 <span class="kw">0.08초</span> 안에 Shift를 쳤을 때 — i-frame 0.18s 유지 + 추가로 <span class="kw">0.5초 자기-불릿타임</span> + 화면 가장자리 잔영 효과.
+        엘리트 3 효과의 PC 버전. <strong>왜?</strong> 회피가 "안 맞으면 OK"의 패시브 행동에서 → "직전에 맞춰 치면 보상" 능동 행동으로 격상.
+        <br>구현: <span class="code">Player._on_hit_attempt</span> 시그널 도입 → 피격 판정 직전 dodge 이력 체크.
+      </div>
+    </div>
+
+    <div class="mechanic proposed">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 차징 그레이드 (Iaido Grade — Quick / Mid / Perfect)</span>
+        <span class="status-chip prop">Proposed · Milestone 3~4</span>
+      </div>
+      <div class="mechanic-desc">
+        현재 차징은 0~0.72s 선형. 이걸 <span class="kw">3구간</span>으로 나눔:
+        <br>· <strong>Quick (0~0.3s)</strong> — 짧은 사거리·빠른 회복
+        <br>· <strong>Mid (0.3~0.6s)</strong> — 균형
+        <br>· <strong>Perfect (0.65~0.72s)</strong> — 최대 사거리 + <span class="kw">슬래시 trail에 보조 잔상 1개</span> (= 1초 안에 같은 자리에 한 번 더 친다)
+        <br>0.72s를 넘기면 <span class="kw">overcharge fizzle</span> — 1초 모든 차징 봉인.
+        <br><strong>왜?</strong> 차징 길이의 "타이밍 결정"이 현재 단조롭다. 구간을 두면 음악적 리듬이 생긴다.
+        <br>구현: <span class="code">Player.gd</span> charge_time → grade 분기 + <span class="code">AimArrow</span>에 grade band 색 추가.
+      </div>
+    </div>
+
+    <div class="mechanic proposed">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 잡몹 텔레그래프 캔슬 (Mob Telegraph Cancel)</span>
+        <span class="status-chip prop">Proposed · Milestone 3</span>
+      </div>
+      <div class="mechanic-desc">
+        근거리 잡몹 부채꼴 텔레그래프 (현재 0.5초) 중에 슬래시로 베면 <span class="kw">텔레그래프 자체가 캔슬</span> + 잡몹은 즉사.
+        스킬샷의 보상 — "예방적 슬래시"가 의미를 갖는다. <strong>왜?</strong> 현재 잡몹은 그냥 베면 다 죽으니 텔레그래프가 "맞으면 죽음" 외엔 의미가 없다.
+        <br>구현: <span class="code">MeleeEnemy</span> wind-up 중 take_hit 시 텔레그래프 효과 노드 destroy.
+      </div>
+    </div>
+
+    <div class="mechanic proposed">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 젠 미터 (Zen Meter — 연속 퍼펙트 보상)</span>
+        <span class="status-chip prop">Proposed · Milestone 4~5</span>
+      </div>
+      <div class="mechanic-desc">
+        퍼펙트 패리·퍼펙트 닷지·퍼펙트 차징이 연속될 때마다 <span class="kw">Zen 미터</span> +1. 미터가 가득 차면 <span class="kw">필살 슬래시</span> 사용 가능 (대각선 풀화면 슬래시 1회).
+        피격 시 미터 절반 감소. <strong>왜?</strong> "잘 했을 때만 더 잘할 수 있다"의 상승 사이클. Hi-Fi Rush의 리듬 미터, Devil May Cry의 SSS 랭크의 정신.
+        <br>구현: <span class="code">ZenSystem.gd</span> 매니저 신규. HUD 미터 표시. 필살은 <span class="code">SuperSlash.tscn</span> 효과.
+      </div>
+    </div>
+
+    <div class="mechanic future">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 다중 시그널 컬러 (Multi-Color Telegraph)</span>
+        <span class="status-chip future">Future · Milestone 6+</span>
+      </div>
+      <div class="mechanic-desc">
+        보스 2/3가 추가될 때 — 시그널 컬러 확장:
+        <br>· <strong>흰색</strong> = 잡기 패턴 → Shift만 회피 가능 (패리 불가)
+        <br>· <strong>보라</strong> = 광역 → 거리 벌리기만 가능
+        <br>· <strong>녹색</strong> = 다단히트 → 패리 N회 연속 시에만 캔슬
+        <br>각 보스는 컬러 조합이 달라야 한다. 보스1 = 노/빨, 보스2 = 노/빨/흰, 보스3 = 노/빨/보라/녹 — 점진 확장.
+      </div>
+    </div>
+
+    <div class="mechanic future">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 비트 동기 모드 (Rhythm-Sync, 선택적)</span>
+        <span class="status-chip future">Future · Optional · Milestone 7+</span>
+      </div>
+      <div class="mechanic-desc">
+        BGM 도입 시점에 — <span class="kw">옵션</span>으로 켜는 모드. 비트 박자 ±100ms 안에 슬래시 릴리즈 시 추가 데미지 +0.5 / Zen +1.
+        Hi-Fi Rush 정신, 하지만 강제는 아니다. <strong>왜 옵션?</strong> 음악에 약한 플레이어를 배제하면 안 됨. 접근성 위주.
+      </div>
+    </div>
+
+    <div class="mechanic future">
+      <div class="mechanic-head">
+        <span class="mechanic-name">⏱ 패리 카드 메커니즘 그룹 (Parry-Themed Cards)</span>
+        <span class="status-chip future">Future · Milestone 3</span>
+      </div>
+      <div class="mechanic-desc">
+        타이밍 정체성을 카드 풀에도 — 신규 카드 그룹:
+        <br>· <strong>Counter Step</strong> — 패리 성공 후 1초 안에 이동 속도 +50%
+        <br>· <strong>Echo Slash</strong> — 퍼펙트 차징 시 0.3초 후 같은 자리 CircularSlash
+        <br>· <strong>Reflective Guard</strong> — i-frame 중 닿은 화살 반사
+        <br>· <strong>Iron Will (Defiance)</strong> — 피격 시 자동으로 0.5초 i-frame + Zen +1
+      </div>
+    </div>
+
+    <h3>참고작 / 영감원</h3>
+    <div class="grid grid-3">
+      <div class="card">
+        <h4>Sekiro</h4>
+        <p style="font-size: 14px;">패리 = 시스템의 중심. 우리도 패리 보상을 키워야 함. 단, 패리 실패 페널티는 가볍게 유지 (뱀써 흐름 유지).</p>
+      </div>
+      <div class="card">
+        <h4>Nioh 2</h4>
+        <p style="font-size: 14px;">스탠스 = 차징 구간의 영감. 다만 우리는 단일 무기라 "스탠스" 대신 <strong>차징 그레이드</strong>로 풀어냄.</p>
+      </div>
+      <div class="card">
+        <h4>Hi-Fi Rush</h4>
+        <p style="font-size: 14px;">리듬 동기 — 옵션으로만. Zen 미터의 직접 영감.</p>
+      </div>
+      <div class="card">
+        <h4>Hades</h4>
+        <p style="font-size: 14px;">대시 i-frame의 균형감. 30분 세션 안에 빌드가 펴지는 페이싱.</p>
+      </div>
+      <div class="card">
+        <h4>Vampire Survivors</h4>
+        <p style="font-size: 14px;">아웃게임 영구 패시브 + 카드 풀 언락 구조. 단 자동공격은 의도적으로 배제.</p>
+      </div>
+      <div class="card">
+        <h4>Octopath Traveler</h4>
+        <p style="font-size: 14px;">HD-2D 비주얼 톤. 3D 깊이 + 2D 스프라이트의 빌보드.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ 현재 상태 ════════════════════ -->
+  <section id="current" class="panel">
+    <h2 class="section-title"><span class="num">03</span>현재 상태 — Milestone 0 완료</h2>
+    <p class="section-subtitle">2026-06-03 기준. 핵심 루프 1바퀴가 살아있고 Testplay 씬으로 디버그 가능.</p>
+
+    <h3>시스템별 상태</h3>
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>PC · 거합 사무라이</h4>
+        <div class="meter-row"><span class="label">이동/회피/i-frame</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">이아이도 차징 슬래시</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">HP · 피격 · 사망</span><div class="meter"><div class="meter-fill" style="width: 90%"></div></div><span class="value">90%</span></div>
+        <p style="color: var(--ink-400); font-size: 12px; margin-top: 8px;">사망 시 GameOver UI 부재 — Milestone 1.</p>
+      </div>
+
+      <div class="card">
+        <h4>적 / 보스</h4>
+        <div class="meter-row"><span class="label">잡몹 (LV1/LV2/원거리)</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">엘리트 3종</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">보스 1종 (Ch1)</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+      </div>
+
+      <div class="card">
+        <h4>웨이브 / 챕터</h4>
+        <div class="meter-row"><span class="label">Ch1 곡선 (120s)</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">스폰 위치 로직</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">Chapter 2+</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+      </div>
+
+      <div class="card">
+        <h4>진행 / 카드</h4>
+        <div class="meter-row"><span class="label">EXP 곡선</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">레벨업 카드 풀</span><div class="meter"><div class="meter-fill" style="width: 35%"></div></div><span class="value">35%</span></div>
+        <div class="meter-row"><span class="label">메커니즘 카드</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+        <p style="color: var(--ink-400); font-size: 12px; margin-top: 8px;">현재 7장 (단순 수치) · 목표 20~30장.</p>
+      </div>
+
+      <div class="card">
+        <h4>UI / UX</h4>
+        <div class="meter-row"><span class="label">HUD / ExpBar / HP3D</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">레벨업 / 클리어 화면</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">GameOver / OutGame</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+      </div>
+
+      <div class="card">
+        <h4>저장 / 메타</h4>
+        <div class="meter-row"><span class="label">SaveSystem</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+        <div class="meter-row"><span class="label">메타 영구강화</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+        <div class="meter-row"><span class="label">카드 풀 언락</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+      </div>
+
+      <div class="card">
+        <h4>비주얼 / 사운드</h4>
+        <div class="meter-row"><span class="label">HD-2D 카메라 / 그라운드</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">스프라이트 · VFX (placeholder)</span><div class="meter"><div class="meter-fill" style="width: 30%"></div></div><span class="value">30%</span></div>
+        <div class="meter-row"><span class="label">BGM · SFX</span><div class="meter"><div class="meter-fill" style="width: 0%"></div></div><span class="value">0%</span></div>
+      </div>
+
+      <div class="card">
+        <h4>도구 / 워크플로우</h4>
+        <div class="meter-row"><span class="label">Testplay 씬 (F6)</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">빌드 자동화 (godot-export)</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+        <div class="meter-row"><span class="label">런타임 검증 스킬</span><div class="meter"><div class="meter-fill" style="width: 100%"></div></div><span class="value">100%</span></div>
+      </div>
+    </div>
+
+    <h3>PC 능력치 — 현재 튜닝값</h3>
+    <table class="compare-table">
+      <thead><tr><th>항목</th><th>값</th><th>관련 카드</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td>이동 속도</td><td>5.0</td><td>Quickstep +20% 스택</td><td>—</td></tr>
+        <tr><td>최대 HP</td><td>5</td><td>Iron Will +1 스택</td><td>피격 1뎀 (잡몹/엘리트), 2뎀 (보스)</td></tr>
+        <tr><td>슬래시 사거리</td><td>3 ~ 11</td><td>Reach +20% 스택</td><td>차징량에 비례</td></tr>
+        <tr><td>슬래시 폭</td><td>1.4</td><td>Razor's Edge +30% 스택</td><td>—</td></tr>
+        <tr><td>슬래시 쿨</td><td>0.15s</td><td>Vigilance -30% 스택</td><td>—</td></tr>
+        <tr><td>최대 차징 시간</td><td>0.72s</td><td>—</td><td>사용자 컨펌 튜닝값</td></tr>
+        <tr><td>대시(슬래시) 시간</td><td>0.12s</td><td>—</td><td>대시 중 무적</td></tr>
+        <tr><td>회피 거리 / 쿨</td><td>3.5 / 0.7s</td><td>Wind Walker -25% 쿨</td><td>i-frame 0.18s</td></tr>
+        <tr><td>피격 i-frame</td><td>1.0s</td><td>—</td><td>강제 · 메타 강화 후보</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ════════════════════ 로드맵 ════════════════════ -->
+  <section id="roadmap" class="panel">
+    <h2 class="section-title"><span class="num">04</span>로드맵 — 마일스톤별 체크리스트</h2>
+    <p class="section-subtitle">각 마일스톤은 <strong>하나의 게임플레이 가치</strong>를 추가한다. 클릭해서 펼치기. 필터로 상태별 보기.</p>
+
+    <div class="milestone-filters">
+      <button class="filter-btn active" data-filter="all">전체</button>
+      <button class="filter-btn" data-filter="done">완료</button>
+      <button class="filter-btn" data-filter="next">다음 1~2개</button>
+      <button class="filter-btn" data-filter="future">미래</button>
+      <button class="filter-btn" data-filter="optional">선택</button>
+    </div>
+
+    <div class="milestones">
+
+      <div class="milestone done" data-status="done">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M0</span>
+            <div>
+              <div class="milestone-title">Chapter 1 완성 · 핵심 루프 검증</div>
+              <div class="milestone-goal">게임의 핵심 루프 1바퀴가 살아있는 상태</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge done">완료</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 100%"></div></div>
+            <span class="progress-label">5/5</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li class="done">챕터 1 인게임 흐름 (0s ~ 120s + 보스)</li>
+            <li class="done">7종 카드 풀 + 레벨업 시스템</li>
+            <li class="done">엘리트 3종 + 보스 1종</li>
+            <li class="done">Testplay 씬으로 디버그/튜닝 가능</li>
+            <li class="done">코드 구조 문서화 (CLAUDE.md, ARCHITECTURE.md, refactor-pass 스킬)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone next" data-status="next">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M1</span>
+            <div>
+              <div class="milestone-title">사망/클리어 UI + 저장 시스템</div>
+              <div class="milestone-goal">인게임 결과를 영구 데이터로 만들어서 메타 진행의 토대 마련</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge wip">다음</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/6</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li><code class="code">scripts/managers/SaveSystem.gd</code> 신규 — <code class="code">user://save.cfg</code> (Godot ConfigFile)</li>
+            <li><code class="code">scenes/ui/GameOverScreen.tscn/.gd</code> — 사망 시 결과(시간/처치/레벨) 표시 + Retry/Quit 버튼</li>
+            <li><code class="code">ChapterClearScreen</code> 갱신 — 결과 표시 + 최고기록 갱신 여부 표시</li>
+            <li>PC 사망 → 자동으로 GameOverScreen 띄움 (현재 R 수동만)</li>
+            <li>챕터 클리어 / 사망 시 <code class="code">SaveSystem.record()</code> 호출</li>
+            <li><code class="code">CLAUDE.md</code> 인덱스 + ARCHITECTURE.md 데이터 흐름 갱신</li>
+          </ul>
+          <div class="callout">
+            <strong>검증</strong>: 클리어/사망 후 재시작했을 때 이전 최고기록이 화면에 보임.
+          </div>
+        </div>
+      </div>
+
+      <div class="milestone next" data-status="next">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M2</span>
+            <div>
+              <div class="milestone-title">Chapter 2 추가 + 곡선 Resource화</div>
+              <div class="milestone-goal">"챕터제"가 진짜 의미를 갖는 상태. + ⏱ 퍼펙트 패리 사슬 도입 권장</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge wip">다음</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/8</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li><code class="code">WaveCurve.gd</code> Resource 신규 (현재 <code class="code">WaveManager</code>의 const 분리)</li>
+            <li><code class="code">resources/chapters/chapter_1.tres</code>, <code class="code">chapter_2.tres</code> 작성</li>
+            <li><code class="code">WaveManager</code>가 <code class="code">curve: WaveCurve</code>를 받도록 수정</li>
+            <li><code class="code">Main.gd</code> <code class="code">current_chapter</code> + <code class="code">chapter_curves</code> 배열</li>
+            <li>Chapter 2 보스 신규 (<code class="code">Boss2.gd</code>) — 패턴 1~2 추가, 시그널 컬러 확장 권장</li>
+            <li>ChapterClearScreen "Next" → 다음 챕터로 라우팅</li>
+            <li>Testplay 보스 버튼이 챕터 선택 가능하도록</li>
+            <li><code class="code">refactor-pass</code> 스킬 1회 적용 — Main.gd 분리 (SpawnService / ArenaServices)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone future" data-status="future">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M3</span>
+            <div>
+              <div class="milestone-title">카드 풀 확장 — 메커니즘 카드 4~6종</div>
+              <div class="milestone-goal">매판 빌드가 달라지는 재미. 단순 +X% 일색 탈피. ⏱ 타이밍 메커니즘 카드 그룹 도입 시점</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge todo">미래</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/5</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li>Multistrike — 슬래시 2회 연속 / Echo — 슬래시 후 CircularSlash / Reflect — 회피 중 화살 반사</li>
+            <li>Vampire — 처치 시 HP 회복 / Phoenix — 1회 부활 / Bullet Time on Kill</li>
+            <li><strong>⏱ 타이밍 카드 그룹</strong>: Counter Step / Echo Slash / Reflective Guard / Defiance — 타이밍 액션 섹션 참고</li>
+            <li><code class="code">UpgradeSystem.CARDS</code> 확장 + <code class="code">apply()</code> 분기</li>
+            <li>PC 카드 보유 상태 자료구조 — <code class="code">PlayerData</code>에 <code class="code">Array[StringName] active_cards</code> 권장</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone future" data-status="future">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M4</span>
+            <div>
+              <div class="milestone-title">메타 영구강화 (혼 + 패시브)</div>
+              <div class="milestone-goal">사망/클리어가 영구 성장으로 환원되는 보상 사이클. ⏱ Zen 미터 도입 권장 시점</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge todo">미래</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/7</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li><code class="code">MetaProgressionSystem.gd</code> 신규 — 혼 잔액 + 패시브 단계 저장</li>
+            <li><code class="code">MetaPassive.gd</code> Resource — id/name/desc/max_level/cost_curve/effect_id</li>
+            <li><code class="code">resources/meta/passives/*.tres</code> — 7종 패시브 초안</li>
+            <li><code class="code">OutGame.tscn</code> 신규 + <code class="code">MetaMenu.tscn</code> (강화 패널)</li>
+            <li><code class="code">project.godot</code> main_scene = OutGame</li>
+            <li>Main 진입 시 <code class="code">MetaProgressionSystem.apply_to(player, exp_system)</code> 호출</li>
+            <li>사망/클리어 시 혼 적립 + OutGame 복귀</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone future" data-status="future">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M5</span>
+            <div>
+              <div class="milestone-title">카드 풀 언락 시스템</div>
+              <div class="milestone-goal">메타 진행이 매판 빌드 다양성과 연결됨. 첫 플레이 ≠ 50번째 플레이</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge todo">미래</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/4</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li><code class="code">MetaProgressionSystem.is_card_unlocked(id)</code> 메서드</li>
+            <li><code class="code">UpgradeSystem.draw(n)</code>가 잠긴 카드 제외</li>
+            <li><code class="code">CardUnlock.tscn</code> — 잠긴 카드 목록 + 혼 비용</li>
+            <li>초기 풀을 4~5장으로 축소 (나머지는 잠김 — 신규 메커니즘 카드는 챕터 클리어 + 혼 비용)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone future" data-status="future">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M6</span>
+            <div>
+              <div class="milestone-title">Chapter 3 + 추가 보스 + 엘리트 효과 확장</div>
+              <div class="milestone-goal">챕터별 정체성. ⏱ 다중 시그널 컬러 도입 (흰/보라/녹)</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge todo">미래</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/5</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li>Chapter 3 곡선 <code class="code">.tres</code></li>
+            <li>Boss 3 신규 (<code class="code">Boss3.gd</code>) — 패턴 2~3개, 다중 시그널 컬러</li>
+            <li>엘리트 효과 4번 후보 — 사용자 결정 필요</li>
+            <li>챕터별 BGM / 환경 색 변화</li>
+            <li>Testplay 챕터 보스/엘리트 선택 UI 확장</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone future" data-status="future">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M7</span>
+            <div>
+              <div class="milestone-title">사운드 / 음악</div>
+              <div class="milestone-goal">청각 폴리시. ⏱ 비트 동기 모드 옵션 도입 가능 시점</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge todo">미래</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/4</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li>BGM 2~3곡 (메뉴 / 인게임 / 보스전)</li>
+            <li>SFX 15~20종 — 슬래시/피격/적사망/카드선택/보스시그널/패리/레벨업</li>
+            <li>볼륨 슬라이더 (Settings)</li>
+            <li>사운드 매니저 (Autoload 또는 Manager)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone optional" data-status="optional">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M8</span>
+            <div>
+              <div class="milestone-title">비주얼 폴리시 (선택)</div>
+              <div class="milestone-goal">placeholder → 실제 게임 비주얼. 외부 아셋 + AI 생성 가능</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge opt">선택</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/5</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li>사무라이 스프라이트 (idle / walk / attack / death — 4방향)</li>
+            <li>적 스프라이트 (각 종류)</li>
+            <li>보스 스프라이트</li>
+            <li>VFX (슬래시 trail, 폭발, 패리 임팩트, 불릿타임 전환)</li>
+            <li>UI 폴리시 (카드 일러스트, 카드 프레임, 화면 전환 효과)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="milestone optional" data-status="optional">
+        <div class="milestone-head">
+          <div class="milestone-title-row">
+            <span class="milestone-num">M9</span>
+            <div>
+              <div class="milestone-title">세계관 / 내러티브 (선택)</div>
+              <div class="milestone-goal">사용자가 결정 시점 도래 후 추가</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <span class="badge opt">선택</span>
+            <div class="progress-track"><div class="progress-bar" style="width: 0%"></div></div>
+            <span class="progress-label">0/4</span>
+          </div>
+        </div>
+        <div class="milestone-body">
+          <ul class="checklist">
+            <li>사무라이 정체 / 동기 설정</li>
+            <li>챕터별 배경 / 짧은 텍스트 인트로</li>
+            <li>보스별 이름 + 1~2줄 대사</li>
+            <li>(선택) NPC / 마을 / 컷씬</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ════════════════════ 카드 풀 ════════════════════ -->
+  <section id="cards" class="panel">
+    <h2 class="section-title"><span class="num">05</span>카드 풀 — 현재 7장 + 확장 후보</h2>
+    <p class="section-subtitle">레벨업 시 3장에서 1장 선택. 중복 픽 = 스택. 매판 빌드 다양성의 중추.</p>
+
+    <div class="card-filter-bar">
+      <button class="filter-btn active" data-card-filter="all">전체</button>
+      <button class="filter-btn" data-card-filter="impl">구현 완료</button>
+      <button class="filter-btn" data-card-filter="prop">추가 후보</button>
+      <button class="filter-btn" data-card-filter="timing">⏱ 타이밍</button>
+    </div>
+
+    <h3>구현된 카드 — 7장</h3>
+    <div class="grid grid-3" id="cards-impl">
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Razor's Edge</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">슬래시 폭 +30%</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Quickstep</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">이속 +20%</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Iron Will</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">최대 HP +1</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Wind Walker</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">회피 쿨 -25%</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Greed</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">EXP 획득 +25%</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Reach</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">슬래시 사거리 +20%</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+
+      <div class="game-card t-numeric" data-card-type="impl">
+        <div class="gc-head"><span class="gc-name">Vigilance</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">슬래시 쿨 -30%</div>
+        <span class="gc-tag impl">Implemented</span>
+      </div>
+    </div>
+
+    <h3>추가 후보 — 수치형</h3>
+    <div class="grid grid-3" id="cards-prop-numeric">
+      <div class="game-card t-numeric-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Sharpened Blade</span><span class="gc-rarity">UNCOMMON</span></div>
+        <div class="gc-desc">엘리트/보스 대상 데미지 +1</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-numeric-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Berserker</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">HP 절반 이하일 때 슬래시 폭 +50%</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-numeric-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Whirlwind</span><span class="gc-rarity">UNCOMMON</span></div>
+        <div class="gc-desc">슬래시 쿨 추가 -20% (Vigilance 스택)</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-numeric-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Featherweight</span><span class="gc-rarity">UNCOMMON</span></div>
+        <div class="gc-desc">회피 거리 +50%</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+    </div>
+
+    <h3>추가 후보 — 메커니즘형</h3>
+    <div class="grid grid-3" id="cards-prop-mechanic">
+      <div class="game-card t-mechanic-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Multistrike</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">한 번 충전으로 슬래시 2회 연속 (동일 방향, 약간 시차)</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-mechanic-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Echo</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">슬래시 후 0.3초에 같은 자리에 CircularSlash (작게)</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-mechanic-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Vampire</span><span class="gc-rarity">UNCOMMON</span></div>
+        <div class="gc-desc">적 처치 시 1/N 확률로 HP +1</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-mechanic-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Phoenix</span><span class="gc-rarity">EPIC</span></div>
+        <div class="gc-desc">HP 0 도달 시 1회 부활 (1라운드 1회)</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-mechanic-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Magnet</span><span class="gc-rarity">COMMON</span></div>
+        <div class="gc-desc">EXP 자동 흡수 (시각 효과 + 거리 표시)</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+      <div class="game-card t-mechanic-future" data-card-type="prop">
+        <div class="gc-head"><span class="gc-name">Bullet Time on Kill</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">엘리트 처치 시 추가 0.5초 슬로우</div>
+        <span class="gc-tag prop">Milestone 3</span>
+      </div>
+    </div>
+
+    <h3>⏱ 추가 후보 — 타이밍 액션 (이 게임의 정체성)</h3>
+    <div class="grid grid-3" id="cards-timing">
+      <div class="game-card t-timing" data-card-type="timing">
+        <div class="gc-head"><span class="gc-name">Counter Step</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">패리 성공 후 1초간 이동 속도 +50%</div>
+        <span class="gc-tag prop">Milestone 3+</span>
+      </div>
+      <div class="game-card t-timing" data-card-type="timing">
+        <div class="gc-head"><span class="gc-name">Echo Slash</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">퍼펙트 차징(0.65s+) 슬래시 시 0.3초 후 같은 자리 CircularSlash</div>
+        <span class="gc-tag prop">Milestone 3+</span>
+      </div>
+      <div class="game-card t-timing" data-card-type="timing">
+        <div class="gc-head"><span class="gc-name">Reflective Guard</span><span class="gc-rarity">RARE</span></div>
+        <div class="gc-desc">회피 i-frame 중 닿은 화살이 적에게 반사</div>
+        <span class="gc-tag prop">Milestone 3+</span>
+      </div>
+      <div class="game-card t-timing" data-card-type="timing">
+        <div class="gc-head"><span class="gc-name">Defiance</span><span class="gc-rarity">EPIC</span></div>
+        <div class="gc-desc">피격 시 자동으로 0.5초 추가 i-frame + Zen +1 (1라운드 3회)</div>
+        <span class="gc-tag prop">Milestone 4+</span>
+      </div>
+      <div class="game-card t-timing" data-card-type="timing">
+        <div class="gc-head"><span class="gc-name">Crimson Focus</span><span class="gc-rarity">EPIC</span></div>
+        <div class="gc-desc">퍼펙트 닷지 성공 시 자기-불릿타임 +0.3초 추가</div>
+        <span class="gc-tag prop">Milestone 4+</span>
+      </div>
+      <div class="game-card t-timing" data-card-type="timing">
+        <div class="gc-head"><span class="gc-name">Parry Master</span><span class="gc-rarity">EPIC</span></div>
+        <div class="gc-desc">패리 윈도우 +0.1초 (0.3 → 0.4) + 패리 카운터 데미지 +1</div>
+        <span class="gc-tag prop">Milestone 4+</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ 적 / 보스 ════════════════════ -->
+  <section id="bestiary" class="panel">
+    <h2 class="section-title"><span class="num">06</span>적 / 보스 도감</h2>
+    <p class="section-subtitle">현재 구현된 모든 적의 능력치와 행동. 챕터 추가 시 LV3/엘리트 4번/추가 보스로 확장.</p>
+
+    <h3>잡몹 (Mobs)</h3>
+    <div class="bestiary">
+      <div class="enemy-row">
+        <div class="enemy-glyph" style="background: rgba(140,140,156,0.15); color: var(--ink-200);">m1</div>
+        <div>
+          <div class="enemy-name">잡몹 근거리 LV1</div>
+          <div class="enemy-sub">기본 잡몹, t=0s 부터 등장</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">1</span>
+        </div>
+        <div class="behavior">추적 → 부채꼴 텔레그래프 0.5s → 1뎀</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">1</span>
+        </div>
+      </div>
+
+      <div class="enemy-row">
+        <div class="enemy-glyph" style="background: rgba(140,140,156,0.15); color: var(--ink-200);">m2</div>
+        <div>
+          <div class="enemy-name">잡몹 근거리 LV2</div>
+          <div class="enemy-sub">t=60s 이후 LV1 대체</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">2</span>
+        </div>
+        <div class="behavior">동일 (HP 2 + 더 압박)</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">2</span>
+        </div>
+      </div>
+
+      <div class="enemy-row">
+        <div class="enemy-glyph" style="background: rgba(74,130,214,0.15); color: var(--azure);">🏹</div>
+        <div>
+          <div class="enemy-name">잡몹 원거리</div>
+          <div class="enemy-sub">거리 유지 + 화살</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">1</span>
+        </div>
+        <div class="behavior">6유닛 유지 + AimLaser 1s 조준 → 화살</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">1</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>엘리트 (Elites) — 3종, t=60s 동시 등장</h3>
+    <div class="bestiary">
+      <div class="enemy-row elite">
+        <div class="enemy-glyph" style="background: rgba(227,74,58,0.2); color: var(--telegraph-r);">E1</div>
+        <div>
+          <div class="enemy-name">엘리트 1 · 빨강</div>
+          <div class="enemy-sub">자폭형 — 사망 시 폭발</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">1</span>
+        </div>
+        <div class="behavior">추적 + 부채꼴, 사망 시 ExplosionBurst</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">3</span>
+        </div>
+      </div>
+
+      <div class="enemy-row elite">
+        <div class="enemy-glyph" style="background: rgba(78,166,114,0.2); color: var(--jade);">E2</div>
+        <div>
+          <div class="enemy-name">엘리트 2 · 초록</div>
+          <div class="enemy-sub">보너스 슬래시 부여</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">3</span>
+        </div>
+        <div class="behavior">사망 시 CircularSlash 보너스 (PC 슬래시 끝나면 발동)</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">5</span>
+        </div>
+      </div>
+
+      <div class="enemy-row elite">
+        <div class="enemy-glyph" style="background: rgba(74,130,214,0.2); color: var(--azure);">E3</div>
+        <div>
+          <div class="enemy-name">엘리트 3 · 파랑</div>
+          <div class="enemy-sub">시간 조작 — 3초 불릿타임</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">5</span>
+        </div>
+        <div class="behavior">사망 시 모든 적/화살 25% 슬로우 3초 + 채도 변화</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">10</span>
+        </div>
+      </div>
+
+      <div class="enemy-row elite" style="opacity: 0.5; border-left-style: dashed;">
+        <div class="enemy-glyph" style="background: var(--bg-elevated); color: var(--ink-600);">E4?</div>
+        <div>
+          <div class="enemy-name">엘리트 4 · ?</div>
+          <div class="enemy-sub">Milestone 6에서 추가 예정 — 사용자 결정 대기</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">7?</span>
+        </div>
+        <div class="behavior">후보: "처치 시 PC 주변에 보호막" / "주변 잡몹 처치 시 폭발 사슬"</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">15?</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>보스 (Bosses)</h3>
+    <div class="bestiary">
+      <div class="enemy-row boss">
+        <div class="enemy-glyph">B1</div>
+        <div>
+          <div class="enemy-name">Chapter 1 보스</div>
+          <div class="enemy-sub">YELLOW/RED 시그널 패턴 · 패리 가능</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">15</span>
+        </div>
+        <div class="behavior">
+          YELLOW (70%): sweep 직전 0.3s 패리 윈도우 → 1초 스턴<br>
+          RED (30%): 패리 불가 — 회피만<br>
+          부채꼴 2뎀
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">—</span>
+        </div>
+      </div>
+
+      <div class="enemy-row boss" style="opacity: 0.5; border-color: var(--ink-line); border-left: 3px dashed var(--ink-600);">
+        <div class="enemy-glyph" style="background: var(--bg-elevated); color: var(--ink-600);">B2?</div>
+        <div>
+          <div class="enemy-name">Chapter 2 보스</div>
+          <div class="enemy-sub">Milestone 2 — 추가 패턴 1~2 + 시그널 컬러 확장 권장 (흰=잡기)</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">22?</span>
+        </div>
+        <div class="behavior">설계 중 · Boss.gd 패턴 복제 + 신규 메커니즘</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">—</span>
+        </div>
+      </div>
+
+      <div class="enemy-row boss" style="opacity: 0.4; border-color: var(--ink-line); border-left: 3px dashed var(--ink-600);">
+        <div class="enemy-glyph" style="background: var(--bg-elevated); color: var(--ink-600);">B3?</div>
+        <div>
+          <div class="enemy-name">Chapter 3 보스</div>
+          <div class="enemy-sub">Milestone 6 — 다중 시그널 컬러 (흰/보라/녹) + 페이즈 2개</div>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HP</span>
+          <span class="stat-value">30?</span>
+        </div>
+        <div class="behavior">설계 중 · 페이즈 전환 + 다중 패턴</div>
+        <div class="stat-block">
+          <span class="stat-label">EXP</span>
+          <span class="stat-value">—</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ 메타 진행 ════════════════════ -->
+  <section id="meta" class="panel">
+    <h2 class="section-title"><span class="num">07</span>메타 진행 — 영구강화</h2>
+    <p class="section-subtitle">VS 본가의 단순화 버전. <strong>혼(魂)</strong>을 적립하여 시작 능력치 패시브 강화 + 카드 풀 언락. 미구현, Milestone 4~5에서 도입.</p>
+
+    <div class="callout">
+      <strong>재화 흐름</strong>: 챕터 클리어 시 +N (스테이지별 보상) · 사망 시 누적 EXP × 0.5 정도 적립 · 인벤토리 잠금/해제는 아웃게임 메뉴에서만.
+    </div>
+
+    <h3>패시브 카테고리 — 초안 7종</h3>
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">강건한 육신</div>
+        <div class="mp-desc">시작 HP +1 (단계별)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">5 / 단계</div>
+    </div>
+
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">단련된 검</div>
+        <div class="mp-desc">슬래시 폭 +5% (단계별)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">3 / 단계</div>
+    </div>
+
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">빠른 발</div>
+        <div class="mp-desc">이속 +3% (단계별)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">3 / 단계</div>
+    </div>
+
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">강한 영혼</div>
+        <div class="mp-desc">EXP 획득 +5% (단계별)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">2 / 단계</div>
+    </div>
+
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">능숙한 회피</div>
+        <div class="mp-desc">회피 쿨 -3% (단계별)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">4 / 단계</div>
+    </div>
+
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">깨어난 자</div>
+        <div class="mp-desc">시작 시 무료 카드 +1장 (시작 즉시 레벨1 카드)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">15 / 단계</div>
+    </div>
+
+    <div class="meta-passive">
+      <div>
+        <div class="mp-name">인내</div>
+        <div class="mp-desc">피격 i-frame +0.1s (단계별)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">5 / 단계</div>
+    </div>
+
+    <h3>⏱ 타이밍 액션 정체성 강화 — 패시브 후보</h3>
+    <p class="section-subtitle">현재 7종 외에, 타이밍 정체성에 직접 연결되는 패시브 후보. Milestone 4에서 추가 결정.</p>
+
+    <div class="meta-passive" style="border-left: 3px solid var(--telegraph-y);">
+      <div>
+        <div class="mp-name">⏱ 직감 (Intuition)</div>
+        <div class="mp-desc">패리 윈도우 +0.02s (단계별, 최대 0.4 → 0.5)</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">10 / 단계</div>
+    </div>
+
+    <div class="meta-passive" style="border-left: 3px solid var(--telegraph-y);">
+      <div>
+        <div class="mp-name">⏱ 거합의 정수 (Iaido Essence)</div>
+        <div class="mp-desc">퍼펙트 차징 윈도우 +0.02s</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">12 / 단계</div>
+    </div>
+
+    <div class="meta-passive" style="border-left: 3px solid var(--telegraph-y);">
+      <div>
+        <div class="mp-name">⏱ 무심 (Mushin)</div>
+        <div class="mp-desc">Zen 미터 시작값 +20%</div>
+      </div>
+      <div class="mp-stages">
+        <div class="stage"></div><div class="stage"></div><div class="stage"></div>
+      </div>
+      <div class="mp-cost">15 / 단계</div>
+    </div>
+
+    <h3>도입 순서 권장</h3>
+    <ol style="padding-left: 24px; color: var(--ink-200);">
+      <li style="margin-bottom: 10px;"><strong>SaveSystem + 최고기록만 (M1)</strong> — 사망/클리어 시 시간/킬/레벨을 user://save.cfg에 적고, 메인 메뉴에서 표시. 영구강화 없음.</li>
+      <li style="margin-bottom: 10px;"><strong>혼 적립 + 단일 패시브 (M4)</strong> — 강화 패널에 한 개만 (강건한 육신). 흐름 검증.</li>
+      <li style="margin-bottom: 10px;"><strong>패시브 5~7종 확장 (M4)</strong> — 카테고리별로 균형 잡힌 풀.</li>
+      <li style="margin-bottom: 10px;"><strong>카드 풀 언락 (M5)</strong> — 카드 7장이 늘어난 시점에 의미가 생긴다.</li>
+      <li style="margin-bottom: 10px;"><strong>챕터 선택 (M2)</strong> — 챕터가 2개 이상 생긴 시점.</li>
+      <li><strong>⏱ 타이밍 패시브 추가 (M4 후반)</strong> — 직감/거합의 정수/무심.</li>
+    </ol>
+  </section>
+
+  <!-- ════════════════════ 의사결정 / 위험 ════════════════════ -->
+  <section id="decisions" class="panel">
+    <h2 class="section-title"><span class="num">08</span>의사결정 / 위험</h2>
+    <p class="section-subtitle">사용자 결정 대기 항목 + 게임 디자인 관점 위험 트래커.</p>
+
+    <h3>의사결정 대기 — 시작 전 결정 필요</h3>
+
+    <div class="decision-card">
+      <div class="dq">세계관 / 톤</div>
+      <div class="dq-detail">동양풍 진지 · 다크판타지 · 코믹 · 어반판타지 등. 미정.</div>
+    </div>
+
+    <div class="decision-card">
+      <div class="dq">챕터별 비주얼 컨셉</div>
+      <div class="dq-detail">어느 시점 어디서 어느 풍경인지. 챕터별 색감/지형. Milestone 8 진입 전 결정 필요.</div>
+    </div>
+
+    <div class="decision-card">
+      <div class="dq">출시 형태</div>
+      <div class="dq-detail">Early Access? 정식 출시? 무료/유료? 가격대?</div>
+    </div>
+
+    <div class="decision-card">
+      <div class="dq">다국어 범위</div>
+      <div class="dq-detail">한/영 only? 인벤 사례처럼 90+ 언어? 음성 더빙 여부?</div>
+    </div>
+
+    <div class="decision-card">
+      <div class="dq">온라인 기능</div>
+      <div class="dq-detail">리더보드만? 코옵? PvP? 인벤 사례는 멀티플레이도 AI로 추진 중.</div>
+    </div>
+
+    <div class="decision-card" style="border-left-color: var(--crimson);">
+      <div class="dq">⏱ 타이밍 액션 강조 정도 — 핵심 질문</div>
+      <div class="dq-detail">
+        모든 플레이어가 패리/퍼펙트 차징을 해야 클리어할 수 있는가? <br>
+        혹은 카드 빌드로 우회 가능한가 (퍼펙트 없이도 클리어 가능, 단 더 어려움)? <br>
+        <strong>현재 권장</strong>: 잡몹은 우회 가능, <strong>보스는 패리 강제</strong> — 그래야 챕터 진행에 타이밍 정체성이 살아남는다.
+      </div>
+    </div>
+
+    <h3>위험 트래커 — 게임 디자인 관점</h3>
+    <table class="risk-table">
+      <thead><tr><th>ID</th><th>위험</th><th>영향</th><th>대응 시점</th></tr></thead>
+      <tbody>
+        <tr><td><span class="risk-id">R1</span></td><td>메타 진행 비용 곡선이 너무 비싸면 진입자가 떨어짐</td><td>리텐션 ↓</td><td>Milestone 4 튜닝</td></tr>
+        <tr><td><span class="risk-id">R2</span></td><td>메커니즘 카드가 너무 강하면 빌드 다양성 죽음 (한 카드만 픽됨)</td><td>매판 동질화</td><td>Milestone 3 테스터 피드백</td></tr>
+        <tr><td><span class="risk-id">R3</span></td><td>보스 패리 윈도우가 너무 짧으면 무력감</td><td>사용자 좌절</td><td>테스터 피드백, 0.3s ± 조정</td></tr>
+        <tr><td><span class="risk-id">R4</span></td><td>챕터 3개 도달 전 컨텐츠 부족 → 반복 피로</td><td>30분 이내 이탈</td><td>Milestone 5 카드 다양성으로 보완</td></tr>
+        <tr><td><span class="risk-id">R5</span></td><td>비주얼 placeholder가 너무 오래가면 외부 어필 약함</td><td>시연/배포 어려움</td><td>Milestone 8 우선순위 ↑ 검토</td></tr>
+        <tr style="background: rgba(200,51,42,0.04);">
+          <td><span class="risk-id">R6</span></td>
+          <td><strong>⏱ 타이밍 액션이 정체성으로 자리잡지 못함</strong> — VS 본가에 묻힘</td>
+          <td>차별화 실패</td>
+          <td>Milestone 2~3에 퍼펙트 패리 사슬 / Zen 미터 도입 결정</td>
+        </tr>
+        <tr style="background: rgba(200,51,42,0.04);">
+          <td><span class="risk-id">R7</span></td>
+          <td><strong>⏱ 타이밍 액션이 너무 어려워서 일반 플레이어 배제</strong></td>
+          <td>접근성 ↓</td>
+          <td>잡몹 우회 + 보스만 강제 / 메타 패시브 "인내·직감"으로 윈도우 확장</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>고정된 결정 (사용자 컨펌)</h3>
+    <ul style="padding-left: 24px; color: var(--ink-200);">
+      <li style="margin-bottom: 6px;">✓ 단일 캐릭터 (거합 사무라이) — 무기 다양화는 보류, 거합만 유지</li>
+      <li style="margin-bottom: 6px;">✓ 메인 브랜치 직접 커밋 — 별도 feature 브랜치 만들지 말 것</li>
+      <li style="margin-bottom: 6px;">✓ 최대 차징 0.72s — 사용자 컨펌 튜닝값</li>
+      <li style="margin-bottom: 6px;">✓ 세계관/사운드/비주얼은 게임플레이가 안정된 뒤 (M6 이후)</li>
+      <li style="margin-bottom: 6px;">✓ Testplay 씬은 Main과 동기화 유지 — 자동 스폰만 빠지고 나머지 모두 동일</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <p><strong style="color: var(--gold);">ProjectFBDC</strong> — 비전 & 타이밍 액션 뱀써 대시보드 · v0.1 · 갱신 2026-06-03</p>
+  <p style="margin-top: 8px;">
+    상세 문서 ·
+    <a href="GAMEDESIGN.md">GAMEDESIGN.md</a> ·
+    <a href="ARCHITECTURE.md">ARCHITECTURE.md</a> ·
+    <a href="../CLAUDE.md">CLAUDE.md</a>
+  </p>
+  <p style="margin-top: 8px; font-style: italic;">"한 손으로 30분, 한 챕터로 영원히 살아남는 사무라이."</p>
+</footer>
+
+<script>
+  // ───── 탭 전환 ─────
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('section.panel');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      panels.forEach(p => p.classList.toggle('active', p.id === target));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  // ───── 마일스톤 펼치기/접기 ─────
+  document.querySelectorAll('.milestone').forEach(m => {
+    m.addEventListener('click', e => {
+      // 내부 링크/버튼은 펼치기 트리거 안 함
+      if (e.target.closest('a, button')) return;
+      m.classList.toggle('open');
+    });
+  });
+
+  // 첫 진입 시 다음 마일스톤(M1, M2)은 펼쳐서 보여주기
+  document.querySelectorAll('.milestone.next').forEach(m => m.classList.add('open'));
+
+  // ───── 마일스톤 필터 ─────
+  const milestoneFilters = document.querySelectorAll('[data-filter]');
+  milestoneFilters.forEach(btn => {
+    btn.addEventListener('click', () => {
+      milestoneFilters.forEach(b => b.classList.toggle('active', b === btn));
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('.milestone').forEach(m => {
+        const show = (filter === 'all') || (m.dataset.status === filter);
+        m.style.display = show ? '' : 'none';
+      });
+    });
+  });
+
+  // ───── 카드 필터 ─────
+  const cardFilters = document.querySelectorAll('[data-card-filter]');
+  cardFilters.forEach(btn => {
+    btn.addEventListener('click', () => {
+      cardFilters.forEach(b => b.classList.toggle('active', b === btn));
+      const filter = btn.getAttribute('data-card-filter');
+      document.querySelectorAll('.game-card').forEach(c => {
+        const t = c.getAttribute('data-card-type');
+        const show = (filter === 'all') || (t === filter);
+        c.style.display = show ? '' : 'none';
+      });
+      // 빈 그리드 제목 숨기기는 안 함 — 구조 유지
+    });
+  });
+
+  // ───── 미터 진입 애니메이션 (스크롤 진입 시) ─────
+  // 탭 전환에서 이미 fade가 충분하므로 추가 IntersectionObserver는 생략.
+
+  // ───── 키보드 네비게이션 ─────
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, textarea')) return;
+    const activeIdx = Array.from(tabs).findIndex(t => t.classList.contains('active'));
+    if (e.key === 'ArrowRight' && activeIdx < tabs.length - 1) {
+      tabs[activeIdx + 1].click();
+    } else if (e.key === 'ArrowLeft' && activeIdx > 0) {
+      tabs[activeIdx - 1].click();
+    }
+  });
+
+  // ───── 해시 라우팅 (선택) ─────
+  const hash = window.location.hash.slice(1);
+  if (hash) {
+    const matchTab = document.querySelector(`.tab[data-tab="${hash}"]`);
+    if (matchTab) matchTab.click();
+  }
+  tabs.forEach(t => {
+    t.addEventListener('click', () => {
+      history.replaceState(null, '', `#${t.dataset.tab}`);
+    });
+  });
+</script>
+
+</body>
+</html>

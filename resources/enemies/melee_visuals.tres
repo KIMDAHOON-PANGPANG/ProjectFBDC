@@ -1,12 +1,9 @@
-[gd_resource type="Resource" script_class="CharacterVisuals" load_steps=3 format=3 uid="uid://b8melvis0001"]
+[gd_resource type="Resource" script_class="CharacterVisuals" format=3 uid="uid://b8melvis0001"]
 
-[ext_resource type="Script" path="res://scripts/resources/CharacterVisuals.gd" id="1_vis"]
-[ext_resource type="Texture2D" path="res://resources/enemies/PoisonSkeleton.png" id="2_ps"]
+[ext_resource type="Script" uid="uid://dpmhewoe17v31" path="res://scripts/resources/CharacterVisuals.gd" id="1_vis"]
+[ext_resource type="Texture2D" uid="uid://dywik3md8swxl" path="res://resources/enemies/BaseSkeleton.png" id="2_bs"]
 
 [resource]
 script = ExtResource("1_vis")
-idle = ExtResource("2_ps")
-pixel_size = 0.02
-placeholder_tint = Color(1, 1, 1, 1)
-flip_h_on_facing = true
+idle = ExtResource("2_bs")
 default_facing_right = false

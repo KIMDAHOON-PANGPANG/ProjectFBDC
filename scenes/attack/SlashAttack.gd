@@ -38,6 +38,13 @@ func _ready() -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.albedo_color = color
+	# Visual polish — a soft emission so the trail reads as a bright
+	# blade-flash against the ground rather than a flat decal. Cheap on
+	# the mobile renderer (no glow post-process; emission just lifts the
+	# unshaded albedo).
+	mat.emission_enabled = true
+	mat.emission = Color(color.r, color.g, color.b)
+	mat.emission_energy_multiplier = 1.3
 	_visual.material_override = mat
 	add_child(_visual)
 
@@ -72,6 +79,22 @@ func _apply_size() -> void:
 	_box_shape.size = Vector3(_length, 1.0, _width)
 	_visual.scale = Vector3(_length, 0.04, _width)
 
+
+## Visual polish — repaint as a Zen-burst slash (gold + strong emission)
+## so the full-width burst reads as a special strike, not just a wider
+## normal slash. Called by Player._spawn_slash_attack after add_child
+## (so `_visual` exists) when the burst flag is set.
+func set_burst_visual() -> void:
+	if _visual == null:
+		return
+	var mat := _visual.material_override as StandardMaterial3D
+	if mat == null:
+		return
+	mat.albedo_color = Color(1.0, 0.85, 0.3, 0.92)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.8, 0.25)
+	mat.emission_energy_multiplier = 2.4
+
 func _do_initial_sweep() -> void:
 	for body in get_overlapping_bodies():
 		_try_kill(body)
@@ -89,7 +112,13 @@ func _try_kill(node: Node) -> void:
 	# Walk up to find an entity with a HealthComponent or a `take_hit` method
 	while target != null:
 		if target.has_method("take_hit"):
-			target.call("take_hit")
+			# Only the boss take_hit accepts an amount — mobs/elites are
+			# 1-shot lethal so passing an arg would either be ignored or
+			# (worse) shift their argless signature. Branch on group.
+			if target.is_in_group("boss"):
+				target.call("take_hit", _resolve_boss_damage())
+			else:
+				target.call("take_hit")
 			hit_enemy.emit(target)
 			return
 		var hp := target.get_node_or_null("HealthComponent")
@@ -98,6 +127,27 @@ func _try_kill(node: Node) -> void:
 			hit_enemy.emit(target)
 			return
 		target = target.get_parent()
+
+
+## ⏱ Damage resolver for boss hits. Two boost paths can apply:
+##   1. Zen burst — slash was spawned with `zen_burst` meta → 5 dmg
+##      (highest priority; consumed by Player._fire_slash on spawn).
+##   2. Perfect-parry chain — PC's `parry_boost_until_msec` still in
+##      the future → 3 dmg (M2).
+## Otherwise the normal 1 dmg. We resolve here so neither Boss nor
+## Player need to know the multiplier values.
+func _resolve_boss_damage() -> int:
+	# Zen burst takes precedence over the parry boost.
+	if has_meta("zen_burst") and bool(get_meta("zen_burst", false)):
+		return 5
+	var pc := get_tree().get_first_node_in_group("player")
+	if pc == null or not is_instance_valid(pc):
+		return 1
+	if not ("parry_boost_until_msec" in pc):
+		return 1
+	if Time.get_ticks_msec() > pc.parry_boost_until_msec:
+		return 1
+	return 3
 
 func _disable_collision() -> void:
 	monitoring = false

@@ -205,6 +205,24 @@ func _in_fan_angle(target_global_pos: Vector3) -> bool:
 	var ang := atan2(local.z, local.x)
 	return absf(ang) <= _half_angle_rad
 
+## ⏱ Preemptive-slash cancel (M3 후속). An attacker that dies mid-wind-up
+## calls this so the pending sweep deals NO damage and the decal fades
+## out early. Sets `_consumed` first so a racing `_begin_sweep` /
+## `_fade_and_free` no-op. Does its own fade (can't reuse _fade_and_free
+## — that early-returns on `_consumed`).
+func cancel() -> void:
+	if _consumed:
+		return
+	_consumed = true
+	var t := create_tween()
+	t.set_parallel(true)
+	if _decal_mat != null:
+		t.tween_property(_decal_mat, "albedo_color:a", 0.0, 0.12)
+	if _sweep_mat != null:
+		t.tween_property(_sweep_mat, "albedo_color:a", 0.0, 0.12)
+	t.chain().tween_callback(queue_free)
+
+
 func _fade_and_free() -> void:
 	if _consumed:
 		return

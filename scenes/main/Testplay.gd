@@ -19,11 +19,19 @@ extends Node3D
 @export var melee_enemy_scene: PackedScene
 @export var elite_enemy_scene: PackedScene
 @export var boss_scene: PackedScene
+## Optional second boss — when wired, the right-side panel adds a
+## separate button for it. Left null means only one "보스" button shows.
+@export var boss_scene_2: PackedScene
+## Optional third boss (Ch3). Same convention as boss_scene_2.
+@export var boss_scene_3: PackedScene
 @export var camera_scene: PackedScene
 
 @export_group("Effects")
 @export var explosion_burst_scene: PackedScene
 @export var circular_slash_scene: PackedScene
+## EXP gem dropped from corpses (mirror of Main) — magnets to PC, credits
+## EXP on pickup. Wired in Testplay.tscn.
+@export var exp_gem_scene: PackedScene
 
 @export_group("UI / Chapter")
 @export var exp_bar_scene: PackedScene
@@ -45,11 +53,26 @@ extends Node3D
 
 const _NORMAL_SATURATION: float = 1.12
 
+# 일섬 게이지 바 (Main 미러). 화면 하단 중앙 0~100% 바.
+const _SLASH_GAUGE_W := 280.0
+const _SLASH_GAUGE_H := 22.0
+const _SLASH_GAUGE_FILL := Color(0.3, 0.7, 1.0, 0.9)
+const _SLASH_GAUGE_FILL_READY := Color(1.0, 0.82, 0.2, 0.95)
+
+# 좌상단 칸 단위 HP (Main 미러). 빨강=남은 칸, 어두운색=잃은 칸.
+const _HP_FULL := Color(0.85, 0.15, 0.15)
+const _HP_EMPTY := Color(0.22, 0.08, 0.08)
+
 # --- Chapter / EXP scripts (preload to dodge class_name cache misses
 # in --headless runs, same as Main.gd) ---
 const _ExpSystemScript := preload("res://scripts/managers/ExpSystem.gd")
 const _UpgradeSystemScript := preload("res://scripts/managers/UpgradeSystem.gd")
 const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd")
+const _ZenSystemScript := preload("res://scripts/managers/ZenSystem.gd")
+# M8 refactor — same shared services as Main, so the debug arena runs
+# identical elite-payload + bullet-time code instead of mirrored copies.
+const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectService.gd")
+const _BulletTimeServiceScript := preload("res://scripts/managers/BulletTimeService.gd")
 
 var _player: Node
 var _camera: HD2DCamera
@@ -57,14 +80,15 @@ var _enemies_root: Node3D
 var _exp_bar: CanvasLayer
 var _exp_system: Node
 var _world_env: WorldEnvironment
-
-# Type-2 elite "bonus action" — same handshake as Main: wait for the
-# next slash_finished before firing the bonus CircularSlash at the PC.
-var _pending_circular_slash: bool = false
-
-# Bullet-time machinery — toggles env saturation + every-enemy time_scale.
-var _bullettime_tween: Tween
-var _bullettime_active: bool = false
+var _elite_effect_service: Node
+var _bullet_time_service: Node
+# 일섬 게이지 바 (Main HUD 미러).
+var _slash_gauge_bg: ColorRect
+var _slash_gauge_bar: ColorRect
+var _slash_gauge_label: Label
+# 좌상단 칸 단위 HP (Main HUD 미러).
+var _hp_box: HBoxContainer
+var _hp_cells: Array = []
 
 func _ready() -> void:
 	_warm_placeholder_cache()
@@ -87,6 +111,9 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
+		return
+	_refresh_hp_cells()
+	_refresh_slash_gauge()
 
 ## --- Procedural arena (mirrors Main; intentional duplication so this
 ## scene stays independent of Main's chapter coupling) ---
@@ -146,6 +173,36 @@ func _spawn_player() -> void:
 	_player.add_to_group("player")
 	add_child(_player)
 	(_player as Node3D).global_position = Vector3.ZERO
+	# Debug arena: no GameOverScreen, no SaveSystem write — those would
+	# pollute the player's real best-records. Instead we auto-reload 1s
+	# after death so the next test cycle starts clean. (See Main.gd for
+	# the production death flow.)
+	if _player.has_signal("died"):
+		_player.died.connect(_on_player_died_testplay)
+	# Echo card mirror (same as Main) — keeps testplay reaching feature
+	# parity for card testing.
+	if _player.has_signal("slash_finished"):
+		_player.slash_finished.connect(_on_player_slash_finished)
+	# ⏱ Perfect dodge → self-bullet-time (mirror of Main).
+	if _player.has_signal("perfect_dodge"):
+		_player.perfect_dodge.connect(_on_player_perfect_dodge)
+
+
+func _on_player_perfect_dodge() -> void:
+	if _bullet_time_service != null:
+		_bullet_time_service.start(0.5)
+
+
+func _on_player_died_testplay() -> void:
+	if not is_inside_tree():
+		return
+	get_tree().create_timer(1.0).timeout.connect(_reload_testplay)
+
+
+func _reload_testplay() -> void:
+	var tree := get_tree()
+	if tree != null:
+		tree.reload_current_scene()
 
 func _spawn_camera() -> void:
 	if camera_scene == null:
@@ -169,6 +226,31 @@ func _build_chapter_systems() -> void:
 		if _exp_bar.has_method("set_exp_source"):
 			_exp_bar.call("set_exp_source", _exp_system)
 
+	# ⏱ Testplay mirrors the ZenSystem wire-up so perfect parries /
+	# charges on the debug arena feed the burst just like in Main.
+	var zs := _ZenSystemScript.new()
+	zs.name = "ZenSystem"
+	add_child(zs)
+	if _player != null and is_instance_valid(_player):
+		zs.bind(_player)
+	if _player != null and "bind_zen_system" in _player:
+		_player.call("bind_zen_system", zs)
+
+	# M8 — shared bullet-time + elite-effect services (mirror Main).
+	_bullet_time_service = _BulletTimeServiceScript.new()
+	_bullet_time_service.name = "BulletTimeService"
+	_bullet_time_service.slow_factor = bullettime_slow_factor
+	_bullet_time_service.duration = bullettime_duration
+	add_child(_bullet_time_service)
+	_bullet_time_service.setup(_world_env)
+
+	_elite_effect_service = _EliteEffectServiceScript.new()
+	_elite_effect_service.name = "EliteEffectService"
+	_elite_effect_service.explosion_burst_scene = explosion_burst_scene
+	_elite_effect_service.circular_slash_scene = circular_slash_scene
+	add_child(_elite_effect_service)
+	_elite_effect_service.setup(_player, _bullet_time_service)
+
 ## Hook a freshly spawned enemy into the bookkeeping pipeline so its
 ## death awards EXP, matching Main's flow.
 func _wire_enemy_lifecycle(inst: Node) -> void:
@@ -190,17 +272,85 @@ func _on_enemy_freed_with_ref(enemy: Node) -> void:
 func award_exp_for_kill(enemy: Node) -> void:
 	if _exp_system == null:
 		return
-	var amount := 1
+	var base := 1
 	if enemy is EliteEnemy:
 		var t: int = enemy.effect_type
 		match t:
-			1: amount = 3
-			2: amount = 5
-			3: amount = 10
-			_: amount = 3
+			1: base = 3
+			2: base = 5
+			3: base = 10
+			4: base = 8
+			_: base = 3
 	elif "_lv" in enemy and enemy._lv >= 2:
-		amount = 2
-	_exp_system.add_exp(amount)
+		base = 2
+	# Mirror of Main — small instant EXP + gem drop carrying the bulk.
+	_exp_system.add_exp(1)
+	_drop_exp_gem(enemy, base)
+	# Vampire card mirror — Testplay supports card testing too.
+	_try_vampire_heal()
+	# 4안 — 처치 시 일섬 게이지 (mirror).
+	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
+		_player.call("gain_gauge_on_kill")
+
+
+func _drop_exp_gem(enemy: Node, value: int) -> void:
+	if exp_gem_scene == null or enemy == null or not is_instance_valid(enemy):
+		_exp_system.add_exp(value)
+		return
+	# death_position captured at _on_died (tree_exited reads as origin).
+	var pos: Vector3
+	if enemy.has_meta("death_position"):
+		pos = enemy.get_meta("death_position")
+	elif enemy is Node3D and enemy.is_inside_tree():
+		pos = (enemy as Node3D).global_position
+	else:
+		_exp_system.add_exp(value)
+		return
+	var gem := exp_gem_scene.instantiate()
+	if gem.has_method("configure"):
+		gem.call("configure", value)
+	add_child(gem)
+	(gem as Node3D).global_position = Vector3(pos.x, 0.3, pos.z)
+
+
+func collect_exp_gem(value: int) -> void:
+	if _exp_system != null:
+		_exp_system.add_exp(value)
+	# 4안 — 젬 획득 시 일섬 게이지 (mirror).
+	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_gem"):
+		_player.call("gain_gauge_on_gem")
+
+
+func _try_vampire_heal() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not ("has_vampire" in _player) or not _player.has_vampire:
+		return
+	var chance: float = 0.15
+	if "vampire_chance" in _player:
+		chance = _player.vampire_chance
+	if randf() >= chance:
+		return
+	var hp_comp := _player.get_node_or_null("HealthComponent") as HealthComponent
+	if hp_comp != null:
+		hp_comp.heal(1)
+
+
+func _on_player_slash_finished() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not ("has_echo" in _player) or not _player.has_echo:
+		return
+	get_tree().create_timer(0.3).timeout.connect(_spawn_echo_circular_at_player)
+
+
+func _spawn_echo_circular_at_player() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not is_inside_tree():
+		return
+	if _elite_effect_service != null:
+		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
 
 func _on_leveled_up(_new_level: int) -> void:
 	if level_up_screen_scene == null:
@@ -228,85 +378,21 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 	if tree != null:
 		tree.paused = false
 
-## --- Elite death payloads (mirror Main) ---
+## --- Elite death payloads (M8 — delegate to shared service) ---
 
+## EliteEnemy._on_died calls this on the current scene. Thin delegate to
+## EliteEffectService, identical to Main's now (single source of truth).
 func trigger_elite_effect(effect_type: int, pos: Vector3) -> void:
-	match effect_type:
-		1:
-			_spawn_explosion(pos)
-		2:
-			_queue_circular_slash_after_slash()
-		3:
-			_start_bullettime(bullettime_duration)
+	if _elite_effect_service != null:
+		_elite_effect_service.trigger(effect_type, pos)
 
-func _spawn_explosion(pos: Vector3) -> void:
-	if explosion_burst_scene == null:
+## Apply current bullet-time slow to a freshly spawned node (mirror of
+## Main._inherit_bullettime — shared service, identical behaviour).
+func _inherit_bullettime(inst: Node) -> void:
+	if _bullet_time_service == null or not _bullet_time_service.is_active():
 		return
-	var burst := explosion_burst_scene.instantiate() as Node3D
-	add_child(burst)
-	burst.global_position = pos
-
-func _spawn_circular_slash(pos: Vector3) -> void:
-	if circular_slash_scene == null:
-		return
-	var slash := circular_slash_scene.instantiate() as Node3D
-	add_child(slash)
-	slash.global_position = pos
-
-func _queue_circular_slash_after_slash() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if _pending_circular_slash:
-		return
-	var is_dashing: bool = false
-	if "_state" in _player:
-		is_dashing = _player._state == 2  # Player.State.DASHING
-	if is_dashing and _player.has_signal("slash_finished"):
-		_pending_circular_slash = true
-		_player.slash_finished.connect(_on_pending_slash_finished, CONNECT_ONE_SHOT)
-		get_tree().create_timer(1.5).timeout.connect(_clear_pending_circular_slash)
-	else:
-		_spawn_circular_slash((_player as Node3D).global_position)
-
-func _on_pending_slash_finished() -> void:
-	_pending_circular_slash = false
-	if _player == null or not is_instance_valid(_player):
-		return
-	_spawn_circular_slash((_player as Node3D).global_position)
-
-func _clear_pending_circular_slash() -> void:
-	_pending_circular_slash = false
-
-## --- Bullet-time / monochrome (mirror Main) ---
-
-func _start_bullettime(duration: float) -> void:
-	if _world_env == null:
-		return
-	_bullettime_active = true
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if "time_scale_mult" in e:
-			e.time_scale_mult = bullettime_slow_factor
-	_apply_slow_to_loose_arrows(bullettime_slow_factor)
-	if _bullettime_tween != null and _bullettime_tween.is_valid():
-		_bullettime_tween.kill()
-	var env := _world_env.environment
-	_bullettime_tween = create_tween()
-	_bullettime_tween.tween_property(env, "adjustment_saturation", 0.0, 0.15)
-	_bullettime_tween.tween_interval(max(duration - 0.45, 0.05))
-	_bullettime_tween.tween_property(env, "adjustment_saturation", _NORMAL_SATURATION, 0.3)
-	_bullettime_tween.tween_callback(_end_bullettime)
-
-func _end_bullettime() -> void:
-	_bullettime_active = false
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if "time_scale_mult" in e:
-			e.time_scale_mult = 1.0
-	_apply_slow_to_loose_arrows(1.0)
-
-func _apply_slow_to_loose_arrows(factor: float) -> void:
-	for child in get_children():
-		if child is EnemyArrow and "time_scale_mult" in child:
-			child.time_scale_mult = factor
+	if "time_scale_mult" in inst:
+		inst.time_scale_mult = _bullet_time_service.current_slow_factor()
 
 ## --- Spawn helpers ---
 
@@ -326,8 +412,7 @@ func _spawn_mob(scene: PackedScene) -> void:
 		return
 	var inst := scene.instantiate()
 	# Inherit bullet-time if it's currently active, parity with Main.
-	if _bullettime_active and "time_scale_mult" in inst:
-		inst.time_scale_mult = bullettime_slow_factor
+	_inherit_bullettime(inst)
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_random_spawn()
@@ -339,17 +424,28 @@ func _spawn_elite(effect_type: int) -> void:
 	var inst := elite_enemy_scene.instantiate()
 	if "effect_type" in inst:
 		inst.effect_type = effect_type
-	if _bullettime_active and "time_scale_mult" in inst:
-		inst.time_scale_mult = bullettime_slow_factor
+	_inherit_bullettime(inst)
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_random_spawn()
 	_wire_enemy_lifecycle(inst)
 
 func _spawn_boss() -> void:
-	if boss_scene == null:
+	_spawn_boss_scene(boss_scene)
+
+
+func _spawn_boss_2() -> void:
+	_spawn_boss_scene(boss_scene_2)
+
+
+func _spawn_boss_3() -> void:
+	_spawn_boss_scene(boss_scene_3)
+
+
+func _spawn_boss_scene(scene: PackedScene) -> void:
+	if scene == null:
 		return
-	var inst := boss_scene.instantiate()
+	var inst := scene.instantiate()
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_random_spawn()
@@ -380,8 +476,15 @@ func _build_button_panel() -> void:
 		{"label": "엘리트 1 (폭발)", "cb": Callable(self, "_on_spawn_elite_1")},
 		{"label": "엘리트 2 (보너스 슬래시)", "cb": Callable(self, "_on_spawn_elite_2")},
 		{"label": "엘리트 3 (불릿타임)", "cb": Callable(self, "_on_spawn_elite_3")},
-		{"label": "보스", "cb": Callable(self, "_on_spawn_boss")},
+		{"label": "엘리트 4 (보호막)", "cb": Callable(self, "_on_spawn_elite_4")},
+		{"label": "보스 1 (Ch1)", "cb": Callable(self, "_on_spawn_boss")},
 	]
+	# Bosses 2/3 only show if their scenes are wired — keeps the panel
+	# uncluttered while early chapters are still the focus.
+	if boss_scene_2 != null:
+		buttons.append({"label": "보스 2 (Ch2)", "cb": Callable(self, "_on_spawn_boss_2")})
+	if boss_scene_3 != null:
+		buttons.append({"label": "보스 3 (Ch3)", "cb": Callable(self, "_on_spawn_boss_3")})
 	for entry in buttons:
 		vbox.add_child(_make_button(entry["label"], entry["cb"], panel_w))
 
@@ -421,13 +524,98 @@ func _build_help_label() -> void:
 	canvas.name = "TestplayHelp"
 	add_child(canvas)
 	var label := Label.new()
-	label.text = "Testplay  |  WASD: move  LMB(hold): aim slash  R: restart"
+	label.text = "Testplay  |  WASD: 이동  LMB: 비도  RMB(hold): 일섬(게이지 100%)  SPACE: 자동조준  R: 재시작"
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	label.add_theme_constant_override("outline_size", 4)
 	label.add_theme_font_size_override("font_size", 16)
-	label.position = Vector2(20, 16)
+	# HP 칸이 좌상단(20,16)을 차지하므로 도움말은 한 줄 아래로 내린다.
+	label.position = Vector2(20, 50)
 	canvas.add_child(label)
+	_build_hp_cells(canvas)
+	_build_slash_gauge(canvas)
+
+## 좌상단 칸 단위 HP (Main._build_hud 의 _hp_box 미러). 빈 컨테이너만 만들고
+## `_refresh_hp_cells` 가 매 프레임 채운다.
+func _build_hp_cells(canvas: CanvasLayer) -> void:
+	_hp_box = HBoxContainer.new()
+	_hp_box.add_theme_constant_override("separation", 5)
+	_hp_box.position = Vector2(20, 16)
+	canvas.add_child(_hp_box)
+
+## 좌상단 칸 단위 HP 갱신 (Main._refresh_hp_cells 미러).
+func _refresh_hp_cells() -> void:
+	if _hp_box == null or _player == null or not is_instance_valid(_player):
+		return
+	if not _player.has_method("get_hp"):
+		return
+	var max_hp: int = 3
+	if _player.has_method("get_max_hp"):
+		max_hp = max(1, int(_player.call("get_max_hp")))
+	if _hp_cells.size() != max_hp:
+		for c in _hp_cells:
+			if is_instance_valid(c):
+				c.queue_free()
+		_hp_cells.clear()
+		for i in max_hp:
+			var cell := ColorRect.new()
+			cell.custom_minimum_size = Vector2(26, 26)
+			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_hp_box.add_child(cell)
+			_hp_cells.append(cell)
+	var cur_hp: int = int(_player.call("get_hp"))
+	for i in _hp_cells.size():
+		_hp_cells[i].color = _HP_FULL if i < cur_hp else _HP_EMPTY
+
+## 일섬 게이지 바 (Main._build_slash_gauge 미러). 화면 하단 중앙 0~100% 바.
+func _build_slash_gauge(canvas: CanvasLayer) -> void:
+	_slash_gauge_bg = ColorRect.new()
+	_slash_gauge_bg.color = Color(0.07, 0.07, 0.09, 0.85)
+	_slash_gauge_bg.anchor_left = 0.5
+	_slash_gauge_bg.anchor_right = 0.5
+	_slash_gauge_bg.anchor_top = 1.0
+	_slash_gauge_bg.anchor_bottom = 1.0
+	_slash_gauge_bg.offset_left = -_SLASH_GAUGE_W * 0.5
+	_slash_gauge_bg.offset_right = _SLASH_GAUGE_W * 0.5
+	_slash_gauge_bg.offset_top = -(_SLASH_GAUGE_H + 28.0)
+	_slash_gauge_bg.offset_bottom = -28.0
+	_slash_gauge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(_slash_gauge_bg)
+
+	_slash_gauge_bar = ColorRect.new()
+	_slash_gauge_bar.color = _SLASH_GAUGE_FILL
+	_slash_gauge_bar.position = Vector2(2, 2)
+	_slash_gauge_bar.size = Vector2(0, _SLASH_GAUGE_H - 4.0)
+	_slash_gauge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slash_gauge_bg.add_child(_slash_gauge_bar)
+
+	_slash_gauge_label = Label.new()
+	_slash_gauge_label.text = "일섬 0%"
+	_slash_gauge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_slash_gauge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_slash_gauge_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_slash_gauge_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_slash_gauge_label.add_theme_constant_override("outline_size", 4)
+	_slash_gauge_label.add_theme_font_size_override("font_size", 14)
+	_slash_gauge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slash_gauge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_slash_gauge_bg.add_child(_slash_gauge_label)
+
+## 매 프레임 일섬 게이지 바 갱신 (Main._refresh_slash_gauge 미러).
+func _refresh_slash_gauge() -> void:
+	if _slash_gauge_bar == null or _player == null or not is_instance_valid(_player):
+		return
+	if not _player.has_method("slash_gauge_frac"):
+		return
+	var frac: float = clampf(_player.call("slash_gauge_frac"), 0.0, 1.0)
+	_slash_gauge_bar.size = Vector2((_SLASH_GAUGE_W - 4.0) * frac, _SLASH_GAUGE_H - 4.0)
+	var ready: bool = _player.has_method("is_slash_ready") and bool(_player.call("is_slash_ready"))
+	if ready:
+		_slash_gauge_bar.color = _SLASH_GAUGE_FILL_READY
+		_slash_gauge_label.text = "⚔ 일섬 READY (RMB)"
+	else:
+		_slash_gauge_bar.color = _SLASH_GAUGE_FILL
+		_slash_gauge_label.text = "일섬 %d%%" % int(round(frac * 100.0))
 
 ## --- Button callbacks ---
 
@@ -444,5 +632,18 @@ func _on_spawn_elite_2() -> void:
 func _on_spawn_elite_3() -> void:
 	_spawn_elite(3)
 
+
+func _on_spawn_elite_4() -> void:
+	_spawn_elite(4)
+
+
 func _on_spawn_boss() -> void:
 	_spawn_boss()
+
+
+func _on_spawn_boss_2() -> void:
+	_spawn_boss_2()
+
+
+func _on_spawn_boss_3() -> void:
+	_spawn_boss_3()

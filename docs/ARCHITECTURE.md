@@ -83,15 +83,21 @@ Enemy.take_hit
        → tree.paused = false
 ```
 
-### 2.2 보스 사망 → 챕터 클리어
+### 2.2 보스 사망 → 챕터 클리어 + SaveSystem
 
 ```
 Boss.take_hit → take_damage → died → _on_died → boss_defeated.emit()
   → Main._on_boss_defeated
+       → elapsed = (now - _chapter_start_msec) / 1000
+       → stats = {time, kills, level}
+       → beat = SaveSystem.record_clear(chapter_id, time, kills, level)
+            └─ best_time/kills/level 갱신, clear_count++
+       → best = SaveSystem.best_for(chapter_id)
        → tree.paused = true
-       → ChapterClearScreen 인스턴스 (Next 버튼)
+       → ChapterClearScreen 인스턴스 + configure(stats, best, beat)
+            └─ stat 행마다 beat[key]가 true면 "NEW!" 배지
   → ChapterClearScreen._on_next_pressed
-       → tree.reload_current_scene  (현재는 챕터 2 없음, 1챕터 재시작)
+       → tree.reload_current_scene  (M2에 다음 챕터 라우팅 도입)
 ```
 
 ### 2.3 엘리트 사망 → 특수 페이로드
@@ -110,11 +116,16 @@ EliteEnemy._on_died
                        └─ Environment.adjustment_saturation 0 → 3s → 1.12
 ```
 
-### 2.4 보스 패리 윈도우
+### 2.4 보스 패리 윈도우 + ⏱ 퍼펙트 패리 사슬 (M2/M6)
 
 ```
 Boss._begin_telegraph
-  → randf() < 0.7 ? YELLOW : RED
+  → 단일 randf() → 다중 컬러 분포:
+       WHITE  (Boss2: 0.2, Boss3: 0.15) — RED 의미, 시각만 흰색
+       PURPLE (Boss3: 0.2)              — RED 의미, 시각만 보라 (광역)
+       GREEN  (Boss3: 0.1)              — RED 의미, 시각만 녹색 (다단)
+       나머지 확률 mass → YELLOW/RED 표준 split (parry_yellow_ratio)
+  → _color_override (0=none/1=W/2=P/3=G) 가 _signal_color_for 분기
   → BossSignal (머리 위 색 아이콘) 스폰
   → FanTelegraph (지면 부채꼴) 스폰
   → YELLOW일 때만:
@@ -122,15 +133,199 @@ Boss._begin_telegraph
         timer(window_len)            → _close_parry_window
   → 0.5s 후 sweep 시점:
         FanTelegraph._try_damage_player_now (point-check)
-        OR (PC가 슬래시 trail로 보스 hit) → Boss.take_hit
+        OR (PC가 슬래시 trail로 보스 hit) → Boss.take_hit(amount=1)
              └─ _parry_open && YELLOW → _on_parried
                   · queue_free(active_telegraph) → 휘두름 시각 캔슬
                   · BossSignal.cancel()
                   · camera_rig.shake_curve(0.5, 0.3) — 강한 ease-out
                   · _blocked = true, 1s 후 _end_block
+                  · ⏱ player.parry_boost_until_msec = now + 1000
+                       (다음 1초 안 다음 보스 슬래시 → dmg×3)
 ```
 
+⏱ 보상 사슬은 `SlashAttack._resolve_boss_damage`가 해석한다 — boss 그룹
+대상일 때만 PC의 `parry_boost_until_msec`를 읽어 `Time.get_ticks_msec()`
+와 비교, 윈도우 안이면 `take_hit(3)`을 호출. 일반 적은 항상 1-shot
+이라 분기 없이 argless `take_hit()` 그대로.
+
 ---
+
+### 2.7 메타 진행 흐름 (M4)
+
+```
+부팅 (project.godot main_scene = OutGame.tscn)
+  → OutGame._ready → 혼 잔액 / 챕터 best record 표시
+       ├─ "게임 시작" → change_scene_to_file(Main.tscn)
+       ├─ "영구강화" → change_scene_to_file(MetaMenu.tscn)
+       │      └─ MetaMenu 패시브 카드 7장 + 강화 버튼
+       │             → MetaProgressionSystem.upgrade(id)
+       │                  · 혼 차감 + 단계+1 + user://meta.cfg 저장
+       │                  · MetaMenu._refresh로 즉시 갱신
+       └─ "종료" → tree.quit
+
+Main 진입 (OutGame Start 또는 F6 Testplay X)
+  → Main._build_chapter_systems 끝에 apply_to(player, exp_system)
+       └─ 각 passive_level > 0 인 항목을:
+              hp / move_speed / slash_width / exp_gain / evade_cooldown
+              / iframe_extra → 직접 mutate
+              free_card → M4 후속 (LevelUpScreen race 회피 필요)
+
+Run end → 혼 적립
+  · Main._on_boss_defeated → record_clear_reward = 10 + ch*5 + lv*2 + kills/5
+  · Main._on_player_died    → record_death_reward = kills/10 + max(lv-1, 0)
+                              (최소 1)
+  · 두 경우 모두 stats["souls"] 로 ChapterClearScreen / GameOverScreen
+    에 넘겨 "+N 혼" stat row 표시
+  · "메뉴로" 버튼 → change_scene_to_file(OutGame.tscn)
+```
+
+### 2.6 메커니즘 카드 효과 흐름 (M3)
+
+```
+레벨업 → LevelUpScreen → UpgradeSystem.apply(card_id, player, exp_system)
+  ├─ "multistrike"    → player.has_multistrike = true
+  ├─ "echo"           → player.has_echo = true
+  ├─ "vampire"        → player.has_vampire = true · vampire_chance = 0.15
+  ├─ "phoenix"        → player.has_phoenix = true
+  ├─ "counter_step"   → player.has_counter_step = true
+  └─ "parry_master"   → player.has_parry_master = true
+                       + 현재 살아있는 모든 boss 그룹 노드에 즉시
+                         parry_window +0.05/+0.05, parry_boost_dmg +1
+                       + Boss._ready가 미래 보스에 자동 적용
+
+런타임 트리거:
+  · Player._fire_slash 끝 → has_multistrike → 0.18s 후 _fire_multistrike_followup
+       (shorter trail, no dash, _is_multistrike_followup latch로 재귀 방지)
+  · Player.slash_finished → Main._on_player_slash_finished → has_echo → 0.3s 후 CircularSlash at PC
+  · Main.award_exp_for_kill → _try_vampire_heal → has_vampire ? roll vampire_chance → HealthComponent.heal(1)
+  · Player._on_died → has_phoenix && not _phoenix_used → hp = max_hp + 2s i-frame + return (skip 죽음)
+  · Boss._on_parried 끝 → player.on_parry_success() → has_counter_step → counter_step_until_msec = now + 1000
+       └─ Player._handle_move가 그 시간 동안 speed_mult 1.5x
+  · Parry Master는 카드 픽 시점에 Boss export 값을 직접 mutate — 런타임 hook 불필요
+```
+
+### 2.12 ⏱ M3 후속 타이밍 메커닉 (2026-06-04)
+
+```
+퍼펙트 닷지 (base, 카드 불요)
+  Player._check_evade_start → _perfect_dodge_fired = false (re-arm)
+  Player.take_hit (공격 도달):
+    if EVADING and _evade_elapsed <= 0.12 and not fired:
+      → perfect_dodge.emit()  → Main._on_player_perfect_dodge → BulletTimeService.start(0.5)
+      → ZenSystem.add(1)  +  SFX "perfect_dodge"  +  camera nudge
+    그 후 is_invincible() early-return (i-frame이 데미지 차단)
+
+차징 그레이드 / Overcharge (base)
+  Player._update_aim:
+    _charge_t >= max → _overcharge_t += delta
+    _overcharge_t >= OVERCHARGE_GRACE(0.45) → _fizzle_charge()
+      → 슬래시 무산 + _cooldown_t = 1.0 (전 차징 봉인) + SFX "fizzle" + shake
+  Perfect grade (charge_frac >= 0.9)는 _fire_slash에서 Zen +1 (기존)
+
+잡몹 텔레그래프 캔슬 (base)
+  MeleeEnemy._begin_telegraph → _active_telegraph = fan
+  MeleeEnemy.take_hit (wind-up 중):
+    _attacking and _active_telegraph valid → FanTelegraph.cancel()
+      → _consumed=true (sweep 데미지 무효) + 빠른 fade
+    → 예방적 슬래시가 보스/소울류처럼 "윈드업 끊기" 보상
+```
+
+### 2.9 ⏱ Zen 미터 + 풀폭 슬래시 (M4 후속, 2026-06-04 도입)
+
+```
+ZenSystem (Main / Testplay 자식)
+  · zen: int (max 5)  ·  burst_armed: bool
+  · add(amount): perfect 입력 시 카운트 + zen_changed.emit
+       퍼펙트 차징 (>=0.9 charge_frac) → Player._fire_slash에서 +1
+       on_parry_success                 → Player.on_parry_success 에서 +1
+  · 가득 차면 → burst_armed = true + player.has_zen_burst = true
+       zen_full.emit  ·  HUD label "⚡ ZEN BURST READY ⚡"
+  · consume_burst(): 다음 슬래시가 호출 → zen 0 리셋 + 플래그 클리어
+  · drain_on_hit():  피격 시 zen 반감 (burst armed면 보존)
+
+Player._fire_slash
+  → burst_active = has_zen_burst (스냅샷)
+  → burst 시: range = max × 1.5, width = base × 3
+              ZenSystem.consume_burst (즉시 클리어)
+  → _spawn_slash_attack(start, end, width, burst=true)
+       └─ SlashAttack.set_meta("zen_burst", true)
+            └─ SlashAttack._resolve_boss_damage → 5 반환 (parry 3, 일반 1 위)
+```
+
+### 2.10 Boss post-M6 진짜 메커닉 (2026-06-04)
+
+```
+Boss._begin_telegraph
+  → _color_override 결정 (W=1 / P=2 / G=3)
+  → 분기 mutate:
+       1 (WHITE 잡기): dmg_now = attack_damage × 2 (단일 강타)
+       2 (PURPLE 광역): fan_radius × 1.5, fan_angle × 1.3
+       3 (GREEN 다단): 첫 fan은 표준, 0.35s 후 followup sweep
+  → FanTelegraph.configure(pos, dir, radius_now, angle_now, dmg_now, ...)
+  → GREEN: create_timer(...).timeout.connect(_spawn_green_followup.bind(pos, dir))
+       └─ _spawn_green_followup: 같은 위치/방향에 두 번째 fan
+            (telegraph_time × 0.5 — 빠른 연쇄)
+```
+
+### 2.11 사운드 (M7 인프라, 2026-06-04)
+
+```
+project.godot [autoload] SoundManager
+  → /root/SoundManager (Node)
+  · play_sfx(name): res://audio/sfx/<name>.ogg → AudioStreamPlayer 풀(6) 라운드로빈
+  · play_bgm(name): res://audio/bgm/<name>.ogg → 전용 player + 크로스페이드 (same-stem no-op)
+  · ResourceLoader.exists로 가드 — .ogg 미배치는 silent skip
+  · 캐시 (sfx_cache / bgm_cache) — 히트도 미스도 캐시
+
+호출 지점 (현재):
+  · Player._fire_slash → play_sfx("slash" 또는 "burst_slash")
+  · Player.take_hit    → play_sfx("hit" 또는 "shield")
+  · Player.on_parry_success → play_sfx("parry")
+  (확장 예정: ExpSystem.leveled_up, Boss.died, ChapterClear 등)
+```
+
+`audio/sfx/*.ogg`, `audio/bgm/*.ogg`는 미배치 — 인프라만 도입, 자산 드롭 시 작동.
+
+### 2.8 챕터별 환경색 (M6)
+
+```
+_build_chapter_systems / _advance_chapter 끝
+  → _apply_chapter_visuals()
+       → ProceduralSkyMaterial.sky_horizon_color / sky_top_color /
+         ground_bottom_color / ground_horizon_color
+         + env.ambient_light_energy
+       · Ch1: 푸름 (0.78/0.85/0.95 horizon · ambient 0.75)
+       · Ch2: 노을 (0.92/0.68/0.48 horizon · ambient 0.65)
+       · Ch3: 황혼 (0.32/0.25/0.42 horizon · ambient 0.45)
+```
+
+WorldEnvironment 자체를 재생성하지 않고 기존 environment의 색만 갱신
+하므로 챕터 전환 시 시각 hitch 없음. BGM/사운드 차이는 M7에서.
+
+### 2.5 PC 사망 → GameOver + SaveSystem (M1)
+
+```
+Player.take_hit (HP → 0)
+  → HealthComponent.take_damage → died.emit
+  → Player._on_died
+       → died.emit()                       ← Main이 받음
+       → SpriteRig.play_death_then_free(self, 0.5)
+            └─ 0.5s tween 후 queue_free (시각적 fade)
+  → Main._on_player_died (signal handler — Player가 sprite tween 중에 즉시)
+       → _game_over_shown 가드 (중복 spawn 방지)
+       → SaveSystem.record_death(chapter_id, time, kills, level)
+            └─ best_kills / best_level 갱신 (사망 시 best_time은 미기록)
+       → SaveSystem.best_for(chapter_id)
+       → tree.paused = true
+       → GameOverScreen 인스턴스 + configure(stats, best, beat)
+            └─ Retry → reload_current_scene
+            └─ Quit  → tree.quit
+```
+
+**Testplay 분기**: Testplay.gd는 같은 `Player.died` 시그널을 받지만, SaveSystem
+호출도 GameOverScreen 표시도 없다 (`_on_player_died_testplay` → 1초 후
+자동 reload). 디버그 씬이 best-record를 오염시키지 않기 위한 의도적 차이 —
+동기화 규칙에서 명시적으로 빠지는 한 케이스.
 
 ## 3. 책임 분리 매트릭스
 
@@ -195,19 +390,41 @@ Boss._begin_telegraph
 5. `Main.award_exp_for_kill` 분기 — 새 타입 EXP 값
 6. 검증: Testplay 버튼 → 효과 발동 + EXP 획득
 
-### 4.5 새 챕터 추가
-
-현재 `WaveManager`가 const 곡선으로 1챕터 하드코딩. 챕터 추가 시점에 **WaveManager Resource화**가 필요해진다 — 부채(6.3 참고).
+### 4.5 새 챕터 추가 (M2에서 인프라 완성 ✅)
 
 순서:
-1. `WaveCurve.gd` (`Resource`) 신규 — `CURVE_TIMES/TARGETS/LVS` + 이벤트 시간(엘리트/보스)을 export
-2. `resources/chapters/chapter_1.tres`, `chapter_2.tres` … 작성
-3. `WaveManager` 가 `curve: WaveCurve` 를 받도록 변경 (const 곡선 제거)
-4. `Main.gd` 에 `current_chapter: int` + `chapter_curves: Array[WaveCurve]` 추가
-5. `ChapterClearScreen` "Next" 버튼이 `reload_current_scene` 대신 다음 챕터로 라우팅 (또는 OutGame으로 복귀 — 5번 시나리오 참고)
-6. 챕터별 보스 다를 경우 `Main.boss_scene: Array[PackedScene]` 배열화
-7. `CLAUDE.md` 인덱스 갱신
-8. 검증: 챕터 1 클리어 후 챕터 2 자동 진입, 챕터 2 클리어 후 다음 흐름
+1. `resources/chapters/chapter_<N>.tres` 작성 (기존 chapter_1/2 복제 + 곡선/시간 조정)
+2. `Main.tscn` 에서 `chapter_curves` 배열에 새 `.tres` 추가
+3. (보스 신규) `scenes/enemies/Boss<N>.tscn` 작성 → `boss_scenes` 배열에 추가
+   - 단순 변형이면 같은 `Boss.gd` + export 값만 다른 `.tscn` (예: `Boss2.tscn`이 max_hp/white_ratio 만 다름)
+   - 완전 다른 패턴이면 Boss.gd 복제 + 신규 _begin_telegraph 로직
+4. `CLAUDE.md` 인덱스 갱신
+5. 검증: Ch<N-1> 클리어 → Ch<N> 자동 진입 (`Main._advance_chapter`), Ch<N> 클리어
+
+#### 챕터 전환 흐름 (in-place)
+
+```
+Boss<N>._on_died → boss_defeated.emit
+  → Main._on_boss_defeated
+       → SaveSystem.record_clear(chapter_id, time, kills, level)
+       → ChapterClearScreen.configure(stats, best, beat) + next_pressed 시그널 연결
+  → ChapterClearScreen._on_next_pressed
+       → next_pressed.emit  +  tree.paused = false  +  queue_free
+  → Main._on_chapter_next_pressed
+       → if _current_chapter < chapter_curves.size():
+              _advance_chapter()
+                   · wipe enemies + loose arrows + 효과
+                   · bullet-time tween 정리
+                   · WaveManager queue_free + 새로 인스턴스
+                   · _current_chapter += 1
+                   · _kill_count = 0  /  _chapter_cleared = false
+                   · set_curve(chapter_curves[_current_chapter - 1])
+                   · _chapter_start_msec = now
+                   · tree.paused = false
+                   ※ PC HP / EXP / 카드 빌드는 유지 — 메타 사이클 핵심
+         else:
+              tree.reload_current_scene  (마지막 챕터 — OutGame 메뉴는 M4에서)
+```
 
 ### 4.6 새 보스 추가
 
@@ -267,7 +484,10 @@ resources/meta/chapter_records.tres     — 최고기록 (저장 파일은 user:
 
 ### 5.5 단계적 도입 권장 순서
 
-1. **SaveSystem + 최고기록만**: 사망/클리어 시 시간/킬/레벨을 user://save.cfg에 적고, 메인 메뉴에서 표시. 영구강화 없음. (가장 작게)
+1. **SaveSystem + 최고기록만** ✅ (M1 완료, 2026-06-03): 사망/클리어 시 시간/킬/레벨을 user://save.cfg에 적고 결과 화면에 NEW! 배지로 표시. OutGame에서도 best 표시 (M4).
+2. **혼 적립 + 패시브 5종** ✅ (M4 완료, 2026-06-03): MetaProgressionSystem + user://meta.cfg. 7종 .tres 정의, 5종 활성(hp/move/slash/exp/evade), iframe_extra는 활성(Player.iframe_bonus), free_card는 정의만(후속).
+3. **OutGame + MetaMenu** ✅ (M4 완료): project.godot main_scene 변경. Start / 영구강화 / 종료. 패시브별 단계/비용/MAX 표시.
+4. **카드 풀 언락** ✅ (M5 완료, 2026-06-03): `UpgradeSystem.CARDS`에 `initial: bool` + `unlock_cost: int` 필드. 초기 풀 4장 (Razor's Edge / Quickstep / Iron Will / Reach), 나머지 9장은 `MetaProgressionSystem.is_card_unlocked`로 게이트. `CardUnlock.tscn` 화면 + OutGame 라우팅 추가.
 2. **혼 적립 + 단일 패시브 (HP+)**: 강화 패널에 한 개만. 흐름 검증.
 3. **패시브 5~7종 확장**: 카테고리별로.
 4. **카드 풀 언락**: 카드 7장이 늘어난 시점에 의미가 생긴다.
@@ -279,22 +499,24 @@ resources/meta/chapter_records.tres     — 최고기록 (저장 파일은 user:
 
 다음 항목들은 `refactor-pass` 스킬의 우선순위 후보다. 항목이 3개 이상 쌓이거나 한 파일이 600줄을 넘으면 패스 권유.
 
-### 6.1 `Main.gd` 비대화 (~700줄)
-- 챕터 시스템 / 스폰 위치 / 엘리트 효과 dispatch / 불릿타임을 한 파일에서 다 한다.
-- 분리 후보:
-  - `SpawnService` 노드 (`_pick_*_spawn`, `_spawn_one`, `_request_spawn`)
-  - `EliteEffectService` 노드 (`trigger_elite_effect`, `_spawn_explosion`, `_queue_circular_slash_*`)
-  - `BulletTimeService` 노드 (`_start_bullettime`, `_end_bullettime`, `_apply_slow_to_loose_arrows`)
-- 분리 효과: Main은 부트 + 챕터 흐름만 갖고, 위 서비스들을 Testplay와 공유 가능 (6.2와 동시 해결).
+### 6.1 `Main.gd` 비대화 (947 → 878줄, M8 리팩토링 후)
+- 분리 완료:
+  - `EliteEffectService` ✅ **통합 완료** (2026-06-04) — `trigger(type,pos)` / `spawn_circular_slash`. Main/Testplay는 `trigger_elite_effect` 얇은 위임만.
+  - `BulletTimeService` ✅ **통합 완료** (2026-06-04) — `start`/`cancel`/`is_active`/`current_slow_factor`. 스폰 헬퍼는 `_inherit_bullettime`로 쿼리.
+- 남은 분리 후보:
+  - `SpawnService` 노드 (`_pick_*_spawn`, `_spawn_one`, `_request_spawn`) — 다음 패스 1순위. Main.gd가 다시 600줄 넘으면.
 
-### 6.2 Main ↔ Testplay 중복
-- `trigger_elite_effect`, `_queue_circular_slash_after_slash`, `_start_bullettime`, `_on_leveled_up`, `award_exp_for_kill` 등이 두 파일에 거의 그대로 존재.
-- 해결: `ArenaServices` 공통 노드 추출. Main / Testplay는 부트 + 자기 특유의 dispatcher만.
-- 우선순위: 6.1과 함께 해결.
+### 6.2 ~~Main ↔ Testplay 중복~~ ✅ 부분 해소 (M8, 2026-06-04)
+- 엘리트 효과 + 불릿타임은 서비스로 단일화 — 그 부분 미러 사라짐.
+- 잔여 중복: `_on_leveled_up` / `award_exp_for_kill` / `_try_vampire_heal` / Echo / Zen wire-up / perfect_dodge handler. `SpawnService` + `ArenaServices` 추출 시 추가 해소 가능.
 
-### 6.3 `WaveManager` const 곡선 → Resource화
-- 챕터가 1개를 넘는 순간 (5.5 단계 5) 필수.
-- `WaveCurve` Resource로 분리, 챕터별 `.tres` 파일.
+
+### 6.3 ~~`WaveManager` const 곡선 → Resource화~~ ✅ M2 완료 (2026-06-03)
+- `scripts/resources/WaveCurve.gd` + `resources/chapters/chapter_{1,2}.tres`.
+- `Main.chapter_curves: Array[WaveCurve]` 에서 active chapter 주입.
+- `WaveManager.set_curve(curve)` API — 챕터 전환 시 같은 노드를 재사용할
+  수도 있지만 현재 `_advance_chapter` 는 queue_free 후 새 인스턴스를 선호
+  (state reset이 명확).
 
 ### 6.4 엘리트 효과 dispatch 하드코딩
 - `Main.trigger_elite_effect` 의 `match effect_type` 분기가 늘어나면 lookup table 또는 Resource로.
@@ -305,7 +527,8 @@ resources/meta/chapter_records.tres     — 최고기록 (저장 파일은 user:
 - 우선순위 낮음 (현재 30줄 정도).
 
 ### 6.6 `UpgradeSystem.apply()` `match` 분기
-- 카드 7장 시점엔 OK. 20장 넘으면 dispatch table or per-card `Callable` 자료구조로 전환.
+- 카드 7장 시점엔 OK. M3에서 **13장**으로 늘었음 (수치 7 + 메커니즘 4 + ⏱ 타이밍 2).
+- 20장 넘으면 dispatch table or per-card `Callable` 자료구조로 전환. 현재는 OK.
 
 ### 6.7 `Player._build_dust_emitter` 가 Player.gd 안
 - 비주얼 한 덩어리가 Player 코드 안에 있음. 별도 `DustEmitter.tscn` 으로 추출 + Player 자식으로 인스턴스. 우선순위 낮음.

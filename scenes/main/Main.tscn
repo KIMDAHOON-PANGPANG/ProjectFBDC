@@ -13,6 +13,13 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/ChapterClearScreen.tscn" id="11_clear"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/Boss.tscn" id="12_boss"]
 [ext_resource type="Resource" path="res://scripts/resources/MeleeEnemyDataLv2.tres" id="13_lv2"]
+[ext_resource type="PackedScene" path="res://scenes/ui/GameOverScreen.tscn" id="14_over"]
+[ext_resource type="Resource" path="res://resources/chapters/chapter_1.tres" id="15_ch1"]
+[ext_resource type="Resource" path="res://resources/chapters/chapter_2.tres" id="16_ch2"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss2.tscn" id="17_boss2"]
+[ext_resource type="Resource" path="res://resources/chapters/chapter_3.tres" id="18_ch3"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="19_boss3"]
+[ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="20_expgem"]
 
 [node name="Main" type="Node3D" unique_id=2118304026]
 script = ExtResource("1_main")
@@ -23,8 +30,12 @@ elite_enemy_scene = ExtResource("6_elite")
 camera_scene = ExtResource("5_cam")
 explosion_burst_scene = ExtResource("7_burst")
 circular_slash_scene = ExtResource("8_cslash")
+exp_gem_scene = ExtResource("20_expgem")
 exp_bar_scene = ExtResource("9_expbar")
 level_up_screen_scene = ExtResource("10_lvlup")
 chapter_clear_screen_scene = ExtResource("11_clear")
+game_over_screen_scene = ExtResource("14_over")
 boss_scene = ExtResource("12_boss")
+chapter_curves = Array[Resource]([ExtResource("15_ch1"), ExtResource("16_ch2"), ExtResource("18_ch3")])
+boss_scenes = Array[PackedScene]([ExtResource("12_boss"), ExtResource("17_boss2"), ExtResource("19_boss3")])
 melee_enemy_data_lv2 = ExtResource("13_lv2")

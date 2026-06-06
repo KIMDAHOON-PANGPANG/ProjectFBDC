@@ -41,6 +41,9 @@ var _attacking: bool = false
 ## Time until the next attack is allowed. Includes telegraph wind-up so
 ## the post-attack recovery sits AFTER the swing resolves.
 var _attack_cd: float = 0.0
+## In-flight FanTelegraph ref (spawn-and-forget, but tracked so a
+## preemptive kill can cancel it — ⏱ M3 후속). Cleared on telegraph done.
+var _active_telegraph: Node = null
 
 func _ready() -> void:
 	if data == null:
@@ -131,6 +134,7 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 			fan_radius, fan_angle_deg, attack_damage, 0.5, 0.15)
 	if fan.has_signal("tree_exited"):
 		fan.tree_exited.connect(_on_telegraph_done, CONNECT_ONE_SHOT)
+	_active_telegraph = fan
 	_attacking = true
 	# Cooldown spans the full telegraph + sweep + a recovery breath.
 	_attack_cd = data.melee_attack_cooldown + 0.5
@@ -142,6 +146,7 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 
 func _on_telegraph_done() -> void:
 	_attacking = false
+	_active_telegraph = null
 
 ## Called by SlashAttack when this enemy is inside its volume.
 ## 1 damage per slash so LV2 mobs (max_hp=2) take 2 hits, LV1 (max_hp=1) dies
@@ -149,6 +154,16 @@ func _on_telegraph_done() -> void:
 func take_hit() -> void:
 	if _dead:
 		return
+	# ⏱ Preemptive-slash reward (M3 후속) — a slash that lands DURING the
+	# wind-up cancels the pending sweep so it deals no damage. Without
+	# this the spawn-and-forget FanTelegraph still resolves and can clip
+	# the PC even though the attacker is already dead. Only the killing
+	# blow matters for LV1 (1 HP); for LV2 the first of two hits cancels.
+	if _attacking and _active_telegraph != null and is_instance_valid(_active_telegraph):
+		if _active_telegraph.has_method("cancel"):
+			_active_telegraph.call("cancel")
+		_active_telegraph = null
+		_attacking = false
 	if _health != null:
 		_health.take_damage(1)
 	else:
@@ -158,6 +173,10 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# Stash the death position NOW — by the time tree_exited fires (where
+	# Main drops the EXP gem) the node is detaching and global_position
+	# reads as origin.
+	set_meta("death_position", global_position)
 	set_physics_process(false)
 	collision_layer = 0
 	collision_mask = 0

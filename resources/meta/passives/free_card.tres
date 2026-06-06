@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="MetaPassive" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MetaPassive.gd" id="1_mp"]
+
+[resource]
+script = ExtResource("1_mp")
+id = "free_card"
+display_name = "(빈 슬롯)"
+description = ""
+max_level = 0
+cost_base = 0
+effect_kind = ""
+effect_per_level = 0.0

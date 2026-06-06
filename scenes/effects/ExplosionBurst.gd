@@ -18,7 +18,13 @@ var _visual: MeshInstance3D
 
 func _ready() -> void:
 	monitoring = true
-	monitorable = false
+	# Deferred — this Area3D spawns from inside EliteEnemy's `died` signal
+	# handler (EliteEnemy._on_died → Main.trigger_elite_effect →
+	# _spawn_explosion → add_child → _ready). Godot 4.x blocks direct
+	# `monitorable` writes during a signal in/out phase; set_deferred
+	# pushes the property change to the next idle frame, which is when
+	# the area would have been picked up anyway.
+	set_deferred("monitorable", false)
 	collision_layer = 0
 	collision_mask = 1 << 2  # Enemy layer
 

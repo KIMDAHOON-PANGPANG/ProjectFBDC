@@ -16,12 +16,28 @@ extends Node3D
 @export_group("Effects")
 @export var explosion_burst_scene: PackedScene
 @export var circular_slash_scene: PackedScene
+## EXP gem dropped from enemy corpses — magnets to the PC, credits EXP on
+## pickup. See ExpGem.gd. Wired in Main.tscn.
+@export var exp_gem_scene: PackedScene
 
 @export_group("UI / Chapter")
 @export var exp_bar_scene: PackedScene
 @export var level_up_screen_scene: PackedScene
 @export var chapter_clear_screen_scene: PackedScene
+## PC death overlay — instantiated from `_on_player_died` once the PC's
+## HP hits 0. Same CanvasLayer pattern as the clear screen.
+@export var game_over_screen_scene: PackedScene
+## Default / fallback boss — kept for back-compat when `boss_scenes` is
+## empty. New chapter slots should use `boss_scenes[chapter_idx]`.
 @export var boss_scene: PackedScene
+## Per-chapter wave curves. Length = chapter count. `chapter_curves[0]` is
+## Chapter 1 (so the user-facing chapter id is `index + 1`). Main injects
+## the active one into WaveManager via `set_curve` on chapter entry.
+@export var chapter_curves: Array[WaveCurve] = []
+## Per-chapter boss PackedScenes. Same indexing as `chapter_curves`. If
+## an entry is null or the array is shorter than the chapter index, we
+## fall back to `boss_scene`.
+@export var boss_scenes: Array[PackedScene] = []
 ## LV2 melee data resource — assigned in editor (MeleeEnemyDataLv2.tres).
 @export var melee_enemy_data_lv2: EnemyData
 
@@ -61,15 +77,6 @@ var _kill_count: int = 0
 
 # Stored reference so bullet-time can toggle saturation on the live env.
 var _world_env: WorldEnvironment
-# Whether a type-2 elite died this frame and is waiting for the next
-# Player.slash_finished to fire the bonus circular slash.
-var _pending_circular_slash: bool = false
-# Active bullet-time tween so retriggering can cancel cleanly.
-var _bullettime_tween: Tween
-# Tracks whether bullet-time is currently dilating world speed. Newly spawned
-# enemies / freshly fired arrows read this on creation so they don't run at
-# full speed while the world is supposed to be slow.
-var _bullettime_active: bool = false
 
 # --- Chapter / EXP / HUD ---
 # Note: explicit preloads (avoid relying on class_name cache, which doesn't
@@ -78,10 +85,51 @@ const _ExpSystemScript := preload("res://scripts/managers/ExpSystem.gd")
 const _UpgradeSystemScript := preload("res://scripts/managers/UpgradeSystem.gd")
 const _WaveManagerScript := preload("res://scripts/managers/WaveManager.gd")
 const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd")
+const _SaveSystemScript := preload("res://scripts/managers/SaveSystem.gd")
+const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
+const _ZenSystemScript := preload("res://scripts/managers/ZenSystem.gd")
+# Refactor pass (M8) — elite payloads + bullet-time pulled into shared
+# service nodes so Main + Testplay run identical code instead of mirrored
+# copies. Main keeps a thin `trigger_elite_effect` delegate (EliteEnemy
+# calls it on current_scene) and queries `_bullet_time_service.is_active()`
+# from the spawn helpers.
+const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectService.gd")
+const _BulletTimeServiceScript := preload("res://scripts/managers/BulletTimeService.gd")
+var _elite_effect_service: Node
+var _bullet_time_service: Node
 var _exp_system: Node
 var _exp_bar: CanvasLayer
 var _wave_mgr: Node
+## ⏱ Zen meter (M4 후속 도입). Tracks consecutive perfect inputs and
+## arms a "burst" flag on the PC for the next slash. HUD label below
+## reads its `zen` / `max_zen` properties.
+var _zen_system: Node
+var _zen_label: Label
+# 4안 HUD — 좌상단 HP 칸 / 하단 일섬 게이지 / 탄약·리로드 텍스트.
+var _hp_box: HBoxContainer
+var _hp_cells: Array = []
+var _slash_gauge_bg: ColorRect
+var _slash_gauge_bar: ColorRect
+var _slash_gauge_label: Label
+var _ammo_label: Label
+const _HP_FULL := Color(0.85, 0.15, 0.15)
+const _HP_EMPTY := Color(0.22, 0.08, 0.08)
+const _SLASH_GAUGE_W := 280.0
+const _SLASH_GAUGE_H := 22.0
+## 일섬 게이지 채움색 — 충전 중(시안) / READY(골드).
+const _SLASH_GAUGE_FILL := Color(0.3, 0.7, 1.0, 0.9)
+const _SLASH_GAUGE_FILL_READY := Color(1.0, 0.82, 0.2, 0.95)
 var _chapter_cleared: bool = false
+## Wall-clock ticks at the moment WaveManager started — used to compute
+## the run's elapsed time for the result screen + SaveSystem record.
+var _chapter_start_msec: int = 0
+## Once-per-run guard: a PC dying mid-slash could in theory emit `died`
+## twice (HealthComponent guards against negative HP, but signal wiring
+## changes might break that). Keeps the overlay from double-spawning.
+var _game_over_shown: bool = false
+## Chapter id used for SaveSystem section keys. Stays 1 until M2's
+## WaveCurve / chapter selection lands.
+var _current_chapter: int = 1
 
 func _ready() -> void:
 	_warm_placeholder_cache()
@@ -179,6 +227,29 @@ func _spawn_player() -> void:
 	_player.add_to_group("player")
 	add_child(_player)
 	(_player as Node3D).global_position = Vector3(0, 0, 0)
+	# Hook the death signal so we can pop GameOverScreen + record stats.
+	# `has_signal` guard keeps Main forward-compatible if Player.gd ever
+	# loses the signal (it shouldn't, but defensive wiring is cheap).
+	if _player.has_signal("died"):
+		_player.died.connect(_on_player_died)
+	# Echo card — listen for every completed slash; if the PC owns the
+	# card, drop a CircularSlash at their foot 0.3s later. Main owns
+	# the effect scene reference so we wire here rather than from
+	# inside Player.gd.
+	if _player.has_signal("slash_finished"):
+		_player.slash_finished.connect(_on_player_slash_finished)
+	# ⏱ Perfect dodge → short self-bullet-time (M3 후속). The service
+	# isn't built until _build_chapter_systems, so we route through a
+	# handler that defers to it (the PC can't dodge before then anyway).
+	if _player.has_signal("perfect_dodge"):
+		_player.perfect_dodge.connect(_on_player_perfect_dodge)
+
+## ⏱ Perfect dodge reward — a short self-bullet-time through the same
+## service the elite-3 effect uses, just a tighter window so it reads as
+## a reactive "close call" slow rather than the big elite payoff.
+func _on_player_perfect_dodge() -> void:
+	if _bullet_time_service != null:
+		_bullet_time_service.start(0.5)
 
 func _spawn_camera() -> void:
 	if camera_scene == null:
@@ -206,12 +277,21 @@ func _spawn_one(scene: PackedScene, r_min: float, r_max: float) -> void:
 	var inst := scene.instantiate()
 	# If bullet-time is currently active, new spawns inherit the slow too
 	# so the world stays consistently dilated.
-	if _bullettime_active and "time_scale_mult" in inst:
-		inst.time_scale_mult = bullettime_slow_factor
+	_inherit_bullettime(inst)
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_offscreen_spawn(r_min, r_max)
 	_wire_enemy_lifecycle(inst)
+
+
+## Apply the current bullet-time slow to a freshly spawned node if the
+## world is dilated right now. Replaces the inline `_bullettime_active`
+## check that used to live in every spawn helper (pre-M8 refactor).
+func _inherit_bullettime(inst: Node) -> void:
+	if _bullet_time_service == null or not _bullet_time_service.is_active():
+		return
+	if "time_scale_mult" in inst:
+		inst.time_scale_mult = _bullet_time_service.current_slow_factor()
 
 ## Spawn an elite with a pre-set effect_type. The effect_type must be
 ## written BEFORE add_child so the elite's _ready() picks it up to label
@@ -222,8 +302,7 @@ func _spawn_one_elite(scene: PackedScene, r_min: float, r_max: float, effect_typ
 	var inst := scene.instantiate()
 	if "effect_type" in inst:
 		inst.effect_type = effect_type
-	if _bullettime_active and "time_scale_mult" in inst:
-		inst.time_scale_mult = bullettime_slow_factor
+	_inherit_bullettime(inst)
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_offscreen_spawn(r_min, r_max)
@@ -409,17 +488,110 @@ func _on_enemy_freed() -> void:
 func award_exp_for_kill(enemy: Node) -> void:
 	if _exp_system == null:
 		return
-	var amount := 1  # regular LV1 melee/ranged
+	var base := 1  # regular LV1 melee/ranged
 	if enemy is EliteEnemy:
 		var t: int = enemy.effect_type
 		match t:
-			1: amount = 3
-			2: amount = 5
-			3: amount = 10
-			_: amount = 3
+			1: base = 3
+			2: base = 5
+			3: base = 10
+			4: base = 8
+			_: base = 3
 	elif "_lv" in enemy and enemy._lv >= 2:
-		amount = 2
-	_exp_system.add_exp(amount)
+		base = 2
+	# Kill pays a small INSTANT exp (the bar nudges on every kill) and
+	# drops the bulk as an EXP gem the PC magnets in — so collecting is
+	# the real reward and ignoring gems costs you.
+	_exp_system.add_exp(EXP_INSTANT_ON_KILL)
+	_drop_exp_gem(enemy, base)
+	# Vampire card — roll on every kill (boss/elite/mob alike). Heal is
+	# bounded by max_hp inside HealthComponent.heal.
+	_try_vampire_heal()
+	# 4안 — 처치 시 일섬 게이지 충전.
+	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
+		_player.call("gain_gauge_on_kill")
+
+
+## Small instant EXP credited the moment an enemy dies (rest is in the
+## gem). Keeps the bar visibly responsive even before the gem is grabbed.
+const EXP_INSTANT_ON_KILL := 1
+
+
+## Drop an EXP gem carrying `value` at the dying enemy's position. The PC
+## magnets it in (ExpGem.gd) and `collect_exp_gem` credits the value.
+## `tree_exited` fires just before the node frees, so its global_position
+## is still readable here. Falls back to immediate EXP if no gem scene
+## is wired (clean-tscn safety).
+func _drop_exp_gem(enemy: Node, value: int) -> void:
+	if exp_gem_scene == null or enemy == null or not is_instance_valid(enemy):
+		_exp_system.add_exp(value)
+		return
+	# Use the position captured at _on_died (set_meta). Reading
+	# global_position here would give origin — tree_exited fires after the
+	# node has detached, so its world transform is already gone, dropping
+	# every gem at the map center.
+	var pos: Vector3
+	if enemy.has_meta("death_position"):
+		pos = enemy.get_meta("death_position")
+	elif enemy is Node3D and enemy.is_inside_tree():
+		pos = (enemy as Node3D).global_position
+	else:
+		# No captured position and the node already left the tree (scene
+		# teardown / forced free) — credit EXP without a gem, no error.
+		_exp_system.add_exp(value)
+		return
+	var gem := exp_gem_scene.instantiate()
+	if gem.has_method("configure"):
+		gem.call("configure", value)
+	add_child(gem)
+	(gem as Node3D).global_position = Vector3(pos.x, 0.3, pos.z)
+
+
+## Called by ExpGem.gd when the PC picks it up. Credits the carried EXP.
+func collect_exp_gem(value: int) -> void:
+	if _exp_system != null:
+		_exp_system.add_exp(value)
+	# 4안 — 젬 획득 시 일섬 게이지 충전.
+	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_gem"):
+		_player.call("gain_gauge_on_gem")
+
+
+## Vampire card hook — `has_vampire` + `vampire_chance` live on the PC.
+## We read them via duck-typed `in` checks so cards stay self-contained
+## (no exhaustive type imports in Main).
+func _try_vampire_heal() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not ("has_vampire" in _player) or not _player.has_vampire:
+		return
+	var chance: float = 0.15
+	if "vampire_chance" in _player:
+		chance = _player.vampire_chance
+	if randf() >= chance:
+		return
+	var hp_comp := _player.get_node_or_null("HealthComponent") as HealthComponent
+	if hp_comp != null:
+		hp_comp.heal(1)
+
+
+## Echo card hook — every Player.slash_finished fires this. We queue a
+## CircularSlash 0.3s later at the PC's current foot position if the
+## card was picked.
+func _on_player_slash_finished() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not ("has_echo" in _player) or not _player.has_echo:
+		return
+	get_tree().create_timer(0.3).timeout.connect(_spawn_echo_circular_at_player)
+
+
+func _spawn_echo_circular_at_player() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not is_inside_tree():
+		return
+	if _elite_effect_service != null:
+		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
 
 func _build_chapter_systems() -> void:
 	# EXP system as a child node so its lifetime tracks the scene.
@@ -435,6 +607,23 @@ func _build_chapter_systems() -> void:
 		if _exp_bar.has_method("set_exp_source"):
 			_exp_bar.call("set_exp_source", _exp_system)
 
+	# Refactor (M8) — bullet-time + elite-effect services. Created before
+	# WaveManager so the first spawn frame can already query bullet-time
+	# state, and EliteEnemy._on_died finds trigger_elite_effect live.
+	_bullet_time_service = _BulletTimeServiceScript.new()
+	_bullet_time_service.name = "BulletTimeService"
+	_bullet_time_service.slow_factor = bullettime_slow_factor
+	_bullet_time_service.duration = bullettime_duration
+	add_child(_bullet_time_service)
+	_bullet_time_service.setup(_world_env)
+
+	_elite_effect_service = _EliteEffectServiceScript.new()
+	_elite_effect_service.name = "EliteEffectService"
+	_elite_effect_service.explosion_burst_scene = explosion_burst_scene
+	_elite_effect_service.circular_slash_scene = circular_slash_scene
+	add_child(_elite_effect_service)
+	_elite_effect_service.setup(_player, _bullet_time_service)
+
 	# Wave manager — drives the population-curve drip + chapter beats.
 	_wave_mgr = _WaveManagerScript.new()
 	_wave_mgr.name = "WaveManager"
@@ -442,15 +631,57 @@ func _build_chapter_systems() -> void:
 	_wave_mgr.count_alive_cb   = Callable(self, "_count_alive_mobs")
 	_wave_mgr.spawn_elites_cb  = Callable(self, "_chapter_spawn_elites")
 	_wave_mgr.spawn_boss_cb    = Callable(self, "_chapter_spawn_boss")
+	# Inject the active chapter's WaveCurve. WaveManager's _process gates
+	# on `curve != null` so a missing setup just stalls the spawner — the
+	# push_warning gives the editor configuration error a single chance
+	# to surface.
+	var curve_idx: int = _current_chapter - 1
+	if curve_idx >= 0 and curve_idx < chapter_curves.size() and chapter_curves[curve_idx] != null:
+		_wave_mgr.set_curve(chapter_curves[curve_idx])
+	else:
+		push_warning("Main: no chapter_curves[%d] — WaveManager idle" % curve_idx)
 	add_child(_wave_mgr)
+
+	# Anchor the chapter timer at the moment WaveManager goes live so the
+	# result-screen "클리어 시간" reads as time-since-first-spawn rather
+	# than time-since-_ready (which includes the bootstrap frame).
+	_chapter_start_msec = Time.get_ticks_msec()
+
+	# M4 — apply permanent meta passives to the live PC + ExpSystem
+	# RIGHT AFTER they're built, before the first physics tick. Owned
+	# passive levels mutate PlayerData.move_speed / slash_width /
+	# HealthComponent.max_hp / ExpSystem.gain_multiplier / etc.
+	if _player != null and is_instance_valid(_player):
+		_MetaScript.apply_to(_player, _exp_system)
+
+	# ⏱ Zen meter — drives the perfect-input → burst slash reward loop.
+	# Attached as a child so it lives only as long as the run does.
+	_zen_system = _ZenSystemScript.new()
+	_zen_system.name = "ZenSystem"
+	add_child(_zen_system)
+	if _player != null and is_instance_valid(_player):
+		_zen_system.bind(_player)
+	if _player != null and "bind_zen_system" in _player:
+		_player.call("bind_zen_system", _zen_system)
+	if _zen_system.has_signal("zen_changed"):
+		_zen_system.zen_changed.connect(_on_zen_changed)
+
+	# M6 — chapter-specific sky / ambient tint so each chapter reads as
+	# a distinct biome at a glance. Runs after the WorldEnvironment has
+	# been built in _build_environment.
+	_apply_chapter_visuals()
 
 ## --- Chapter 1 wave handlers ---
 
 ## WaveManager calls this once per drip tick (1.0s). Choose mob type by
-## a fixed 5:1 melee:ranged ratio; melee uses LV2 data once `lv >= 2`.
-## Ranged mobs stay LV1 (no LV2 ranged data resource yet).
+## the curve's ranged_ratio (Ch1 = 0.16 ≈ 5:1; Ch2 bumps to 0.2). Melee
+## uses LV2 data once `lv >= 2`. Ranged mobs stay LV1 (no LV2 ranged
+## data resource yet).
 func _request_spawn(lv: int) -> void:
-	var spawn_ranged: bool = randf() < 0.16  # ≈ 1/6 → 5:1 ratio
+	var ratio: float = 0.16
+	if _wave_mgr != null and _wave_mgr.has_method("ranged_ratio"):
+		ratio = float(_wave_mgr.call("ranged_ratio"))
+	var spawn_ranged: bool = randf() < ratio
 	if spawn_ranged:
 		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
 		return
@@ -499,11 +730,18 @@ func _chapter_spawn_elites() -> void:
 		var effect_type: int = (i % 3) + 1
 		_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, effect_type)
 
-## One-shot at t=120 — boss spawns off-screen so it stomps in visibly.
+## One-shot at curve.boss_time — boss spawns off-screen so it stomps in
+## visibly. Picks the chapter-specific boss from `boss_scenes` first,
+## falls back to the legacy single `boss_scene` if not wired.
 func _chapter_spawn_boss() -> void:
-	if boss_scene == null:
+	var idx: int = _current_chapter - 1
+	var scene: PackedScene = boss_scene
+	if idx >= 0 and idx < boss_scenes.size() and boss_scenes[idx] != null:
+		scene = boss_scenes[idx]
+	if scene == null:
+		push_warning("Main: no boss scene for chapter %d" % _current_chapter)
 		return
-	var boss := boss_scene.instantiate()
+	var boss := scene.instantiate()
 	_enemies_root.add_child(boss)
 	if boss is Node3D:
 		(boss as Node3D).global_position = _pick_offscreen_spawn(10.0, 14.0)
@@ -521,8 +759,7 @@ func _spawn_one_lv2(scene: PackedScene, r_min: float, r_max: float) -> void:
 		inst.data = melee_enemy_data_lv2
 	if "_lv" in inst:
 		inst._lv = 2
-	if _bullettime_active and "time_scale_mult" in inst:
-		inst.time_scale_mult = bullettime_slow_factor
+	_inherit_bullettime(inst)
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_offscreen_spawn(r_min, r_max)
@@ -537,10 +774,185 @@ func _on_boss_defeated() -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
+	# Capture stats off live state BEFORE the save call so the file and
+	# the result screen agree (kill count / level can't legally change
+	# between the two reads, but the order is documented).
+	var elapsed_sec: float = _elapsed_seconds()
+	var pc_level: int = (_exp_system.level if _exp_system != null else 1)
+	var stats := {"time": elapsed_sec, "kills": _kill_count, "level": pc_level}
+	var beat: Dictionary = _SaveSystemScript.record_clear(_current_chapter, elapsed_sec, _kill_count, pc_level)
+	var best: Dictionary = _SaveSystemScript.best_for(_current_chapter)
+	# M4 — credit souls for the clear. Stash on stats so the screen can
+	# show "+N 혼" alongside the time/kills/level rows.
+	var souls_earned: int = _MetaScript.record_clear_reward(_current_chapter, elapsed_sec, _kill_count, pc_level)
+	stats["souls"] = souls_earned
+	# Basic gold currency — auto-awarded from kills + survival time.
+	stats["gold"] = _MetaScript.record_gold_reward(_kill_count, elapsed_sec)
 	# Pause world progression and show the clear screen.
 	tree.paused = true
 	var clear := chapter_clear_screen_scene.instantiate() as CanvasLayer
 	add_child(clear)
+	if clear.has_method("configure"):
+		clear.call("configure", stats, best, beat)
+	# `next_pressed` lets Main decide between advancing to the next
+	# chapter and reloading the scene (final chapter case). The screen
+	# self-frees after emitting; CONNECT_ONE_SHOT keeps a double-click
+	# from firing twice during the fade-out.
+	if clear.has_signal("next_pressed"):
+		clear.next_pressed.connect(_on_chapter_next_pressed, CONNECT_ONE_SHOT)
+
+
+## ChapterClearScreen.next_pressed handler — advance to the next chapter
+## in-place if one exists, otherwise reload the current scene (Ch1
+## restart placeholder until the OutGame menu lands in M4).
+func _on_chapter_next_pressed() -> void:
+	if _current_chapter < chapter_curves.size():
+		_advance_chapter()
+	else:
+		var tree := get_tree()
+		if tree != null:
+			tree.paused = false
+			tree.reload_current_scene()
+
+
+## In-place chapter switch. Wipes the arena (enemies / loose effects),
+## bumps `_current_chapter`, rebuilds WaveManager with the new curve,
+## and resets the chapter clock. Keeps the PC's HP / EXP / card build
+## intact — that persistence across chapters is the whole point of the
+## meta loop.
+func _advance_chapter() -> void:
+	# 1) Wipe live combat surface. We free instead of group-walking
+	# `enemies` exhaustively because boss/elite payloads (CircularSlash,
+	# ExplosionBurst, etc.) sit outside that group as direct scene
+	# children — easier to nuke the whole container + scan for stray
+	# effect nodes.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(e):
+			e.queue_free()
+	# Loose arrows / effects parented to the scene root.
+	for child in get_children():
+		if child is EnemyArrow:
+			child.queue_free()
+
+	# 2) Stop any in-flight bullet-time (cancel resets saturation too).
+	if _bullet_time_service != null:
+		_bullet_time_service.cancel()
+
+	# 3) Tear down WaveManager so the new chapter's curve+timers start
+	# clean. (We could call set_curve and reset state in-place, but a
+	# fresh instance is cheaper to reason about — same pattern Main uses
+	# at boot.)
+	if _wave_mgr != null and is_instance_valid(_wave_mgr):
+		_wave_mgr.queue_free()
+	_wave_mgr = null
+
+	# 4) Reset chapter state.
+	_current_chapter += 1
+	_chapter_cleared = false
+	_kill_count = 0
+	_kill_label.text = "Kills: 0"
+
+	# 5) Rebuild WaveManager with the new curve. Inlined instead of
+	# calling _build_chapter_systems wholesale so we don't recreate the
+	# ExpSystem (PC keeps their level/EXP between chapters).
+	_wave_mgr = _WaveManagerScript.new()
+	_wave_mgr.name = "WaveManager"
+	_wave_mgr.request_spawn_cb = Callable(self, "_request_spawn")
+	_wave_mgr.count_alive_cb   = Callable(self, "_count_alive_mobs")
+	_wave_mgr.spawn_elites_cb  = Callable(self, "_chapter_spawn_elites")
+	_wave_mgr.spawn_boss_cb    = Callable(self, "_chapter_spawn_boss")
+	var curve_idx: int = _current_chapter - 1
+	if curve_idx >= 0 and curve_idx < chapter_curves.size() and chapter_curves[curve_idx] != null:
+		_wave_mgr.set_curve(chapter_curves[curve_idx])
+	add_child(_wave_mgr)
+
+	# 6) Anchor the new chapter's clock + resume.
+	_chapter_start_msec = Time.get_ticks_msec()
+	# M6 — refresh the sky/ambient for the new chapter.
+	_apply_chapter_visuals()
+	var tree := get_tree()
+	if tree != null:
+		tree.paused = false
+
+
+## M6 — Chapter-specific environment tint. Reuses the ProceduralSkyMaterial
+## from _build_environment, just adjusts colors + ambient energy per chapter.
+## Defaults (Ch1) match the original _build_environment values.
+func _apply_chapter_visuals() -> void:
+	if _world_env == null or _world_env.environment == null:
+		return
+	var env: Environment = _world_env.environment
+	var sky_mat := env.sky.sky_material as ProceduralSkyMaterial if env.sky != null else null
+	match _current_chapter:
+		1:
+			if sky_mat != null:
+				sky_mat.sky_horizon_color = Color(0.78, 0.85, 0.95)
+				sky_mat.sky_top_color = Color(0.45, 0.7, 0.92)
+				sky_mat.ground_bottom_color = Color(0.25, 0.32, 0.22)
+				sky_mat.ground_horizon_color = Color(0.78, 0.85, 0.95)
+			env.ambient_light_energy = 0.75
+		2:
+			# Ch2 — golden / dusk: hotter, lower sun feel.
+			if sky_mat != null:
+				sky_mat.sky_horizon_color = Color(0.92, 0.68, 0.48)
+				sky_mat.sky_top_color = Color(0.65, 0.42, 0.55)
+				sky_mat.ground_bottom_color = Color(0.32, 0.22, 0.18)
+				sky_mat.ground_horizon_color = Color(0.85, 0.55, 0.42)
+			env.ambient_light_energy = 0.65
+		3:
+			# Ch3 — twilight / night: darkest reading.
+			if sky_mat != null:
+				sky_mat.sky_horizon_color = Color(0.32, 0.25, 0.42)
+				sky_mat.sky_top_color = Color(0.12, 0.1, 0.22)
+				sky_mat.ground_bottom_color = Color(0.1, 0.1, 0.15)
+				sky_mat.ground_horizon_color = Color(0.3, 0.22, 0.35)
+			env.ambient_light_energy = 0.45
+
+
+## Player.died handler — pause the world, record the death, show the
+## GameOverScreen overlay with run stats + NEW! badges if the death
+## beat any peak (yes, you can die further than you've ever cleared
+## and that legitimately bumps best_kills / best_level).
+func _on_player_died() -> void:
+	if _game_over_shown:
+		return
+	_game_over_shown = true
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var elapsed_sec: float = _elapsed_seconds()
+	var pc_level: int = (_exp_system.level if _exp_system != null else 1)
+	var stats := {"time": elapsed_sec, "kills": _kill_count, "level": pc_level}
+	var beat: Dictionary = _SaveSystemScript.record_death(_current_chapter, elapsed_sec, _kill_count, pc_level)
+	var best: Dictionary = _SaveSystemScript.best_for(_current_chapter)
+	# M4 — death consolation 혼. Smaller than a clear but never zero so
+	# every attempt feeds the meta loop.
+	var souls_earned: int = _MetaScript.record_death_reward(_current_chapter, elapsed_sec, _kill_count, pc_level)
+	stats["souls"] = souls_earned
+	# Basic gold currency — auto-awarded from kills + survival time (death too).
+	stats["gold"] = _MetaScript.record_gold_reward(_kill_count, elapsed_sec)
+	tree.paused = true
+	if game_over_screen_scene == null:
+		# Fallback for runs where the export wasn't wired — log so the
+		# editor link-up gets noticed but don't crash; the PC death
+		# tween still finishes and R reloads. Future-proof against a
+		# clean-tscn run.
+		push_warning("Main.game_over_screen_scene not set — GameOver UI skipped")
+		return
+	var over := game_over_screen_scene.instantiate() as CanvasLayer
+	add_child(over)
+	if over.has_method("configure"):
+		over.call("configure", stats, best, beat)
+
+
+## Wall-clock seconds since WaveManager started. Centralised so the
+## clear / death paths can't drift out of sync on the formula.
+func _elapsed_seconds() -> float:
+	if _chapter_start_msec <= 0:
+		return 0.0
+	return float(Time.get_ticks_msec() - _chapter_start_msec) / 1000.0
 
 ## ExpSystem fired leveled_up → pause world, show 3 upgrade cards, wait for
 ## a pick, apply it, then resume.
@@ -573,99 +985,14 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 
 ## --- Elite death payloads ---
 
-## Called by EliteEnemy._on_died(). Routes to the matching payload.
+## Called by EliteEnemy._on_died() on the current scene. Thin delegate
+## to the shared EliteEffectService (M8 refactor — the payload bodies
+## now live in scripts/managers/EliteEffectService.gd, identical for
+## Main + Testplay). Bullet-time (type 3) routes through that service
+## into BulletTimeService.
 func trigger_elite_effect(effect_type: int, pos: Vector3) -> void:
-	match effect_type:
-		1:
-			_spawn_explosion(pos)
-		2:
-			_queue_circular_slash_after_slash()
-		3:
-			_start_bullettime(bullettime_duration)
-
-func _spawn_explosion(pos: Vector3) -> void:
-	if explosion_burst_scene == null:
-		return
-	var burst := explosion_burst_scene.instantiate() as Node3D
-	add_child(burst)
-	burst.global_position = pos
-
-func _spawn_circular_slash(pos: Vector3) -> void:
-	if circular_slash_scene == null:
-		return
-	var slash := circular_slash_scene.instantiate() as Node3D
-	add_child(slash)
-	slash.global_position = pos
-
-## A type-2 elite died. If the player is still in their iaido dash, wait
-## for slash_finished; otherwise the slash already ended, fire immediately
-## at the player's current position.
-func _queue_circular_slash_after_slash() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if _pending_circular_slash:
-		return  # already queued
-	# Player has signal `slash_finished`. State.DASHING == 2 (from Player.State).
-	var is_dashing: bool = false
-	if "_state" in _player:
-		is_dashing = _player._state == 2  # State.DASHING
-	if is_dashing and _player.has_signal("slash_finished"):
-		_pending_circular_slash = true
-		_player.slash_finished.connect(_on_pending_slash_finished, CONNECT_ONE_SHOT)
-		# Safety: if Player dies before slash_finished fires (CONNECT_ONE_SHOT
-		# auto-disconnects on emit; but on emitter free the callback never
-		# runs and the flag would stay stuck forever, blocking future type-2
-		# effects). Force-clear after a short window.
-		get_tree().create_timer(1.5).timeout.connect(_clear_pending_circular_slash)
-	else:
-		_spawn_circular_slash((_player as Node3D).global_position)
-
-func _on_pending_slash_finished() -> void:
-	_pending_circular_slash = false
-	if _player == null or not is_instance_valid(_player):
-		return
-	_spawn_circular_slash((_player as Node3D).global_position)
-
-func _clear_pending_circular_slash() -> void:
-	# No-op if the signal already cleared us — this is just a watchdog.
-	_pending_circular_slash = false
-
-## --- Bullet-time / monochrome ---
-
-func _start_bullettime(duration: float) -> void:
-	if _world_env == null:
-		return
-	_bullettime_active = true
-	# Slow all current enemies (and any arrows in flight).
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if "time_scale_mult" in e:
-			e.time_scale_mult = bullettime_slow_factor
-	# Arrows aren't in a group — scan our direct children for any in flight.
-	_apply_slow_to_loose_arrows(bullettime_slow_factor)
-
-	# Tween saturation: snap to 0 fast, hold, then ease back to normal.
-	if _bullettime_tween != null and _bullettime_tween.is_valid():
-		_bullettime_tween.kill()
-	var env := _world_env.environment
-	_bullettime_tween = create_tween()
-	_bullettime_tween.tween_property(env, "adjustment_saturation", 0.0, 0.15)
-	_bullettime_tween.tween_interval(max(duration - 0.45, 0.05))
-	_bullettime_tween.tween_property(env, "adjustment_saturation", _NORMAL_SATURATION, 0.3)
-	_bullettime_tween.tween_callback(_end_bullettime)
-
-func _end_bullettime() -> void:
-	_bullettime_active = false
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if "time_scale_mult" in e:
-			e.time_scale_mult = 1.0
-	_apply_slow_to_loose_arrows(1.0)
-
-func _apply_slow_to_loose_arrows(factor: float) -> void:
-	# Arrows are spawned as direct children of the current scene (us),
-	# not under _enemies_root. Walk our children to grab any.
-	for child in get_children():
-		if child is EnemyArrow and "time_scale_mult" in child:
-			child.time_scale_mult = factor
+	if _elite_effect_service != null:
+		_elite_effect_service.trigger(effect_type, pos)
 
 func _build_hud() -> void:
 	var canvas := CanvasLayer.new()
@@ -676,8 +1003,12 @@ func _build_hud() -> void:
 	vbox.add_theme_constant_override("separation", 4)
 	canvas.add_child(vbox)
 
-	# (HP text label removed — the PC now wears a floating HpBar3D over its
-	#  head, so the corner text became redundant.)
+	# 4안 — 좌상단 칸 단위 HP (빨간 사각형 더미 리소스). 빈 컨테이너만 만들고,
+	# 칸 수/색은 `_refresh_hp_cells` 가 매 프레임 Player.get_hp()/get_max_hp()
+	# 로 갱신·재구성한다. 머리 위 HpBar3D 와 병행 표시(역할이 다름).
+	_hp_box = HBoxContainer.new()
+	_hp_box.add_theme_constant_override("separation", 5)
+	vbox.add_child(_hp_box)
 
 	_kill_label = Label.new()
 	_kill_label.text = "Kills: 0"
@@ -688,15 +1019,120 @@ func _build_hud() -> void:
 	vbox.add_child(_kill_label)
 
 	_info_label = Label.new()
-	_info_label.text = "WASD : move    LMB(hold): aim slash    R: restart"
+	_info_label.text = "WASD: 이동   LMB: 비도   RMB(hold): 일섬(게이지 100%)   SPACE: 자동조준   Shift: 회피   R: 재시작"
 	_info_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_info_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_info_label.add_theme_constant_override("outline_size", 4)
 	_info_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(_info_label)
 
+	# ⏱ Zen meter readout — sits below the info line, refreshed by
+	# `_on_zen_changed`. "BURST!" overrides the count when armed.
+	_zen_label = Label.new()
+	_zen_label.text = "Zen: 0 / 5"
+	_zen_label.add_theme_color_override("font_color", Color(1, 0.85, 0.4))
+	_zen_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_zen_label.add_theme_constant_override("outline_size", 4)
+	_zen_label.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(_zen_label)
+
+	_build_slash_gauge(canvas)
+
+## 일섬 게이지 바 — 화면 하단 중앙. 0~100% 로 차오르고, 100% 도달 시 골드로
+## 바뀌며 "READY" 표기 (우클릭으로 일섬 발동). `_update_hud` 가 매 프레임
+## `Player.slash_gauge_frac()` / `is_slash_ready()` 를 읽어 갱신한다.
+## Testplay 에도 동일 코드가 미러됨 (동기화 규칙).
+func _build_slash_gauge(canvas: CanvasLayer) -> void:
+	_slash_gauge_bg = ColorRect.new()
+	_slash_gauge_bg.color = Color(0.07, 0.07, 0.09, 0.85)
+	# 하단 중앙 앵커 — 창 크기가 바뀌어도 중앙 하단에 고정.
+	_slash_gauge_bg.anchor_left = 0.5
+	_slash_gauge_bg.anchor_right = 0.5
+	_slash_gauge_bg.anchor_top = 1.0
+	_slash_gauge_bg.anchor_bottom = 1.0
+	_slash_gauge_bg.offset_left = -_SLASH_GAUGE_W * 0.5
+	_slash_gauge_bg.offset_right = _SLASH_GAUGE_W * 0.5
+	_slash_gauge_bg.offset_top = -(_SLASH_GAUGE_H + 28.0)
+	_slash_gauge_bg.offset_bottom = -28.0
+	_slash_gauge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(_slash_gauge_bg)
+
+	_slash_gauge_bar = ColorRect.new()
+	_slash_gauge_bar.color = _SLASH_GAUGE_FILL
+	_slash_gauge_bar.position = Vector2(2, 2)
+	_slash_gauge_bar.size = Vector2(0, _SLASH_GAUGE_H - 4.0)
+	_slash_gauge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slash_gauge_bg.add_child(_slash_gauge_bar)
+
+	_slash_gauge_label = Label.new()
+	_slash_gauge_label.text = "일섬 0%"
+	_slash_gauge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_slash_gauge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_slash_gauge_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_slash_gauge_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_slash_gauge_label.add_theme_constant_override("outline_size", 4)
+	_slash_gauge_label.add_theme_font_size_override("font_size", 14)
+	_slash_gauge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slash_gauge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_slash_gauge_bg.add_child(_slash_gauge_label)
+
 func _update_hud() -> void:
 	if _player == null or not is_instance_valid(_player):
 		# PC freed — no live HP to read; the floating bar disappeared with it.
 		return
 	_kill_label.text = "Kills: %d" % _kill_count
+	_refresh_hp_cells()
+	_refresh_slash_gauge()
+
+## 좌상단 칸 단위 HP 갱신. 칸 수가 바뀌면(메타 강건 등) 재구성하고, 현재 HP
+## 만큼 빨강(_HP_FULL), 나머지는 어두운색(_HP_EMPTY)으로 칠한다. Testplay 에도
+## 동일 코드가 미러됨 (동기화 규칙).
+func _refresh_hp_cells() -> void:
+	if _hp_box == null or not _player.has_method("get_hp"):
+		return
+	var max_hp: int = 3
+	if _player.has_method("get_max_hp"):
+		max_hp = max(1, int(_player.call("get_max_hp")))
+	# 칸 수 불일치 시 재구성 (스폰 직후 / 메타 HP 보너스 적용 후 자가 보정).
+	if _hp_cells.size() != max_hp:
+		for c in _hp_cells:
+			if is_instance_valid(c):
+				c.queue_free()
+		_hp_cells.clear()
+		for i in max_hp:
+			var cell := ColorRect.new()
+			cell.custom_minimum_size = Vector2(26, 26)
+			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_hp_box.add_child(cell)
+			_hp_cells.append(cell)
+	var cur_hp: int = int(_player.call("get_hp"))
+	for i in _hp_cells.size():
+		_hp_cells[i].color = _HP_FULL if i < cur_hp else _HP_EMPTY
+
+## 매 프레임 일섬 게이지 바 갱신. Player 의 getter 를 덕타이핑으로 읽는다.
+func _refresh_slash_gauge() -> void:
+	if _slash_gauge_bar == null or not _player.has_method("slash_gauge_frac"):
+		return
+	var frac: float = clampf(_player.call("slash_gauge_frac"), 0.0, 1.0)
+	_slash_gauge_bar.size = Vector2((_SLASH_GAUGE_W - 4.0) * frac, _SLASH_GAUGE_H - 4.0)
+	var ready: bool = _player.has_method("is_slash_ready") and bool(_player.call("is_slash_ready"))
+	if ready:
+		_slash_gauge_bar.color = _SLASH_GAUGE_FILL_READY
+		_slash_gauge_label.text = "⚔ 일섬 READY (RMB)"
+	else:
+		_slash_gauge_bar.color = _SLASH_GAUGE_FILL
+		_slash_gauge_label.text = "일섬 %d%%" % int(round(frac * 100.0))
+
+
+## ⏱ Zen meter HUD refresh. Connected to ZenSystem.zen_changed at
+## chapter setup; updates the label or paints BURST! while the burst
+## flag is armed.
+func _on_zen_changed(current: int, maximum: int) -> void:
+	if _zen_label == null:
+		return
+	if _zen_system != null and "burst_armed" in _zen_system and _zen_system.burst_armed:
+		_zen_label.text = "⚡ ZEN BURST READY ⚡"
+		_zen_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
+	else:
+		_zen_label.text = "Zen: %d / %d" % [current, maximum]
+		_zen_label.add_theme_color_override("font_color", Color(1, 0.85, 0.4))
