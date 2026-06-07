@@ -200,6 +200,16 @@ static func _apply_melee(e, row: Dictionary) -> void:
 		e.leap_radius = _rf(row, "leap_radius", e.leap_radius)
 	if "leap_damage" in e:
 		e.leap_damage = _ri(row, "leap_damage", e.leap_damage)
+	# 군집 분리(Boid) 파라미터 — 잡몹/리퍼 겹침 방지.
+	if "separation_radius" in e:
+		e.separation_radius = _rf(row, "separation_radius", e.separation_radius)
+	if "separation_weight" in e:
+		e.separation_weight = _rf(row, "separation_weight", e.separation_weight)
+	# 경직(아머 게이지).
+	if "armor_max" in e:
+		e.armor_max = _ri(row, "armor_max", e.armor_max)
+	if "stagger_duration" in e:
+		e.stagger_duration = _rf(row, "stagger_duration", e.stagger_duration)
 	# max_hp 미적용 (WaveManager 레벨업이 관리).
 
 
@@ -211,6 +221,10 @@ static func _apply_ranged(e, row: Dictionary) -> void:
 		e.data.ranged_keep_distance = _rf(row, "keep_distance", e.data.ranged_keep_distance)
 		e.data.arrow_speed = _rf(row, "arrow_speed", e.data.arrow_speed)
 	e.aim_lock_duration = _rf(row, "aim_lock_duration", e.aim_lock_duration)
+	if "armor_max" in e:
+		e.armor_max = _ri(row, "armor_max", e.armor_max)
+	if "stagger_duration" in e:
+		e.stagger_duration = _rf(row, "stagger_duration", e.stagger_duration)
 	# max_hp / 화살 데미지 미적용.
 
 
@@ -223,6 +237,10 @@ static func _apply_elite(e, row: Dictionary) -> void:
 	e.fan_angle_deg = _rf(row, "fan_angle_deg", e.fan_angle_deg)
 	e.separation_radius = _rf(row, "separation_radius", e.separation_radius)
 	e.separation_weight = _rf(row, "separation_weight", e.separation_weight)
+	if "armor_max" in e:
+		e.armor_max = _ri(row, "armor_max", e.armor_max)
+	if "stagger_duration" in e:
+		e.stagger_duration = _rf(row, "stagger_duration", e.stagger_duration)
 	# max_hp 미적용 (effect_type 표가 관리).
 
 
@@ -246,3 +264,7 @@ static func _apply_boss(e, row: Dictionary) -> void:
 	e.purple_ratio = _rf(row, "purple_ratio", e.purple_ratio)
 	e.enable_green_signal = _rb(row, "enable_green_signal", e.enable_green_signal)
 	e.green_ratio = _rf(row, "green_ratio", e.green_ratio)
+	if "armor_max" in e:
+		e.armor_max = _ri(row, "armor_max", e.armor_max)
+	if "stagger_duration" in e:
+		e.stagger_duration = _rf(row, "stagger_duration", e.stagger_duration)

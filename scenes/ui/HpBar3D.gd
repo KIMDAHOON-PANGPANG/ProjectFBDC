@@ -46,6 +46,8 @@ extends Node3D
 @export var bg_color: Color = Color(0.07, 0.07, 0.09, 0.9)
 @export var fill_color: Color = Color(0.92, 0.18, 0.22, 1.0)
 @export var border_color: Color = Color(0.0, 0.0, 0.0, 0.95)
+## 아머(경직 게이지) 칸 색 — HP 우측에 표시되는 파란 게이지(armor_max>0 일 때만).
+@export var armor_color: Color = Color(0.25, 0.55, 1.0, 1.0)
 ## World-space offset above the follow target. Default = head height of the
 ## PC capsule (1.4 cap + a bit of headroom).
 @export var follow_offset: Vector3 = Vector3(0, 1.9, 0)
@@ -53,6 +55,8 @@ extends Node3D
 var _bg: MeshInstance3D
 var _fill: MeshInstance3D
 var _fill_carrier: Node3D
+var _armor_fill: MeshInstance3D
+var _armor_carrier: Node3D
 var _border: MeshInstance3D
 var _hp: HealthComponent
 # Node we glue ourselves above every frame. Defaults to our parent.
@@ -60,7 +64,7 @@ var _follow_target: Node3D
 
 func _ready() -> void:
 	_build()
-	_refresh(1.0)
+	_refresh(1.0, 0.0, 1.0)
 	# Detach from parent transform inheritance and drive position ourselves.
 	top_level = true
 	# Default follow target = our parent (typical Player.tscn setup).
@@ -145,6 +149,20 @@ func _build() -> void:
 	_fill.position = Vector3(width * 0.5, 0, 0)
 	_fill_carrier.add_child(_fill)
 
+	# 아머(파란) 칸 — HP 존 경계에서 시작해 오른쪽으로 채워진다. 위치/스케일은
+	# refresh() 가 armor_max 에 맞춰 매번 갱신(armor_max=0 이면 숨겨 PC 바엔 영향 없음).
+	_armor_carrier = Node3D.new()
+	_armor_carrier.position = Vector3(width * 0.5, 0, 0.004)
+	_armor_carrier.visible = false
+	add_child(_armor_carrier)
+	_armor_fill = MeshInstance3D.new()
+	var am := QuadMesh.new()
+	am.size = Vector2(width, height)
+	_armor_fill.mesh = am
+	_armor_fill.material_override = _make_unshaded(armor_color)
+	_armor_fill.position = Vector3(width * 0.5, 0, 0)
+	_armor_carrier.add_child(_armor_fill)
+
 func _make_unshaded(color: Color) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -158,26 +176,51 @@ func _make_unshaded(color: Color) -> StandardMaterial3D:
 
 ## Connect to a HealthComponent so we auto-refresh on damage/heal events.
 func attach_health(hp: HealthComponent) -> void:
-	if _hp != null and _hp.damaged.is_connected(_on_damaged):
-		_hp.damaged.disconnect(_on_damaged)
+	if _hp != null:
+		if _hp.damaged.is_connected(_on_damaged):
+			_hp.damaged.disconnect(_on_damaged)
+		if _hp.has_signal("armor_changed") and _hp.armor_changed.is_connected(_on_damaged):
+			_hp.armor_changed.disconnect(_on_damaged)
 	_hp = hp
 	if _hp != null:
 		_hp.damaged.connect(_on_damaged)
+		if _hp.has_signal("armor_changed"):
+			_hp.armor_changed.connect(_on_damaged)
 		refresh()
 
-func _on_damaged(_amount: int) -> void:
+# damaged(amount) 와 armor_changed() 양쪽에 연결 — 기본값 0 으로 0인자 시그널도 수용.
+func _on_damaged(_amount: int = 0) -> void:
 	refresh()
 
 func refresh() -> void:
 	if _hp == null:
-		_refresh(1.0)
+		_refresh(1.0, 0.0, 1.0)
 		return
-	var ratio: float = float(_hp.hp) / float(max(_hp.max_hp, 1))
-	_refresh(ratio)
+	var hp_ratio: float = float(_hp.hp) / float(max(_hp.max_hp, 1))
+	var armor_max: int = 0
+	if "armor_max" in _hp:
+		armor_max = int(_hp.armor_max)
+	var armor_ratio: float = 0.0
+	if armor_max > 0 and "armor" in _hp:
+		armor_ratio = clamp(float(_hp.armor) / float(armor_max), 0.0, 1.0)
+	# HP 존이 차지하는 폭 비율 = max_hp / (max_hp + armor_max). armor_max=0 이면 1.0(전폭 HP).
+	var total: float = float(max(_hp.max_hp, 1) + armor_max)
+	var hp_zone: float = float(max(_hp.max_hp, 1)) / total
+	_refresh(hp_ratio, armor_ratio, hp_zone)
 
-func _refresh(ratio: float) -> void:
-	ratio = clamp(ratio, 0.0, 1.0)
+func _refresh(hp_ratio: float, armor_ratio: float, hp_zone: float) -> void:
+	hp_ratio = clamp(hp_ratio, 0.0, 1.0)
+	armor_ratio = clamp(armor_ratio, 0.0, 1.0)
+	hp_zone = clamp(hp_zone, 0.0, 1.0)
 	if _fill_carrier != null:
-		# ONLY scale.x changes; carrier origin stays at the BG's left edge.
-		# No fill repositioning required → no drift.
-		_fill_carrier.scale = Vector3(max(ratio, 0.0001), 1.0, 1.0)
+		# HP 는 [bar 왼쪽 ~ hp_zone] 구간을 hp_ratio 만큼 채운다(왼쪽 고정 스케일).
+		_fill_carrier.scale = Vector3(max(hp_zone * hp_ratio, 0.0001), 1.0, 1.0)
+	if _armor_carrier != null:
+		var armor_zone: float = 1.0 - hp_zone
+		if armor_zone <= 0.0001:
+			_armor_carrier.visible = false
+		else:
+			_armor_carrier.visible = true
+			# 아머 칸: HP 존 경계에서 시작해 오른쪽으로 armor_ratio 만큼 채운다.
+			_armor_carrier.position = Vector3(-width * 0.5 + hp_zone * width, 0, 0.004)
+			_armor_carrier.scale = Vector3(max(armor_zone * armor_ratio, 0.0001), 1.0, 1.0)

@@ -20,9 +20,9 @@ var _box_shape: BoxShape3D
 func _ready() -> void:
 	monitoring = true
 	monitorable = false
-	# Detect enemies on layer 3 (Enemy)
+	# Detect enemies on layer 3 (Enemy) + 적 발사체(EnemyAttack, layer 5) 격추용.
 	collision_layer = 0
-	collision_mask = 1 << 2  # layer 3
+	collision_mask = (1 << 2) | (1 << 4)
 
 	_box_shape = BoxShape3D.new()
 	_shape = CollisionShape3D.new()
@@ -108,6 +108,14 @@ func _on_area_entered(area: Area3D) -> void:
 	_try_kill(area)
 
 func _try_kill(node: Node) -> void:
+	# 적 발사체는 격추만 한다(적 처치/보스 데미지로 치지 않음 — hit_enemy 미발생).
+	var pr := node
+	while pr != null:
+		if pr.is_in_group("enemy_projectiles"):
+			if pr.has_method("take_hit"):
+				pr.call("take_hit")
+			return
+		pr = pr.get_parent()
 	var target: Node = node
 	# Walk up to find an entity with a HealthComponent or a `take_hit` method
 	while target != null:

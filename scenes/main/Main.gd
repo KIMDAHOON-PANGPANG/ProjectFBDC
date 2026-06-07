@@ -113,7 +113,6 @@ var _hp_cells: Array = []
 var _slash_gauge_bg: ColorRect
 var _slash_gauge_bar: ColorRect
 var _slash_gauge_label: Label
-var _ammo_label: Label
 const _HP_FULL := Color(0.85, 0.15, 0.15)
 const _HP_EMPTY := Color(0.22, 0.08, 0.08)
 const _SLASH_GAUGE_W := 280.0
@@ -501,9 +500,8 @@ func award_exp_for_kill(enemy: Node) -> void:
 			_: base = 3
 	elif "_lv" in enemy and enemy._lv >= 2:
 		base = 2
-	# Kill pays a small INSTANT exp (the bar nudges on every kill) and
-	# drops the bulk as an EXP gem the PC magnets in — so collecting is
-	# the real reward and ignoring gems costs you.
+	# 처치 직접 EXP 는 거의 0(EXP_INSTANT_ON_KILL). 대부분의 EXP 는 떨어진 젬을
+	# 주워야 들어온다 — 적을 죽이는 것만으로는 레벨이 거의 안 오른다.
 	_exp_system.add_exp(EXP_INSTANT_ON_KILL)
 	_drop_exp_gem(enemy, base)
 	# Vampire card — roll on every kill (boss/elite/mob alike). Heal is
@@ -514,9 +512,9 @@ func award_exp_for_kill(enemy: Node) -> void:
 		_player.call("gain_gauge_on_kill")
 
 
-## Small instant EXP credited the moment an enemy dies (rest is in the
-## gem). Keeps the bar visibly responsive even before the gem is grabbed.
-const EXP_INSTANT_ON_KILL := 1
+## 처치 즉시 EXP — 0(사용자 밸런스). 적을 죽이는 것만으로는 거의 차지 않고,
+## 떨어진 EXP 젬(오브젝트)을 주워야 레벨이 오른다. add_exp(0)은 no-op.
+const EXP_INSTANT_ON_KILL := 0
 
 
 ## Drop an EXP gem carrying `value` at the dying enemy's position. The PC
@@ -1020,17 +1018,6 @@ func _build_hud() -> void:
 	_hp_box.add_theme_constant_override("separation", 5)
 	vbox.add_child(_hp_box)
 
-	# 4안 — 장탄수(비도) 텍스트. `_refresh_ammo` 가 매 프레임 get_ammo()/
-	# get_max_ammo()/is_reloading() 로 갱신. 머리 위 ReloadBar3D(진행바)와
-	# 역할 분담(여긴 숫자, 저긴 리로드 진행). Testplay 에도 미러됨.
-	_ammo_label = Label.new()
-	_ammo_label.text = "비도: - / -"
-	_ammo_label.add_theme_color_override("font_color", Color(1, 1, 1))
-	_ammo_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_ammo_label.add_theme_constant_override("outline_size", 4)
-	_ammo_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_ammo_label)
-
 	_kill_label = Label.new()
 	_kill_label.text = "Kills: 0"
 	_kill_label.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1040,7 +1027,7 @@ func _build_hud() -> void:
 	vbox.add_child(_kill_label)
 
 	_info_label = Label.new()
-	_info_label.text = "WASD: 이동   LMB: 비도   RMB(hold): 일섬(게이지 100%)   SPACE: 자동조준   Shift: 회피   R: 재시작"
+	_info_label.text = "WASD: 이동   LMB: 근접 공격   RMB(hold): 일섬(게이지 100%)   SPACE: 회피   R: 재시작"
 	_info_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_info_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_info_label.add_theme_constant_override("outline_size", 4)
@@ -1103,23 +1090,7 @@ func _update_hud() -> void:
 		return
 	_kill_label.text = "Kills: %d" % _kill_count
 	_refresh_hp_cells()
-	_refresh_ammo()
 	_refresh_slash_gauge()
-
-## 장탄수(비도) 텍스트 갱신. 리로드 중이면 앰버색 "리로드 중…", 아니면 현재/최대
-## 탄약 수. Testplay 에도 동일 코드가 미러됨 (동기화 규칙).
-func _refresh_ammo() -> void:
-	if _ammo_label == null or not _player.has_method("get_ammo"):
-		return
-	var reloading: bool = _player.has_method("is_reloading") and bool(_player.call("is_reloading"))
-	if reloading:
-		_ammo_label.text = "비도: 리로드 중…"
-		_ammo_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.25))
-	else:
-		var ammo: int = int(_player.call("get_ammo"))
-		var maxa: int = int(_player.call("get_max_ammo")) if _player.has_method("get_max_ammo") else ammo
-		_ammo_label.text = "비도: %d / %d" % [ammo, maxa]
-		_ammo_label.add_theme_color_override("font_color", Color(1, 1, 1))
 
 ## 좌상단 칸 단위 HP 갱신. 칸 수가 바뀌면(메타 강건 등) 재구성하고, 현재 HP
 ## 만큼 빨강(_HP_FULL), 나머지는 어두운색(_HP_EMPTY)으로 칠한다. Testplay 에도

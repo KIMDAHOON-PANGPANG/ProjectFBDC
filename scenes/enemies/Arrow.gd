@@ -20,6 +20,8 @@ func _ready() -> void:
 	collision_layer = 1 << 4  # EnemyAttack
 	collision_mask = (1 << 0) | (1 << 1)  # World + Player
 	monitoring = true
+	# PC 의 공격(근접 부채 / 슬래시)에 맞으면 사라지도록 그룹 등록 — take_hit 으로 격추.
+	add_to_group("enemy_projectiles")
 
 	if get_node_or_null("CollisionShape3D") == null:
 		var cs := CollisionShape3D.new()
@@ -73,6 +75,13 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 	global_position += _dir * speed * delta
+
+## PC 의 공격(근접 부채/슬래시)이 호출 — 발사체는 HP 없이 한 방에 격추(소멸).
+func take_hit(_amount: int = 0) -> void:
+	if _consumed:
+		return
+	_consumed = true
+	queue_free()
 
 func _on_hit(node: Node) -> void:
 	if _consumed:

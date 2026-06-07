@@ -30,6 +30,10 @@ extends CharacterBody3D
 ## How strongly separation pushes vs. PC chase (1.0 = equal weight).
 @export var separation_weight: float = 1.8
 
+## ── 경직(아머 게이지) ── 엘리트는 데미지 4 누적되면 경직. 0 = 아머 없음. enemy.csv 로 조절.
+@export var armor_max: int = 4
+@export var stagger_duration: float = 0.4
+
 @export var number_label_path: NodePath
 @export var mesh_path: NodePath
 
@@ -43,6 +47,10 @@ extends CharacterBody3D
 
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+## 스무스 넉백 컴포넌트(피격/피탄 시 부드럽게 밀림).
+const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
+## 머리 위 HP+아머 바(코드 인스턴스 — .tscn 수정 불필요).
+const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -56,6 +64,8 @@ var _dead: bool = false
 var _attacking: bool = false
 var _label: Label3D
 var _mesh: MeshInstance3D
+## 스무스 넉백 상태(피격/피탄 시 밀림).
+var _kb = _KnockbackScript.new()
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -63,7 +73,7 @@ func _ready() -> void:
 	# Opt-in to the melee category — drives the shared FanTelegraph attack.
 	add_to_group("melee_enemies")
 	collision_layer = 1 << 2  # Enemy
-	collision_mask = (1 << 0) | (1 << 1)  # World + Player (bump only, no damage)
+	collision_mask = (1 << 0) | (1 << 1)  # World + Player — PC 가 밀침(자기 빠져나감). PC 는 안 막힘.
 
 	# 데이터 관리 — enemy_combat.json(엘리트) 행동 파라미터 적용. HP 는 미적용
 	# (아래 _hp_for_type 의 effect_type 표가 관리).
@@ -75,8 +85,16 @@ func _ready() -> void:
 	_health = get_node_or_null("HealthComponent") as HealthComponent
 	if _health != null:
 		_health.setup(max_hp)
+		_health.setup_armor(armor_max, stagger_duration)
 		_health.died.connect(_on_died)
 		_health.damaged.connect(_on_damaged)
+		# 머리 위 HP+아머 바(코드 인스턴스 — .tscn 수정 불필요).
+		var bar := _HpBar3DScene.instantiate()
+		if "follow_offset" in bar:
+			bar.follow_offset = Vector3(0, 1.7, 0)
+		add_child(bar)
+		if bar.has_method("attach_health"):
+			bar.call("attach_health", _health)
 
 	_label = get_node_or_null(number_label_path) as Label3D
 	if _label != null:
@@ -105,6 +123,15 @@ func _physics_process(delta: float) -> void:
 	delta *= time_scale_mult
 	if _attack_cd > 0.0:
 		_attack_cd -= delta
+	# 스무스 넉백 — 피탄/피격 시 부드럽게 밀고 감쇠.
+	_kb.integrate(self, delta)
+	# 경직(아머 소거) 중 — 이동/공격 정지.
+	if _health != null:
+		_health.tick_stagger(delta)
+		if _health.is_staggered():
+			velocity = Vector3.ZERO
+			move_and_slide()
+			return
 
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
@@ -181,6 +208,10 @@ func _on_telegraph_done() -> void:
 ## Called by SlashAttack when this enemy's body overlaps the slash volume.
 ## Unlike regular mobs (which take 999 damage), elites take 1 damage per
 ## slash — so a type-1 dies in 1 hit, type-2 in 3, type-3 in 5.
+## 피격(플레이어 AOE)/피탄(비도) 시 외부에서 호출 — 스무스 넉백 시작.
+func apply_knockback(dir: Vector3, speed: float) -> void:
+	_kb.push(dir, speed)
+
 func take_hit() -> void:
 	if _dead:
 		return
@@ -213,6 +244,10 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# 사망 시 넉백/경직 즉시 정지 — 밀리던 중이라도 그 자리에서 죽는다(요청).
+	_kb.vel = Vector3.ZERO
+	if _health != null:
+		_health.clear_stagger()
 	# Stash death position for the EXP gem drop (tree_exited is too late).
 	set_meta("death_position", global_position)
 	set_physics_process(false)

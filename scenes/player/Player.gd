@@ -26,8 +26,8 @@ const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
-## 4안 — 비도 투사체 씬 (기본 공격). Player.tscn에 Kunai.tscn 주입.
-@export var kunai_scene: PackedScene
+## 근접 스윙 VFX 씬 (기본 공격). Player.tscn 에 MeleeSwing.tscn 주입.
+@export var melee_swing_scene: PackedScene
 @export var aim_arrow_path: NodePath
 @export var sprite_rig_path: NodePath
 
@@ -63,16 +63,9 @@ var _evade_refill_t: float = 0.0
 # (메타)가 더해지지만 메타 효과는 현재 초기화됨.
 var _iframe_t: float = 0.0
 
-# ── 4안 — 비도(Kunai) 기본 공격 상태 ──
-## Current magazine ammo. Empties → reload.
-var _ammo: int = 5
-## Reload countdown. > 0 means reloading (fire suppressed).
-var _reload_t: float = 0.0
-## Per-shot cooldown countdown.
-var _fire_cd: float = 0.0
-## Auto-aim toggle (SPACE). When ON, fire targets the nearest enemy in
-## `autoaim_radius` instead of the mouse.
-var _autoaim: bool = false
+# ── 근접 기본 공격(부채꼴 스윙) 상태 ──
+## 스윙 간격 쿨다운. > 0 이면 아직 다음 스윙 불가(공격 속도).
+var _melee_cd: float = 0.0
 
 # ── 4안 — 일섬 게이지 ──
 ## Fills from kills / gem pickups / perfect dodges. Slash (right-click)
@@ -167,11 +160,15 @@ func _ready() -> void:
 		data.visuals.placeholder_tint = Color(0.85, 0.9, 1.0)
 
 	# 데이터 관리 — pc_combat.json 값으로 PlayerData 를 덮어쓴다(파일/값 없으면
-	# 기존 기본값 유지). max_hp / max_ammo 를 읽기 전에 적용해야 반영됨.
+	# 기존 기본값 유지). max_hp 등을 읽기 전에 적용해야 반영됨.
 	_CombatDataScript.apply_to_player(self)
 
 	collision_layer = 1 << 1  # Player
-	collision_mask = (1 << 0) | (1 << 2)  # World + Enemy (block on enemies optional; we still pass over)
+	# 비대칭 충돌 — PC 는 World 만 마스크해 몬스터에 막히거나 밀리지 않는다(몬스터는
+	# PC 를 못 민다). 대신 각 몬스터가 Player 를 마스크해 PC 와 겹치면 스스로 옆으로
+	# 빠져나가므로, PC 가 군중을 헤집고 지나가면 몬스터가 밀려난다. 한 방향
+	# 디펜트레이션이라 예전의 상호 "쭉 밀림" 끼임 버그는 재발하지 않는다.
+	collision_mask = (1 << 0)  # World only (몬스터에 안 막힘 = PC 불가침)
 
 	_aim_arrow = get_node_or_null(aim_arrow_path) as AimArrow
 	_sprite_rig = get_node_or_null(sprite_rig_path) as SpriteRig
@@ -179,7 +176,6 @@ func _ready() -> void:
 		_sprite_rig.fallback_color = Color(0.85, 0.9, 1.0)
 		_sprite_rig.set_visuals(data.visuals)
 
-	_ammo = data.max_ammo  # 4안 — start with a full magazine
 	_evade_stacks = data.evade_max_stacks  # 회피 스택 가득 시작
 
 	_health = get_node_or_null("HealthComponent") as HealthComponent
@@ -194,18 +190,20 @@ func _ready() -> void:
 	_build_dust_emitter()
 
 func _physics_process(delta: float) -> void:
-	# 4안 — 비도 발사 / 리로드 / 자동조준 토글은 state 무관 (매 프레임).
-	# DASHING/EVADING 중엔 발사만 _update_kunai 내부에서 억제.
-	_update_kunai(delta)
-	# Evade cooldown ticks independently of state so it counts down during
-	# slash / cooldown / etc.
+	# 근접 기본 공격 — state 무관 매 프레임(이동 중에도 휘두름). 내부에서 차징/
+	# 대시/회피 중엔 억제.
+	_update_melee(delta)
+	# 연속 대시 사이 최소 간격.
 	if _evade_cd > 0.0:
 		_evade_cd -= delta
-	# 회피 스택 리필 — 전부 소진(0)일 때만 카운트, 다 차면 한 번에 max 로 복구.
-	if _evade_stacks <= 0 and _evade_refill_t > 0.0:
+	# 회피 스택 리필 — 가득 차지 않았으면 한 칸씩 차오른다(칸당 evade_refill_time 초).
+	if _evade_stacks < data.evade_max_stacks:
+		if _evade_refill_t <= 0.0:
+			_evade_refill_t = data.evade_refill_time
 		_evade_refill_t -= delta
 		if _evade_refill_t <= 0.0:
-			_evade_stacks = data.evade_max_stacks
+			_evade_stacks += 1
+			_evade_refill_t = 0.0  # 아직 부족하면 다음 프레임에 재가동
 	if _iframe_t > 0.0:
 		_iframe_t -= delta
 	match _state:
@@ -244,17 +242,20 @@ func _handle_move(delta: float) -> void:
 	var speed_mult: float = 1.0
 	if has_counter_step and Time.get_ticks_msec() <= counter_step_until_msec:
 		speed_mult = 1.5
+	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
 	velocity.x = dir.x * data.move_speed * speed_mult
 	velocity.z = dir.z * data.move_speed * speed_mult
 	velocity.y = 0.0
 	move_and_slide()
 	var moving: bool = dir.length_squared() > 0.01
+	# (1) 캐릭터는 항상 마우스 커서 방향을 바라본다(이동 방향과 무관). 빌보드
+	# 스프라이트라 좌/우 플립으로 표현.
+	var face := _mouse_to_world_dir()
+	if face.length_squared() > 0.0001:
+		_aim_dir = face
 	if _sprite_rig != null:
-		if moving:
-			_sprite_rig.set_state(SpriteRig.State.WALK)
-			_sprite_rig.set_facing(dir.x)
-		else:
-			_sprite_rig.set_state(SpriteRig.State.IDLE)
+		_sprite_rig.set_facing(_aim_dir.x)
+		_sprite_rig.set_state(SpriteRig.State.WALK if moving else SpriteRig.State.IDLE)
 	# Dust kicks on whenever we're actually moving — gives a visible
 	# self-motion cue on top of the world-anchored grid ground.
 	if _dust_emitter != null:
@@ -517,10 +518,9 @@ func _check_evade_start() -> void:
 	_evade_end = global_position + dir * data.evade_distance
 	_evade_elapsed = 0.0
 	_evade_cd = data.evade_cooldown
-	# 스택 1 소비 — 전부 소진되면 리필 타이머 시작(가득 차기까지 refill_time 초).
+	# 스택 1 소비 — 부족해지면 _physics_process 의 charge 리필이 한 칸씩 채운다
+	# (한 칸당 evade_refill_time 초).
 	_evade_stacks -= 1
-	if _evade_stacks <= 0:
-		_evade_refill_t = data.evade_refill_time
 	_perfect_dodge_fired = false  # ⏱ fresh evade — re-arm the perfect-dodge reward
 	_set_state(State.EVADING)
 	if _sprite_rig != null:
@@ -587,75 +587,36 @@ func bind_zen_system(zs: Node) -> void:
 	_zen_system = zs
 
 
-# ══════════════ 4안 — 비도(Kunai) 기본 공격 ══════════════
+# ══════════════ 기본 공격 — 근접 부채꼴 스윙 (LB) ══════════════
 
-## Per-frame: toggle auto-aim, tick reload/cooldown, fire while held.
-func _update_kunai(delta: float) -> void:
-	if Input.is_action_just_pressed("autoaim"):
-		_autoaim = not _autoaim
-	if _fire_cd > 0.0:
-		_fire_cd -= delta
-	if _reload_t > 0.0:
-		_reload_t -= delta
-		if _reload_t <= 0.0:
-			_ammo = data.max_ammo  # reload complete
-		return  # no firing mid-reload
-	# Slash dash / evade take priority — don't throw kunai then.
-	if _state == State.DASHING or _state == State.EVADING:
+## 매 프레임 — LB 홀드 중이면 melee_cooldown 간격으로 스윙(이동 중에도 가능).
+func _update_melee(delta: float) -> void:
+	if _melee_cd > 0.0:
+		_melee_cd -= delta
+	# 차징(일섬)/대시/회피 중엔 기본 공격 억제. 그 외(이동 포함) 매 프레임 가능.
+	if _state == State.AIMING or _state == State.DASHING or _state == State.EVADING:
 		return
-	if Input.is_action_pressed("fire") and _fire_cd <= 0.0 and _ammo > 0:
+	if Input.is_action_pressed("fire") and _melee_cd <= 0.0:
 		if _is_pointer_over_ui():
 			return
-		_fire_kunai()
+		_do_melee_swing()
 
 
-func _fire_kunai() -> void:
-	if kunai_scene == null:
-		return
-	# Direction: auto-aim → nearest enemy in radius; else mouse.
-	var dir: Vector3
-	if _autoaim:
-		var target := _lock_on_target()
-		if target != null:
-			dir = target.global_position - global_position
-			dir.y = 0.0
-			dir = dir.normalized() if dir.length() > 0.01 else _mouse_to_world_dir()
-		else:
-			dir = _mouse_to_world_dir()
-	else:
-		dir = _mouse_to_world_dir()
+## (2) LB 근접 스윙 — 커서 방향 전방 부채꼴 안의 적을 타격. (4) 이동을 막지
+## 않으므로 걸으면서 휘두를 수 있다. 데미지는 적 HealthComponent 에 직접
+## (보스는 패리 없이 칩 데미지). 모션은 추후 — 임시 부채 VFX 만 띄운다.
+func _do_melee_swing() -> void:
+	var dir := _mouse_to_world_dir()
 	if dir.length() < 0.01:
 		dir = _aim_dir
 	dir = dir.normalized()
-	# 이동하면서 쏘면 탄도가 약간 튄다(멈춰서 쏘면 정확). 수평 속도로 이동 판정.
-	var moving: bool = Vector2(velocity.x, velocity.z).length() > 0.5
-	if moving and data.kunai_move_spread_deg > 0.0:
-		var spread := deg_to_rad(randf_range(-data.kunai_move_spread_deg, data.kunai_move_spread_deg))
-		dir = dir.rotated(Vector3.UP, spread)
 	_aim_dir = dir
-	# 자동락온(SPACE ON) = 데미지↓ + 속도↓(한 방에 안 죽음). 수동 = 풀 데미지(한 방).
-	var _kdmg: int = data.kunai_autoaim_damage if _autoaim else data.kunai_damage
-	var _kspd: float = data.kunai_speed * (data.kunai_autoaim_speed_mult if _autoaim else 1.0)
-	var kunai := kunai_scene.instantiate()
-	if kunai.has_method("configure"):
-		kunai.call("configure", dir, _kspd, _kdmg, data.kunai_lifetime)
-	get_tree().current_scene.add_child(kunai)
-	(kunai as Node3D).global_position = global_position + dir * 0.6
-	_ammo -= 1
-	_fire_cd = data.fire_cooldown
+	_melee_cd = data.melee_cooldown
 	if _sprite_rig != null:
 		_sprite_rig.set_facing(dir.x)
-	_play_sfx("kunai")
-	if _ammo <= 0:
-		_reload_t = data.reload_time  # auto-reload when emptied
-
-
-## Nearest live enemy within `autoaim_radius` (XZ). Distance ties resolve
-## randomly per the design (5안-style fairness).
-func _lock_on_target() -> Node3D:
-	var r2: float = data.autoaim_radius * data.autoaim_radius
-	var best_d2: float = INF
-	var ties: Array = []
+	var half := deg_to_rad(data.melee_angle_deg) * 0.5
+	var r2 := data.melee_range * data.melee_range
+	var hit_any := false
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or not (e is Node3D):
 			continue
@@ -663,17 +624,50 @@ func _lock_on_target() -> Node3D:
 			continue
 		var to_e: Vector3 = (e as Node3D).global_position - global_position
 		to_e.y = 0.0
-		var d2: float = to_e.length_squared()
-		if d2 > r2:
+		if to_e.length_squared() > r2:
 			continue
-		if d2 < best_d2 - 0.04:
-			best_d2 = d2
-			ties = [e]
-		elif absf(d2 - best_d2) <= 0.04:
-			ties.append(e)
-	if ties.is_empty():
-		return null
-	return ties[randi() % ties.size()] as Node3D
+		# 부채꼴 각도 체크(중심 = 커서 방향).
+		if to_e.length() > 0.01:
+			var ang := acos(clamp(dir.dot(to_e.normalized()), -1.0, 1.0))
+			if ang > half:
+				continue
+		var hp := (e as Node3D).get_node_or_null("HealthComponent")
+		if hp != null and hp is HealthComponent:
+			(hp as HealthComponent).take_damage(data.melee_damage)
+			hit_any = true
+	# 발사체(적 화살)도 부채 안에 들어오면 격추한다.
+	for p in get_tree().get_nodes_in_group("enemy_projectiles"):
+		if not is_instance_valid(p) or not (p is Node3D):
+			continue
+		var to_p: Vector3 = (p as Node3D).global_position - global_position
+		to_p.y = 0.0
+		if to_p.length_squared() > r2:
+			continue
+		if to_p.length() > 0.01:
+			var ang_p := acos(clamp(dir.dot(to_p.normalized()), -1.0, 1.0))
+			if ang_p > half:
+				continue
+		if p.has_method("take_hit"):
+			p.call("take_hit")
+	_spawn_melee_swing(dir)
+	_play_sfx("melee")
+	# 타격감 — 스윙마다 약한 카메라 흔들림 + 적중 시 극소량 히트스탑(역경직).
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null:
+		if rig.has_method("shake"):
+			rig.call("shake", data.melee_shake_amp, data.melee_shake_dur)
+		if hit_any and rig.has_method("hitstop"):
+			rig.call("hitstop", data.melee_hitstop_scale, data.melee_hitstop_dur)
+
+
+## 임시 스윙 VFX — 커서 방향으로 부채 플래시(모션 추후 교체).
+func _spawn_melee_swing(dir: Vector3) -> void:
+	if melee_swing_scene == null:
+		return
+	var fx := melee_swing_scene.instantiate()
+	get_tree().current_scene.add_child(fx)
+	if fx.has_method("configure"):
+		fx.call("configure", global_position, dir, data.melee_range, data.melee_angle_deg)
 
 
 # ══════════════ 4안 — 일섬 게이지 ══════════════
@@ -709,8 +703,10 @@ func _knockback_nearby_enemies() -> void:
 		to_e.y = 0.0
 		var d: float = to_e.length()
 		if d < data.knockback_radius and d > 0.01:
-			var push: float = data.knockback_force * (1.0 - d / data.knockback_radius)
-			(e as Node3D).global_position += to_e.normalized() * push
+			# 거리 감쇠된 밀침 속도로 스무스 넉백(적의 Knockback 컴포넌트가 감쇠 처리).
+			var spd: float = data.knockback_force * (1.0 - d / data.knockback_radius)
+			if e.has_method("apply_knockback"):
+				e.call("apply_knockback", to_e.normalized(), spd)
 
 
 # ══════════════ 4안 — HUD getters (Main reads these) ══════════════
@@ -727,20 +723,18 @@ func slash_gauge_frac() -> float:
 func is_slash_ready() -> bool:
 	return _slash_gauge >= data.slash_gauge_max
 
-func get_ammo() -> int:
-	return _ammo
+# ── 회피 스택 getters (머리 위 DodgeStackBar3D 가 읽음) ──
+func get_evade_stacks() -> int:
+	return _evade_stacks
 
-func get_max_ammo() -> int:
-	return data.max_ammo
+func get_max_evade_stacks() -> int:
+	return data.evade_max_stacks
 
-func is_reloading() -> bool:
-	return _reload_t > 0.0
-
-## 0→1 reload progress (1.0 when not reloading).
-func reload_frac() -> float:
-	if _reload_t <= 0.0:
+## 충전 중인 다음 스택의 진행도 0→1 (가득이면 1.0).
+func evade_refill_frac() -> float:
+	if _evade_stacks >= data.evade_max_stacks:
 		return 1.0
-	return clamp(1.0 - _reload_t / max(data.reload_time, 0.01), 0.0, 1.0)
+	return clamp(1.0 - _evade_refill_t / max(data.evade_refill_time, 0.01), 0.0, 1.0)
 
 
 # ────── M7 sound hook helpers ──────

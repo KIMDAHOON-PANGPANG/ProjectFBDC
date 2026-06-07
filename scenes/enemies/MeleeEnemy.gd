@@ -41,9 +41,27 @@ enum Behavior { CHASER, LEAPER }
 ## 빨간 원형 데칼 텔레그래프(LeapTelegraph) — MeleeEnemy.tscn 에서 주입.
 @export var leap_telegraph_scene: PackedScene
 
+## ── 군집 분리 (Boid) ── 잡몹/리퍼끼리 겹치지 않게 추격 방향에 회피력을 섞는다.
+## enemy.csv(근접·리퍼) 에서 조절. 0 = 분리 끔. (엘리트는 자체 분리 별도 유지.)
+@export var separation_radius: float = 1.3
+@export var separation_weight: float = 1.2
+
+## ── 경직(아머 게이지) ── 0 = 아머 없음(잡몹은 한 방 처치라 경직 미적용). enemy.csv 로 조절.
+@export var armor_max: int = 0
+@export var stagger_duration: float = 0.4
+
 const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/melee_visuals.tres")
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+## 스무스 넉백 컴포넌트(피격/피탄 시 부드럽게 밀림).
+const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
+
+## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
+## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
+## ▶ 추후 공간 그리드(C)로 확장하려면 _refresh_sep_list 의 리스트 채우는 줄만
+##   교체하면 된다(이웃 질의 추상화 지점).
+static var _sep_frame: int = -1
+static var _sep_list: Array = []
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -71,6 +89,8 @@ var _leap_start: Vector3
 var _leap_end: Vector3
 var _leap_elapsed: float = 0.0
 var _active_leap_decal: Node = null
+## 스무스 넉백 상태(피격/피탄 시 밀림).
+var _kb = _KnockbackScript.new()
 
 func _ready() -> void:
 	if data == null:
@@ -89,7 +109,7 @@ func _ready() -> void:
 	# Instance-level (not class-level) so future archetypes can mix.
 	add_to_group("melee_enemies")
 	collision_layer = 1 << 2  # Enemy
-	collision_mask = (1 << 0) | (1 << 1)  # World + Player (bump only, no damage)
+	collision_mask = (1 << 0) | (1 << 1)  # World + Player — PC 와 겹치면 스스로 빠져나감(=PC 가 밀침). PC 는 안 막힘.
 
 	_sprite_rig = get_node_or_null(sprite_rig_path) as SpriteRig
 	if _sprite_rig != null:
@@ -99,6 +119,7 @@ func _ready() -> void:
 	_health = get_node_or_null("HealthComponent") as HealthComponent
 	if _health != null:
 		_health.setup(data.max_hp)
+		_health.setup_armor(armor_max, stagger_duration)
 		_health.died.connect(_on_died)
 
 	_player = get_tree().get_first_node_in_group("player")
@@ -110,6 +131,15 @@ func _physics_process(delta: float) -> void:
 	delta *= time_scale_mult
 	if _attack_cd > 0.0:
 		_attack_cd -= delta
+	# 스무스 넉백 — 어느 상태든 위치를 부드럽게 밀고 감쇠(피격/피탄 반응).
+	_kb.integrate(self, delta)
+	# 경직(아머 소거) 중 — 이동/공격/리프 정지(넉백은 위에서 적용 = 밀리며 경직).
+	if _health != null:
+		_health.tick_stagger(delta)
+		if _health.is_staggered():
+			velocity = Vector3.ZERO
+			move_and_slide()
+			return
 
 	# 리프 점프 중 — 곡선 이동만 처리(추격/공격 잠금).
 	if _leaping:
@@ -154,14 +184,58 @@ func _physics_process(delta: float) -> void:
 	# to a corner of the world. The constant-velocity chase is a couple
 	# of vector ops per tick, so even hundreds of mobs cost nothing
 	# measurable; the real performance ceiling is rendering, not AI.
-	var dir := to_player.normalized()
-	velocity.x = dir.x * data.move_speed * time_scale_mult
-	velocity.z = dir.z * data.move_speed * time_scale_mult
+	var chase_dir := to_player.normalized()
+	# 군집 분리 — 추격 방향에 이웃 회피력을 섞어 서로 겹치지 않게 한다.
+	var move_dir := chase_dir
+	var sep := _separation_vector()
+	if sep.length_squared() > 0.000001:
+		var blended := chase_dir + sep * separation_weight
+		if blended.length() > 0.001:
+			move_dir = blended.normalized()
+	velocity.x = move_dir.x * data.move_speed * time_scale_mult
+	velocity.z = move_dir.z * data.move_speed * time_scale_mult
 	velocity.y = 0.0
 	move_and_slide()
 	if _sprite_rig != null:
 		_sprite_rig.set_state(SpriteRig.State.WALK)
-		_sprite_rig.set_facing(dir.x)
+		_sprite_rig.set_facing(chase_dir.x)  # 바라보는 방향은 분리와 무관하게 플레이어 쪽
+
+
+## 프레임당 1회 공유 이웃 리스트 갱신(정적). "melee_enemies" 그룹 = 잡몹+리퍼+
+## 엘리트+보스. 같은 프레임에 또 불리면 즉시 반환(몹당 호출돼도 수집은 1회).
+static func _refresh_sep_list(tree: SceneTree) -> void:
+	if tree == null:
+		return
+	var f: int = Engine.get_physics_frames()
+	if f == _sep_frame:
+		return
+	_sep_frame = f
+	_sep_list = tree.get_nodes_in_group("melee_enemies")
+
+## Boid 분리 벡터 — 공유 이웃 중 separation_radius 안의 몹에서 멀어지는 합력
+## (가까울수록 강함, 선형 감쇠). EliteEnemy._compute_separation 과 동일 수식.
+func _separation_vector() -> Vector3:
+	if separation_radius <= 0.0:
+		return Vector3.ZERO
+	_refresh_sep_list(get_tree())
+	var avoid := Vector3.ZERO
+	var my_pos := global_position
+	for other in _sep_list:
+		if other == self or not is_instance_valid(other):
+			continue
+		if "_dead" in other and other._dead:
+			continue
+		var d: Vector3 = my_pos - (other as Node3D).global_position
+		d.y = 0.0
+		var dist := d.length()
+		if dist < separation_radius and dist > 0.01:
+			avoid += d.normalized() * (1.0 - dist / separation_radius)
+	return avoid
+
+
+## 피격(플레이어 AOE)/피탄(비도) 시 외부에서 호출 — 스무스 넉백 시작.
+func apply_knockback(dir: Vector3, speed: float) -> void:
+	_kb.push(dir, speed)
 
 ## Spawn a FanTelegraph at our feet aimed at the PC. We commit the
 ## position/direction now — the telegraph itself owns the rest (wind-up
@@ -261,6 +335,10 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# 사망 시 넉백/경직 즉시 정지 — 밀리던 중이라도 그 자리에서 죽는다(요청).
+	_kb.vel = Vector3.ZERO
+	if _health != null:
+		_health.clear_stagger()
 	# 리프 중 사망 — 펜딩 슬램 데칼 취소(유령 데미지 방지).
 	_leaping = false
 	if _active_leap_decal != null and is_instance_valid(_active_leap_decal) \

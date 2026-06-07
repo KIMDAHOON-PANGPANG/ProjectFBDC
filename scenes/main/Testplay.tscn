@@ -5,14 +5,14 @@
 [ext_resource type="PackedScene" uid="uid://b8enmem00001" path="res://scenes/enemies/MeleeEnemy.tscn" id="3_melee"]
 [ext_resource type="PackedScene" uid="uid://b8elite00001" path="res://scenes/enemies/EliteEnemy.tscn" id="4_elite"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/Boss.tscn" id="5_boss"]
-[ext_resource type="PackedScene" path="res://scenes/enemies/Boss2.tscn" id="11_boss2"]
-[ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="12_boss3"]
 [ext_resource type="PackedScene" uid="uid://b8hd2dcam0001" path="res://scenes/main/HD2DCamera.tscn" id="6_cam"]
 [ext_resource type="PackedScene" uid="uid://bo0wkpp4fk441" path="res://scenes/effects/ExplosionBurst.tscn" id="7_burst"]
 [ext_resource type="PackedScene" uid="uid://b8cslash00001" path="res://scenes/effects/CircularSlash.tscn" id="8_cslash"]
-[ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="12_expgem"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ExpBar.tscn" id="9_expbar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/LevelUpScreen.tscn" id="10_lvlup"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss2.tscn" id="11_boss2"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="12_boss3"]
+[ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="12_expgem"]
 [ext_resource type="PackedScene" path="res://scenes/ui/AimCursor.tscn" id="13_aim"]
 
 [node name="Testplay" type="Node3D" unique_id=350878978]
@@ -30,4 +30,4 @@ exp_gem_scene = ExtResource("12_expgem")
 exp_bar_scene = ExtResource("9_expbar")
 level_up_screen_scene = ExtResource("10_lvlup")
 
-[node name="AimCursor" parent="." instance=ExtResource("13_aim")]
+[node name="AimCursor" parent="." unique_id=1087397690 instance=ExtResource("13_aim")]

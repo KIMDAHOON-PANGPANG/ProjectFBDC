@@ -25,6 +25,8 @@ enum AttackType { YELLOW, RED }
 
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+## 머리 위 HP+아머 바(코드 인스턴스 — .tscn 수정 불필요).
+const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 
 ## 보스 변형 식별자 (1=Boss / 2=Boss2 / 3=Boss3). 각 .tscn 에서 지정.
 ## CombatData 가 enemy_combat.json 의 "보스_<id>" 섹션을 적용하는 키.
@@ -35,6 +37,9 @@ const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 @export var attack_range: float = 2.4
 @export var attack_cooldown: float = 1.6
 @export var max_hp: int = 15
+## ── 경직(아머 게이지) ── 보스는 데미지 6 누적되면 경직 → 큰 반격 기회. 0=없음. enemy.csv 로 조절.
+@export var armor_max: int = 6
+@export var stagger_duration: float = 0.6
 
 @export var number_label_path: NodePath
 @export var mesh_path: NodePath
@@ -142,7 +147,11 @@ func _ready() -> void:
 	# telegraph attack. A future ranged boss simply leaves this line out.
 	add_to_group("melee_enemies")
 	collision_layer = 1 << 2  # Enemy
-	collision_mask = (1 << 0) | (1 << 1)  # World + Player (bump only, no damage)
+	# 비대칭 충돌 — 보스는 Player 를 마스크해 PC 와 겹치면 스스로 빠져나간다(=PC 가
+	# 밀침). PC 는 Enemy 를 마스크하지 않아 보스에 안 막히고 안 밀린다. 한 방향
+	# 디펜트레이션이라 예전의 상호 끼임/밀림 + eject 호출이 일으킨 "쭉 밀림" 버그는
+	# 재발하지 않는다(eject 호출은 _physics_process 에서 제거된 상태 유지).
+	collision_mask = (1 << 0) | (1 << 1)  # World + Player
 
 	# 데이터 관리 — enemy_combat.json(보스_공통 + 보스_<boss_id>) 적용. 보스 HP 는
 	# 변형별 고정값이라 여기서 적용되고, 아래 _health.setup(max_hp) 가 그 값을 쓴다.
@@ -151,8 +160,18 @@ func _ready() -> void:
 	_health = get_node_or_null("HealthComponent") as HealthComponent
 	if _health != null:
 		_health.setup(max_hp)
+		_health.setup_armor(armor_max, stagger_duration)
 		_health.died.connect(_on_died)
 		_health.damaged.connect(_on_damaged)
+		# 머리 위 HP+아머 바(코드 인스턴스). width 는 _build 전에 설정해야 반영됨.
+		var bar := _HpBar3DScene.instantiate()
+		if "width" in bar:
+			bar.width = 1.2  # 보스는 더 넓은 바
+		if "follow_offset" in bar:
+			bar.follow_offset = Vector3(0, 2.7, 0)
+		add_child(bar)
+		if bar.has_method("attach_health"):
+			bar.call("attach_health", _health)
 
 	_label = get_node_or_null(number_label_path) as Label3D
 	if _label != null:
@@ -190,10 +209,17 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	# Eject the PC from inside the boss body if the iaido dash dropped
-	# them in there. Runs every tick (cheap; just bounds checks) so the
-	# PC can't get stuck during attack / chase / block alike.
-	_eject_overlapping_player()
+	# (구) _eject_overlapping_player() 호출 제거 — 이제 PC 가 보스를 통과하므로
+	# 끼지 않는다. 매 틱 PC 를 밀어내던 그 코드가 근접으로 옆에서 때릴 때 "쭉
+	# 밀리는" 버그의 직접 원인이었다. 함수는 남겨두되(참고용) 더는 호출하지 않음.
+
+	# 경직(아머 소거) 중 — 보스도 이동/공격 정지(사망이 아닐 때만). 큰 반격 기회.
+	if _health != null:
+		_health.tick_stagger(delta)
+		if _health.is_staggered():
+			velocity = Vector3.ZERO
+			move_and_slide()
+			return
 
 	# Post-parry stun: locked in place, no actions, no attacks. The
 	# block_duration timer flips _blocked back off so the next tick
@@ -482,6 +508,8 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	if _health != null:
+		_health.clear_stagger()
 	# Stash death position for the EXP gem drop (tree_exited is too late).
 	set_meta("death_position", global_position)
 	set_physics_process(false)

@@ -7,8 +7,8 @@
 [ext_resource type="PackedScene" path="res://scenes/attack/SlashAttack.tscn" id="5_slash"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HpBar3D.tscn" id="6_hpbar"]
 [ext_resource type="Resource" path="res://resources/player/player_data.tres" id="7_pd"]
-[ext_resource type="PackedScene" path="res://scenes/attack/Kunai.tscn" id="8_kunai"]
-[ext_resource type="PackedScene" path="res://scenes/ui/ReloadBar3D.tscn" id="9_reloadbar"]
+[ext_resource type="PackedScene" path="res://scenes/attack/MeleeSwing.tscn" id="8_melee"]
+[ext_resource type="PackedScene" path="res://scenes/ui/DodgeStackBar3D.tscn" id="9_dodge"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
@@ -24,7 +24,7 @@ data = ExtResource("7_pd")
 aim_arrow_path = NodePath("AimArrow")
 sprite_rig_path = NodePath("SpriteRig")
 slash_attack_scene = ExtResource("5_slash")
-kunai_scene = ExtResource("8_kunai")
+melee_swing_scene = ExtResource("8_melee")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
@@ -50,5 +50,4 @@ texture_filter = 0
 [node name="HpBar3D" parent="." instance=ExtResource("6_hpbar")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
 
-[node name="ReloadBar3D" parent="." instance=ExtResource("9_reloadbar")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.18, 0)
+[node name="DodgeStackBar3D" parent="." instance=ExtResource("9_dodge")]

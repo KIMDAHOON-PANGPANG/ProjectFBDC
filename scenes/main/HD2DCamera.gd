@@ -39,6 +39,8 @@ var _shake_amp: float = 0.0
 # by shake_curve(...). shake(...) resets to false for the linear feel.
 var _shake_use_curve: bool = false
 var _cam_base_origin: Vector3
+## 히트스탑 재진입 가드(겹쳐서 Engine.time_scale 이 꼬이지 않게).
+var _hitstop_active: bool = false
 
 func _ready() -> void:
 	add_to_group("camera_rig")  # Player/other systems look up the rig via this group.
@@ -138,6 +140,28 @@ func shake_curve(amplitude: float, duration: float) -> void:
 func nudge_lag(duration: float, factor: float) -> void:
 	_lag_timer = max(_lag_timer, duration)
 	_lag_factor = clamp(factor, 0.05, 1.0)
+
+## 극소량 히트스탑 — Engine.time_scale 을 잠깐 낮췄다 복구해 타격감(역경직)을 준다.
+## BulletTime(per-enemy time_scale_mult)과 독립이라 충돌하지 않는다. 복구 타이머는
+## ignore_time_scale 로 실시간 동작(time_scale=0 이어도 깨어남). 카메라가 PC 보다
+## 오래 살아남고 _exit_tree 에서 강제 정상화하므로 time_scale 이 멈춘 채 방치될 일이 없다.
+func hitstop(scale: float, duration: float) -> void:
+	if _hitstop_active or duration <= 0.0:
+		return
+	_hitstop_active = true
+	Engine.time_scale = clampf(scale, 0.0, 1.0)
+	var t := get_tree().create_timer(duration, true, false, true)  # ignore_time_scale
+	t.timeout.connect(_end_hitstop)
+
+func _end_hitstop() -> void:
+	Engine.time_scale = 1.0
+	_hitstop_active = false
+
+func _exit_tree() -> void:
+	# 씬 종료 중 히트스탑이 걸려 있었어도 time_scale 을 반드시 정상화.
+	if not is_equal_approx(Engine.time_scale, 1.0):
+		Engine.time_scale = 1.0
+	_hitstop_active = false
 
 ## Whether a world position falls inside the active camera's frustum.
 ## Used by spawners to keep spawns off-screen and by ranged enemies to
