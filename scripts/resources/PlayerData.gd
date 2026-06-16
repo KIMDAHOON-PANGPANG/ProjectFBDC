@@ -30,6 +30,21 @@ extends Resource
 ## Cooldown after a slash, in seconds. 0 = no cooldown.
 @export var slash_cooldown: float = 0.15
 
+# ── 일섬 돌진/범위 (기획 튜닝) ──
+## 돌진 속도 (m/s) — 일섬 대시가 1초에 전진하는 거리. 기획 친화 단위.
+## 캐릭터 이동(5 m/s) 대비 거합 대시는 보통 40~80. 대시 시간 = 거리 ÷ 속도라
+## 거리가 멀어도 체감 속도가 일정하다. (dash_duration 은 폴백으로만 남김)
+@export var slash_dash_speed: float = 55.0
+## 모드2(게임 시작 2) 일섬의 풀차지 사거리 (m). 차징 0→1 에 따라 min_slash_range
+## ~ 이 값으로 늘어난다(AimArrow 가 시각화). 모드1 의 max_slash_range 와 독립.
+@export var instant_slash_distance: float = 11.0
+## 모드2 — 최대 차지 도달 후 자동 발사까지 버틸 수 있는 오버차지 시간(초).
+## 이 안에 버튼을 떼면 그때 발사, 넘기면 강제 발사된다(모드1 fizzle 과 달리 불발 아님).
+@export var instant_overcharge_hold: float = 2.0
+## 일섬 타격 범위 (m) — x=폭(좌우), y=높이(상하), z=전방 길이 가산(돌진 거리에
+## 더해지는 추가 판정 길이; 0 이면 돌진 경로 그대로). 박스 판정 크기.
+@export var slash_hit_extents: Vector3 = Vector3(1.4, 1.0, 0.0)
+
 @export_group("Evade Dash")
 ## Distance covered by a Shift-dash, in world units. (CSV: evade_distance)
 @export var evade_distance: float = 2.5
@@ -122,5 +137,27 @@ extends Resource
 @export var boss_slash_damage_normal: int = 1
 @export var boss_slash_damage_parry: int = 3
 @export var boss_slash_damage_zen: int = 5
+
+# ── 열관리(Heat) — "게임 시작 2"(즉발 일섬) 모드 전용. 럼블 열관리 게이지식. ──
+# 일섬(평타)마다 열이 오르고, 직전 일섬 후 combo_window 초 이내면 combo_mult
+# 배 더 오른다. 100% 도달 시 overheat_duration 초 탈진(이동 감소 + 발사 봉인),
+# 끝나면 0 으로. 마지막 일섬 후 decay_delay 초가 지나면 지수적으로 식는다.
+@export_group("Heat (즉발 일섬 열관리)")
+## 일섬 1발당 기본 열 획득(%). 첫발 10 + 연타 15×6 = 7발째 정확히 100%.
+@export var heat_gain_base: float = 10.0
+## 직전 일섬 후 이 시간(초) 이내에 또 쏘면 연타로 간주 → combo_mult 적용.
+@export var heat_combo_window: float = 7.0
+## 연타 시 열 획득 배수(1.5 = +50%).
+@export var heat_combo_mult: float = 1.5
+## 탈진 임계(%) — 이 값에 닿으면 탈진.
+@export var heat_overheat_threshold: float = 100.0
+## 탈진 지속(초). 이 동안 이동 감소 + 일섬 발사 불가, 끝나면 열 0.
+@export var heat_overheat_duration: float = 5.0
+## 탈진 중 이동속도 배수(0.5 = 50% 감소).
+@export var heat_overheat_move_mult: float = 0.5
+## 마지막 일섬 후 열이 식기 시작하기까지의 유예(초).
+@export var heat_decay_delay: float = 4.0
+## 지수 감소 계수 k (per second). H *= e^(-k·dt). 클수록 빨리 식음.
+@export var heat_decay_rate: float = 1.0
 
 @export var visuals: CharacterVisuals

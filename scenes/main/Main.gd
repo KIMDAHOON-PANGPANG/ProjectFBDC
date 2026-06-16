@@ -1121,6 +1121,11 @@ func _refresh_hp_cells() -> void:
 func _refresh_slash_gauge() -> void:
 	if _slash_gauge_bar == null or not _player.has_method("slash_gauge_frac"):
 		return
+	# 모드2(즉발 일섬)는 일섬 게이지 미사용 → 게이지바 숨김.
+	if _player.has_method("is_instant_slash_mode") and bool(_player.call("is_instant_slash_mode")):
+		if _slash_gauge_bg != null:
+			_slash_gauge_bg.visible = false
+		return
 	var frac: float = clampf(_player.call("slash_gauge_frac"), 0.0, 1.0)
 	_slash_gauge_bar.size = Vector2((_SLASH_GAUGE_W - 4.0) * frac, _SLASH_GAUGE_H - 4.0)
 	var ready: bool = _player.has_method("is_slash_ready") and bool(_player.call("is_slash_ready"))

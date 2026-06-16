@@ -13,6 +13,9 @@ signal hit_enemy(enemy: Node)
 
 var _length: float = 1.0
 var _width: float = 1.4
+## 범위 Vector3 분해 — _width=x(폭) · _height=y(높이) · _len_pad=z(전방 길이 가산).
+var _height: float = 1.0
+var _len_pad: float = 0.0
 var _visual: MeshInstance3D
 var _shape: CollisionShape3D
 var _box_shape: BoxShape3D
@@ -57,14 +60,17 @@ func _ready() -> void:
 	get_tree().create_timer(fade_after).timeout.connect(_fade_and_free)
 
 ## Call BEFORE adding to the tree (or right after) to configure dimensions.
-func configure(start_pos: Vector3, end_pos: Vector3, width: float) -> void:
+## extents = 타격 박스 범위(m): x=폭 / y=높이 / z=전방 길이 가산.
+func configure(start_pos: Vector3, end_pos: Vector3, extents: Vector3) -> void:
 	var mid := (start_pos + end_pos) * 0.5
 	var dir := end_pos - start_pos
 	var length := dir.length()
 	if length < 0.01:
 		length = 0.01
 	_length = length
-	_width = max(width, 0.1)
+	_width = max(extents.x, 0.1)
+	_height = max(extents.y, 0.1)
+	_len_pad = max(extents.z, 0.0)
 	global_position = Vector3(mid.x, mid.y + 0.1, mid.z)
 	var yaw := atan2(-dir.z, dir.x)
 	rotation = Vector3(0.0, yaw, 0.0)
@@ -76,8 +82,9 @@ func configure(start_pos: Vector3, end_pos: Vector3, width: float) -> void:
 		_apply_size()
 
 func _apply_size() -> void:
-	_box_shape.size = Vector3(_length, 1.0, _width)
-	_visual.scale = Vector3(_length, 0.04, _width)
+	# 판정 박스: 길이(돌진 + 전방 가산) × 높이 × 폭. 시각은 바닥 데칼이라 y 납작.
+	_box_shape.size = Vector3(_length + _len_pad, _height, _width)
+	_visual.scale = Vector3(_length + _len_pad, 0.04, _width)
 
 
 ## Visual polish — repaint as a Zen-burst slash (gold + strong emission)

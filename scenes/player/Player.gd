@@ -23,6 +23,8 @@ enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING }
 ## 데이터 관리 로더 — pc_combat.json 값을 PlayerData 에 적용. class_name 캐시
 ## 미스를 피하려 preload + 정적 호출(헤드리스 안전).
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+## 메인 메뉴에서 고른 컨트롤 모드(즉발 일섬 여부)를 씬 전환 너머로 읽는다.
+const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
@@ -38,6 +40,8 @@ var _cooldown_t: float = 0.0
 var _dash_start: Vector3
 var _dash_end: Vector3
 var _dash_elapsed: float = 0.0
+## 돌진 시간(초) — _fire_slash 에서 거리 ÷ slash_dash_speed 로 매번 갱신.
+var _dash_dur: float = 0.12
 var _aim_arrow: AimArrow
 var _sprite_rig: SpriteRig
 var _health: HealthComponent
@@ -66,6 +70,20 @@ var _iframe_t: float = 0.0
 # ── 근접 기본 공격(부채꼴 스윙) 상태 ──
 ## 스윙 간격 쿨다운. > 0 이면 아직 다음 스윙 불가(공격 속도).
 var _melee_cd: float = 0.0
+
+## "게임 시작 2"(즉발 일섬) 모드 여부 — _ready 에서 GameConfig 로 읽는다.
+## true 면 LB 가 차징 없는 즉발 일섬이 되고, 근접 스윙 + RB 게이지 일섬은
+## 비활성(옛날 거합 컨트롤). 회피(SPACE)는 양쪽 모드 공통.
+var _instant_slash: bool = false
+
+# ── 열관리(Heat) — 즉발 일섬 모드 전용(럼블 열관리 게이지식) ──
+## 0~100(%). 일섬마다 오르고(연타 보너스), 유예 후 지수 감소. 100 도달 시 탈진.
+var _heat: float = 0.0
+## 마지막 일섬 시각(ms) — 연타 윈도우 + 감소 유예 계산 기준.
+var _heat_last_msec: int = 0
+## 탈진 상태 — 이동 감소 + 일섬 발사 봉인.
+var _overheated: bool = false
+var _overheat_t: float = 0.0
 
 # ── 4안 — 일섬 게이지 ──
 ## Fills from kills / gem pickups / perfect dodges. Slash (right-click)
@@ -163,6 +181,9 @@ func _ready() -> void:
 	# 기존 기본값 유지). max_hp 등을 읽기 전에 적용해야 반영됨.
 	_CombatDataScript.apply_to_player(self)
 
+	# 메인 메뉴에서 "게임 시작 2" 로 들어왔으면 즉발 일섬 모드.
+	_instant_slash = _GameConfigScript.instant_slash_mode
+
 	collision_layer = 1 << 1  # Player
 	# 비대칭 충돌 — PC 는 World 만 마스크해 몬스터에 막히거나 밀리지 않는다(몬스터는
 	# PC 를 못 민다). 대신 각 몬스터가 Player 를 마스크해 PC 와 겹치면 스스로 옆으로
@@ -193,6 +214,8 @@ func _physics_process(delta: float) -> void:
 	# 근접 기본 공격 — state 무관 매 프레임(이동 중에도 휘두름). 내부에서 차징/
 	# 대시/회피 중엔 억제.
 	_update_melee(delta)
+	# 열관리(즉발 일섬 모드) — 탈진 타이머 + 지수 감소. 모드1 이면 즉시 반환.
+	_update_heat(delta)
 	# 연속 대시 사이 최소 간격.
 	if _evade_cd > 0.0:
 		_evade_cd -= delta
@@ -209,13 +232,20 @@ func _physics_process(delta: float) -> void:
 	match _state:
 		State.IDLE:
 			_handle_move(delta)
-			_check_attack_start()
+			if _instant_slash:
+				_check_instant_slash()
+			else:
+				_check_attack_start()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
 				_cooldown_t -= delta
 		State.AIMING:
-			velocity = Vector3.ZERO
-			move_and_slide()
+			# 모드2(즉발 일섬)는 차징하며 이동 가능. 모드1 은 제자리 차징.
+			if _instant_slash:
+				_handle_move(delta)
+			else:
+				velocity = Vector3.ZERO
+				move_and_slide()
 			_update_aim(delta)
 			_check_attack_release()
 		State.DASHING:
@@ -242,6 +272,9 @@ func _handle_move(delta: float) -> void:
 	var speed_mult: float = 1.0
 	if has_counter_step and Time.get_ticks_msec() <= counter_step_until_msec:
 		speed_mult = 1.5
+	# 열관리 — 탈진(오버히트) 중엔 이동속도 감소.
+	if _overheated:
+		speed_mult *= data.heat_overheat_move_mult
 	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
 	velocity.x = dir.x * data.move_speed * speed_mult
 	velocity.z = dir.z * data.move_speed * speed_mult
@@ -277,6 +310,92 @@ func _check_attack_start() -> void:
 			_aim_arrow.show_arrow()
 			_aim_arrow.set_charge(0.0)
 
+
+## 게임 시작 2(즉발 일섬) — LB 클릭마다 차징 없이 곧바로 일섬을 발사한다.
+## 쿨다운(data.slash_cooldown)만 적용 · 게이지/차징 게이트 없음 = 옛날 거합 손맛.
+func _check_instant_slash() -> void:
+	if _overheated:
+		return  # 탈진 중엔 일섬 발사 불가(이동 감소 + 발사 봉인)
+	if _cooldown_t > 0.0:
+		return
+	if Input.is_action_just_pressed("fire"):
+		if _is_pointer_over_ui():
+			return
+		# 차징 시작 — 이동하며 충전(State.AIMING). LB 를 떼거나 오버차지가 끝나면
+		# _fire_slash 로 발사된다. (UI 화살은 이동해도 PC 를 따라온다.)
+		_set_state(State.AIMING)
+		_charge_t = 0.0
+		_overcharge_t = 0.0
+		if _aim_arrow != null:
+			_aim_arrow.show_arrow()
+			_aim_arrow.set_charge(0.0)
+
+
+# ══════════════ 열관리(Heat) — 즉발 일섬 모드 전용 ══════════════
+
+## 매 프레임 — 탈진 타이머를 깎거나(끝나면 열 0), 마지막 일섬 후 유예가 지나면
+## 열을 지수적으로 식힌다. 즉발 일섬 모드가 아니면 아무것도 안 한다.
+func _update_heat(delta: float) -> void:
+	if not _instant_slash:
+		return
+	if _overheated:
+		_overheat_t -= delta
+		if _overheat_t <= 0.0:
+			_overheated = false
+			_heat = 0.0
+			if _sprite_rig != null and _sprite_rig.has_method("flash"):
+				_sprite_rig.call("flash", 0.2)
+			_play_sfx("cooldown_ready")
+		return
+	if _heat <= 0.0:
+		return
+	var since: float = float(Time.get_ticks_msec() - _heat_last_msec) / 1000.0
+	if since > data.heat_decay_delay:
+		# 지수 감소 — dH/dt = -k·H → H *= e^(-k·dt). 커브로 부드럽게 식음.
+		_heat *= exp(-data.heat_decay_rate * delta)
+		if _heat < 0.5:
+			_heat = 0.0
+
+
+## 일섬 발사마다 호출 — 기본 획득에, 직전 일섬 후 combo_window 초 이내면
+## combo_mult 를 곱한다. 임계 도달 시 탈진 진입.
+func _add_heat() -> void:
+	var now: int = Time.get_ticks_msec()
+	var since: float = float(now - _heat_last_msec) / 1000.0
+	var gain: float = data.heat_gain_base
+	if _heat_last_msec > 0 and since <= data.heat_combo_window:
+		gain *= data.heat_combo_mult
+	_heat = min(_heat + gain, data.heat_overheat_threshold)
+	_heat_last_msec = now
+	if _heat >= data.heat_overheat_threshold:
+		_enter_overheat()
+
+
+## 100% 도달 — overheat_duration 초 탈진. 이동 감소(_handle_move) +
+## 발사 봉인(_check_instant_slash). 진입 연출은 빨강 플래시 + 카메라 쉐이크.
+func _enter_overheat() -> void:
+	_overheated = true
+	_overheat_t = data.heat_overheat_duration
+	_heat = data.heat_overheat_threshold
+	if _sprite_rig != null and _sprite_rig.has_method("flash"):
+		_sprite_rig.call("flash", 0.45)
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null and rig.has_method("shake"):
+		rig.call("shake", 0.12, 0.3)
+	_play_sfx("overheat")
+
+
+# 머리 위 HeatBar3D 가 읽는 getter들 (덕타이핑).
+func is_instant_slash_mode() -> bool:
+	return _instant_slash
+
+func get_heat_frac() -> float:
+	return clamp(_heat / max(data.heat_overheat_threshold, 1.0), 0.0, 1.0)
+
+func is_overheated() -> bool:
+	return _overheated
+
+
 func _is_pointer_over_ui() -> bool:
 	var vp := get_viewport()
 	if vp == null:
@@ -284,17 +403,23 @@ func _is_pointer_over_ui() -> bool:
 	return vp.gui_get_hovered_control() != null
 
 func _check_attack_release() -> void:
-	if not Input.is_action_pressed("slash"):
+	# 모드2 는 LB(fire) 홀드 차징, 모드1 은 RB(slash). 버튼을 떼면 발사.
+	var action: String = "fire" if _instant_slash else "slash"
+	if not Input.is_action_pressed(action):
 		_fire_slash()
 
 func _update_aim(delta: float) -> void:
 	_charge_t = min(_charge_t + delta, data.max_charge_time)
-	# ⏱ Overcharge — once fully charged, holding longer accumulates toward
-	# a fizzle. Auto-releases into a 1s lockout so holding "just in case"
-	# is actively punished.
+	# 최대 차지 도달 후 오버차지 누적.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
-		if _overcharge_t >= data.overcharge_grace:
+		if _instant_slash:
+			# 모드2 — instant_overcharge_hold 초 버틴 뒤 자동 발사(불발 아님).
+			if _overcharge_t >= data.instant_overcharge_hold:
+				_fire_slash()
+				return
+		# 모드1 — ⏱ grace 초과 시 불발(fizzle) + 잠금. "혹시나" 홀드를 응징.
+		elif _overcharge_t >= data.overcharge_grace:
 			_fizzle_charge()
 			return
 	var dir := _mouse_to_world_dir()
@@ -306,7 +431,9 @@ func _update_aim(delta: float) -> void:
 		_aim_arrow.aim_at_direction(_aim_dir)
 	if _sprite_rig != null:
 		_sprite_rig.set_facing(_aim_dir.x)
-		_sprite_rig.set_state(SpriteRig.State.IDLE)
+		# 모드2 는 이동하며 차징하므로 걷기/대기 애니는 _handle_move 가 정한다.
+		if not _instant_slash:
+			_sprite_rig.set_state(SpriteRig.State.IDLE)
 
 
 ## ⏱ Overcharge fizzle — the charge was held past the grace window. Waste
@@ -334,16 +461,26 @@ func _fire_slash() -> void:
 	# out wide / long / heavy. We snapshot the flag now (consume_burst
 	# below clears it) so the spawned trail gets the boost too.
 	var burst_active: bool = has_zen_burst
-	var slash_range: float = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
-	var slash_width_now: float = data.slash_width
+	# 사거리 — 젠 버스트 > 즉발(모드2 고정) > 차징(모드1 선형) 순.
+	var slash_range: float
 	if burst_active:
 		slash_range = data.max_slash_range * data.zen_burst_range_mult
-		slash_width_now = data.slash_width * data.zen_burst_width_mult
+	elif _instant_slash:
+		# 모드2 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 사거리 증가.
+		slash_range = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
+	else:
+		slash_range = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
+	# 범위(Vector3) — 젠 버스트면 폭(x)만 배수로 키운다.
+	var ext: Vector3 = data.slash_hit_extents
+	if burst_active:
+		ext = Vector3(ext.x * data.zen_burst_width_mult, ext.y, ext.z)
 		if _zen_system != null and _zen_system.has_method("consume_burst"):
 			_zen_system.call("consume_burst")
 	_dash_start = global_position
 	_dash_end = global_position + _aim_dir.normalized() * slash_range
 	_dash_elapsed = 0.0
+	# 돌진 속도(m/s) → 동적 대시 시간 = 거리 ÷ 속도(거리가 멀어도 체감 일정).
+	_dash_dur = max(slash_range / max(data.slash_dash_speed, 0.01), 0.02)
 	_set_state(State.DASHING)
 	if _aim_arrow != null:
 		_aim_arrow.hide_arrow()
@@ -351,7 +488,7 @@ func _fire_slash() -> void:
 		_sprite_rig.set_state(SpriteRig.State.ATTACK)
 		_sprite_rig.set_facing(_aim_dir.x)
 	# Spawn slash trail at the start of the dash.
-	_spawn_slash_attack(_dash_start, _dash_end, slash_width_now, burst_active)
+	_spawn_slash_attack(_dash_start, _dash_end, ext, burst_active)
 	# ⏱ Perfect-charge zen reward — full charge (>= 0.9 of max) feeds
 	# the meter. Burst slashes don't double-dip (they consumed the meter).
 	if not burst_active and _zen_system != null and charge_frac >= data.perfect_charge_threshold \
@@ -361,10 +498,13 @@ func _fire_slash() -> void:
 	if Engine.has_singleton("SoundManager") or _has_sound_manager():
 		_play_sfx("burst_slash" if burst_active else "slash")
 	slash_started.emit()
+	# 모드2(즉발 일섬) — 발사마다 열 누적(연타 보너스), 100% 시 탈진.
+	if _instant_slash:
+		_add_heat()
 
 func _update_dash(delta: float) -> void:
 	_dash_elapsed += delta
-	var t: float = clamp(_dash_elapsed / max(data.dash_duration, 0.0001), 0.0, 1.0)
+	var t: float = clamp(_dash_elapsed / max(_dash_dur, 0.0001), 0.0, 1.0)
 	# Smooth easing (ease-out)
 	var eased: float = 1.0 - pow(1.0 - t, 2.0)
 	global_position = _dash_start.lerp(_dash_end, eased)
@@ -381,15 +521,15 @@ func _update_dash(delta: float) -> void:
 		if has_multistrike and not _is_multistrike_followup:
 			get_tree().create_timer(0.18).timeout.connect(_fire_multistrike_followup)
 
-func _spawn_slash_attack(start: Vector3, end: Vector3, width: float = -1.0, burst: bool = false) -> void:
+func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO, burst: bool = false) -> void:
 	var attack: SlashAttack
 	if slash_attack_scene != null:
 		attack = slash_attack_scene.instantiate() as SlashAttack
 	else:
 		attack = SlashAttack.new()
 	get_tree().current_scene.add_child(attack)
-	var w: float = width if width > 0.0 else data.slash_width
-	attack.configure(start, end, w)
+	var ext: Vector3 = extents if extents.length_squared() > 0.0001 else data.slash_hit_extents
+	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
 	# ⏱ Zen burst payload — SlashAttack._resolve_boss_damage checks this
 	# meta and returns 5 (vs. 1 / 3) when set. Cheap to carry on the
@@ -591,6 +731,9 @@ func bind_zen_system(zs: Node) -> void:
 
 ## 매 프레임 — LB 홀드 중이면 melee_cooldown 간격으로 스윙(이동 중에도 가능).
 func _update_melee(delta: float) -> void:
+	# 모드2(즉발 일섬)에서는 LB 가 일섬에 쓰이므로 근접 스윙을 끈다.
+	if _instant_slash:
+		return
 	if _melee_cd > 0.0:
 		_melee_cd -= delta
 	# 차징(일섬)/대시/회피 중엔 기본 공격 억제. 그 외(이동 포함) 매 프레임 가능.
@@ -675,6 +818,9 @@ func _spawn_melee_swing(dir: Vector3) -> void:
 ## Add to the slash gauge (×gain mult), clamped to max. Called from Main
 ## on kill / gem pickup and from take_hit on perfect dodge.
 func add_slash_gauge(amount: float) -> void:
+	# 모드2(즉발 일섬)는 일섬 게이지를 쓰지 않는다 — 처치/젬/저스트회피와 무관.
+	if _instant_slash:
+		return
 	if amount <= 0.0:
 		return
 	_slash_gauge = min(_slash_gauge + amount * slash_gauge_gain_mult, data.slash_gauge_max)

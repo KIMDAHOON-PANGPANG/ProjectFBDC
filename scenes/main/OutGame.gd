@@ -7,6 +7,8 @@ extends Control
 
 const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
 const _SaveScript := preload("res://scripts/managers/SaveSystem.gd")
+## 시작 버튼이 고른 컨트롤 모드를 인게임으로 넘기는 전역 플래그.
+const _GameConfig := preload("res://scripts/managers/GameConfig.gd")
 const _MAIN_PATH := "res://scenes/main/Main.tscn"
 const _META_MENU_PATH := "res://scenes/ui/MetaMenu.tscn"
 const _CARD_UNLOCK_PATH := "res://scenes/ui/CardUnlock.tscn"
@@ -82,6 +84,7 @@ func _build() -> void:
 	center.add_child(spacer2)
 
 	center.add_child(_make_button("게임 시작", _on_start_pressed))
+	center.add_child(_make_button("게임 시작 2 (즉발 일섬)", _on_start2_pressed))
 	center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
 	center.add_child(_make_button("카드 해금", _on_card_unlock_pressed))
 	center.add_child(_make_button("종료", _on_quit_pressed))
@@ -135,6 +138,14 @@ func _make_button(label: String, cb: Callable) -> Button:
 
 
 func _on_start_pressed() -> void:
+	# 기본(4안) 컨트롤 — LB 근접 스윙 + RB 게이지 일섬.
+	_GameConfig.instant_slash_mode = false
+	get_tree().change_scene_to_file(_MAIN_PATH)
+
+
+func _on_start2_pressed() -> void:
+	# 옛날 거합 컨트롤 — LB 클릭에 일섬 즉발(차징 없음).
+	_GameConfig.instant_slash_mode = true
 	get_tree().change_scene_to_file(_MAIN_PATH)
 
 
