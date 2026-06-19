@@ -43,6 +43,8 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 
 @export var number_label_path: NodePath
 @export var mesh_path: NodePath
+## 보스 해골 스프라이트 틴트(보스별 테마색). Boss2=보라/Boss3=청록은 .tscn 에서 지정.
+@export var boss_tint: Color = Color(1.0, 0.55, 0.55)
 
 ## Fan-telegraph tuning. Boss is a wide, hard-hitting swing — bigger arc
 ## and reach than mobs, 2 damage on connect (same as the legacy attack).
@@ -113,6 +115,9 @@ const _PC_STATE_DASHING: int = 2
 var time_scale_mult: float = 1.0
 
 var _player: Node3D
+## 보스 박스의 월드 X/Z 반경(노드 스케일 반영) — _ready 에서 콜리전 셰입×scale 로
+## 산출. PC 끼임 방지 eject 경계 계산에 쓴다(스케일을 바꿔도 자동 추종).
+var _boss_half_xz: float = _BOSS_HALF_XZ
 var _health: HealthComponent
 var _attack_cd: float = 0.0
 var _dead: bool = false
@@ -138,7 +143,7 @@ var _blocked: bool = false
 var _active_telegraph: Node = null
 var _active_signal: Node = null
 var _label: Label3D
-var _mesh: MeshInstance3D
+var _sprite: Sprite3D
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -177,15 +182,23 @@ func _ready() -> void:
 	if _label != null:
 		_label.text = str(max_hp)
 
-	_mesh = get_node_or_null(mesh_path) as MeshInstance3D
-	# Duplicate material so flashes don't leak (defensive — there's only one
-	# boss but the pattern stays consistent with EliteEnemy).
-	if _mesh != null:
-		var src_mat := _mesh.get_surface_override_material(0)
-		if src_mat != null:
-			_mesh.set_surface_override_material(0, src_mat.duplicate())
+	# 해골 스프라이트 — 보스 테마색(boss_tint)으로 틴트. 알파 안전(d3d12).
+	_sprite = get_node_or_null(mesh_path) as Sprite3D
+	if _sprite != null:
+		_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_sprite.shaded = false
+		_sprite.transparent = true
+		_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		_sprite.alpha_scissor_threshold = 0.5
+		_sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_sprite.modulate = boss_tint
 
 	_player = get_tree().get_first_node_in_group("player")
+
+	# 보스 박스 월드 X/Z 반경 산출(노드 스케일 반영) — PC 끼임 방지 eject 경계용.
+	var _cs := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if _cs != null and _cs.shape is BoxShape3D:
+		_boss_half_xz = (_cs.shape as BoxShape3D).size.x * 0.5 * scale.x
 
 	# Parry Master card was picked BEFORE this boss spawned — pick up
 	# the boosted window + counter damage here so per-chapter boss
@@ -209,9 +222,9 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	# (구) _eject_overlapping_player() 호출 제거 — 이제 PC 가 보스를 통과하므로
-	# 끼지 않는다. 매 틱 PC 를 밀어내던 그 코드가 근접으로 옆에서 때릴 때 "쭉
-	# 밀리는" 버그의 직접 원인이었다. 함수는 남겨두되(참고용) 더는 호출하지 않음.
+	# PC 가 보스 박스 안에 끼면(일섬 관통 실패 등) 박스 밖으로 밀어낸다. 대시 중엔
+	# 내부에서 스킵 — 슬래시 대시의 프레임별 위치 갱신과 싸우지 않게(끼임만 해소).
+	_eject_overlapping_player()
 
 	# 경직(아머 소거) 중 — 보스도 이동/공격 정지(사망이 아닐 때만). 큰 반격 기회.
 	if _health != null:
@@ -477,7 +490,7 @@ func _eject_overlapping_player() -> void:
 		return  # Dash overrides position; eject would fight it.
 	var dx: float = pc.global_position.x - global_position.x
 	var dz: float = pc.global_position.z - global_position.z
-	var bound: float = _BOSS_HALF_XZ + _PC_RADIUS + _EJECT_SLACK
+	var bound: float = _boss_half_xz + _PC_RADIUS + _EJECT_SLACK
 	if absf(dx) >= bound or absf(dz) >= bound:
 		return  # Not inside the extended footprint — nothing to do.
 	var push_x: float = bound - absf(dx)
@@ -493,16 +506,13 @@ func _on_damaged(_amount: int) -> void:
 	if _label != null and _health != null:
 		_label.text = str(max(_health.hp, 0))
 	# Brief white flash on hit (skip lethal hit to avoid fighting death anim).
-	if _mesh == null or _health == null or _health.hp <= 0:
+	if _sprite == null or _health == null or _health.hp <= 0:
 		return
-	var mat := _mesh.get_surface_override_material(0) as StandardMaterial3D
-	if mat == null:
-		return
-	var original: Color = mat.albedo_color
-	var flash: Color = Color(1.0, 1.0, 1.0, original.a)
+	var original: Color = _sprite.modulate
+	var flash: Color = Color(2.5, 2.5, 2.5, original.a)
 	var t := create_tween()
-	t.tween_property(mat, "albedo_color", flash, 0.04)
-	t.tween_property(mat, "albedo_color", original, 0.14)
+	t.tween_property(_sprite, "modulate", flash, 0.04)
+	t.tween_property(_sprite, "modulate", original, 0.14)
 
 func _on_died() -> void:
 	if _dead:
@@ -522,11 +532,8 @@ func _play_death_fade() -> void:
 	var duration := 0.9
 	var t := create_tween()
 	t.set_parallel(true)
-	if _mesh != null:
-		var mat := _mesh.get_surface_override_material(0) as StandardMaterial3D
-		if mat != null:
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			t.tween_property(mat, "albedo_color:a", 0.0, duration)
+	if _sprite != null:
+		t.tween_property(_sprite, "modulate:a", 0.0, duration)
 	if _label != null:
 		t.tween_property(_label, "modulate:a", 0.0, duration)
 	t.tween_property(self, "position:y", position.y - 1.0, duration)

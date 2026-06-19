@@ -38,6 +38,8 @@ enum Behavior { CHASER, LEAPER }
 @export var leap_duration: float = 0.7
 @export var leap_height: float = 2.6
 @export var leap_recheck: float = 0.6
+## 점프 전 "삐슝" 사전 경고(빨간 플래시) 시간(초). 끝나면 점프 + 착지 데칼 등장.
+@export var leap_pre_time: float = 0.32
 ## 빨간 원형 데칼 텔레그래프(LeapTelegraph) — MeleeEnemy.tscn 에서 주입.
 @export var leap_telegraph_scene: PackedScene
 
@@ -55,6 +57,8 @@ const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/melee
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 ## 스무스 넉백 컴포넌트(피격/피탄 시 부드럽게 밀림).
 const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
+## 머리 위 HP 바(모든 몬스터 공통 — 코드 인스턴스).
+const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -62,6 +66,9 @@ const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
 ##   교체하면 된다(이웃 질의 추상화 지점).
 static var _sep_frame: int = -1
 static var _sep_list: Array = []
+## 리퍼 그룹 AI — 동시에 한 마리만 리프 공격하도록 공유 '공격 토큰' 보유자.
+## null/무효(죽음·해제)면 자유. 보유자가 착지/사망/취소 시 해제. (게임 시작2 리퍼 개편)
+static var _leap_attacker = null
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -87,7 +94,10 @@ var _active_telegraph: Node = null
 var _leaping: bool = false
 var _leap_start: Vector3
 var _leap_end: Vector3
+var _leap_above: Vector3
 var _leap_elapsed: float = 0.0
+var _leap_phase: int = 0  # 0=PRE(삐슝 사전경고) / 1=AIR(점프~체공~내려찍기)
+var _leap_pre_t: float = 0.0
 var _active_leap_decal: Node = null
 ## 스무스 넉백 상태(피격/피탄 시 밀림).
 var _kb = _KnockbackScript.new()
@@ -108,6 +118,9 @@ func _ready() -> void:
 	# Opt-in to the melee category — FanTelegraph attacks live here.
 	# Instance-level (not class-level) so future archetypes can mix.
 	add_to_group("melee_enemies")
+	# 리퍼는 별도 그룹 — 스폰 캡(동시 3마리) + 그룹 AI 토큰 질의에 사용.
+	if behavior == Behavior.LEAPER:
+		add_to_group("leapers")
 	collision_layer = 1 << 2  # Enemy
 	collision_mask = (1 << 0) | (1 << 1)  # World + Player — PC 와 겹치면 스스로 빠져나감(=PC 가 밀침). PC 는 안 막힘.
 
@@ -121,6 +134,13 @@ func _ready() -> void:
 		_health.setup(data.max_hp)
 		_health.setup_armor(armor_max, stagger_duration)
 		_health.died.connect(_on_died)
+		# 머리 위 HP 바 — 모든 몬스터 공통(잡몹/리퍼). 코드 인스턴스.
+		var bar := _HpBar3DScene.instantiate()
+		if "follow_offset" in bar:
+			bar.follow_offset = Vector3(0, 1.55, 0)
+		add_child(bar)
+		if bar.has_method("attach_health"):
+			bar.call("attach_health", _health)
 
 	_player = get_tree().get_first_node_in_group("player")
 
@@ -173,7 +193,12 @@ func _physics_process(delta: float) -> void:
 	# LEAPER — 리프(곡선 점프 + 빨간 원형 슬램) 전용. leap_range 안에서 확률 발동.
 	# 실패하면 leap_recheck 동안 재굴림을 막아 매 프레임 굴리지 않는다.
 	elif behavior == Behavior.LEAPER:
-		if leap_telegraph_scene != null and _attack_cd <= 0.0 and dist <= leap_range:
+		# 그룹 AI — 다른 리퍼가 공격(토큰 보유) 중이면 공격 금지, 뒷걸음/대기 추적만.
+		if not _leap_token_free():
+			_leap_standoff_move(to_player, dist)
+			return
+		# 토큰 자유 + 쿨다운 + 사거리 + PC 시야(화면) 안에 보일 때만 리프 발동.
+		if leap_telegraph_scene != null and _attack_cd <= 0.0 and dist <= leap_range and _is_on_screen():
 			if randf() < leap_chance:
 				_begin_leap(to_player, dist)
 				return
@@ -278,28 +303,50 @@ func _begin_leap(to_player_xz: Vector3, dist: float) -> void:
 	_leap_start = global_position
 	_leap_end = global_position + dir * travel
 	_leap_end.y = _leap_start.y
+	_leap_above = Vector3(_leap_end.x, _leap_start.y + leap_height, _leap_end.z)
 	_leap_elapsed = 0.0
+	_leap_pre_t = 0.0
+	_leap_phase = 0  # PRE — "삐슝" 사전 경고
 	_leaping = true
-	# 점프 + 슬램 + 회복 동안 다음 공격 잠금.
-	_attack_cd = data.melee_attack_cooldown + leap_duration + 0.4
-	var decal = leap_telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(decal)
-	if decal.has_method("configure"):
-		# windup = 점프 시간 → 데칼이 착지 순간에 슬램 데미지 판정.
-		decal.call("configure", _leap_end, leap_radius, leap_damage, leap_duration)
-	_active_leap_decal = decal
+	_leap_attacker = self  # 그룹 AI 토큰 획득(이 동안 다른 리퍼는 공격 대기)
+	# 사전경고 + 점프(체공=데칼 차오름) + 슬램 + 회복 동안 다음 공격 잠금.
+	_attack_cd = data.melee_attack_cooldown + leap_pre_time + leap_duration + 0.4
 	velocity = Vector3.ZERO
+	# 삐슝! — 점프 전 빨간 사전 경고(스프라이트 플래시). 착지 데칼은 점프 시작 때 등장.
 	if _sprite_rig != null:
+		if _sprite_rig.has_method("flash"):
+			_sprite_rig.call("flash", 0.25)
 		_sprite_rig.set_state(SpriteRig.State.ATTACK)
 		_sprite_rig.set_facing(dir.x)
 
 ## 곡선 점프 진행 — 포물선(t=0.5 정점)으로 착지 지점까지. 슬램 데미지는 데칼이
 ## 자기 windup 타이머로 착지 순간에 처리한다.
 func _update_leap(delta: float) -> void:
+	# PRE — "삐슝" 사전 경고(점프 전 제자리). 끝나면 점프 + 착지 데칼 등장.
+	if _leap_phase == 0:
+		velocity = Vector3.ZERO
+		_leap_pre_t += delta
+		if _leap_pre_t >= leap_pre_time:
+			_spawn_leap_decal()   # 데칼이 보임 — 중심→바깥 100% 차오름 시작
+			_leap_phase = 1       # AIR
+			_leap_elapsed = 0.0
+		return
+	# AIR — 빠르게 상승 → 체공(데칼 차오르는 동안) → 순식간에 내려찍기.
 	_leap_elapsed += delta
 	var t: float = clamp(_leap_elapsed / max(leap_duration, 0.0001), 0.0, 1.0)
-	var flat: Vector3 = _leap_start.lerp(_leap_end, t)
-	var h: float = leap_height * 4.0 * t * (1.0 - t)
+	# 수평: 초반(0~0.5)에 착지점 위로 이동(smoothstep) 후 고정.
+	var hzt: float = clamp(t / 0.5, 0.0, 1.0)
+	hzt = hzt * hzt * (3.0 - 2.0 * hzt)
+	var flat: Vector3 = _leap_start.lerp(_leap_end, hzt)
+	# 수직: 상승(0~0.22) → 체공 유지(~0.82) → 가속 낙하(0.82~1.0, 순식간).
+	var h: float
+	if t < 0.22:
+		h = leap_height * (t / 0.22)
+	elif t < 0.82:
+		h = leap_height
+	else:
+		var dt: float = (t - 0.82) / 0.18
+		h = leap_height * (1.0 - dt * dt)
 	global_position = Vector3(flat.x, _leap_start.y + h, flat.z)
 	if _sprite_rig != null:
 		_sprite_rig.set_state(SpriteRig.State.ATTACK)
@@ -307,6 +354,66 @@ func _update_leap(delta: float) -> void:
 		global_position = _leap_end
 		_leaping = false
 		_active_leap_decal = null
+		_release_leap_token()  # 착지(슬램) → 다음 리퍼가 공격 가능
+
+
+## 착지 데칼 생성 — 점프 시작 시 호출. windup=leap_duration 동안 중심→바깥으로
+## 100% 차오르고, 차오름이 끝나는(=몬스터 착지) 순간 슬램 데미지 + 카메라 쉐이크.
+func _spawn_leap_decal() -> void:
+	if leap_telegraph_scene == null:
+		return
+	var decal = leap_telegraph_scene.instantiate()
+	get_tree().current_scene.add_child(decal)
+	if decal.has_method("configure"):
+		decal.call("configure", _leap_end, leap_radius, leap_damage, leap_duration)
+	_active_leap_decal = decal
+
+
+## 그룹 AI 토큰 — null 이거나 무효(죽음/해제)면 자유.
+static func _leap_token_free() -> bool:
+	return _leap_attacker == null or not is_instance_valid(_leap_attacker)
+
+func _release_leap_token() -> void:
+	if _leap_attacker == self:
+		_leap_attacker = null
+
+
+## PC 시야(카메라 절두체) 안에 이 몬스터가 보이는가 — 보일 때만 리프 텔레그래프 발동.
+func _is_on_screen() -> bool:
+	var vp := get_viewport()
+	if vp == null:
+		return true
+	var cam := vp.get_camera_3d()
+	if cam == null:
+		return true
+	return cam.is_position_in_frustum(global_position)
+
+
+## 다른 리퍼가 공격(토큰 보유) 중일 때 — 공격하지 않고 PC를 추적하되 리프 사거리
+## 부근에서 대기(가까우면 뒷걸음, 멀면 접근). 군집 분리 섞음.
+func _leap_standoff_move(to_player_xz: Vector3, dist: float) -> void:
+	var dir := to_player_xz
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else Vector3(1, 0, 0)
+	var standoff: float = leap_range * 0.85
+	var move := Vector3.ZERO
+	if dist < standoff - 0.3:
+		move = -dir            # 뒷걸음질(너무 가까움)
+	elif dist > standoff + 0.6:
+		move = dir             # 추적 접근(너무 멈)
+	# else: 거의 정지(대기)
+	var sep := _separation_vector()
+	if sep.length_squared() > 0.000001:
+		move += sep * separation_weight
+		if move.length() > 0.001:
+			move = move.normalized()
+	velocity.x = move.x * data.move_speed * time_scale_mult * 0.8
+	velocity.z = move.z * data.move_speed * time_scale_mult * 0.8
+	velocity.y = 0.0
+	move_and_slide()
+	if _sprite_rig != null:
+		_sprite_rig.set_state(SpriteRig.State.WALK if move.length_squared() > 0.0001 else SpriteRig.State.IDLE)
+		_sprite_rig.set_facing(dir.x)
 
 ## Called by SlashAttack when this enemy is inside its volume.
 ## 1 damage per slash so LV2 mobs (max_hp=2) take 2 hits, LV1 (max_hp=1) dies
@@ -339,8 +446,9 @@ func _on_died() -> void:
 	_kb.vel = Vector3.ZERO
 	if _health != null:
 		_health.clear_stagger()
-	# 리프 중 사망 — 펜딩 슬램 데칼 취소(유령 데미지 방지).
+	# 리프 중 사망 — 펜딩 슬램 데칼 취소(유령 데미지 방지) + 그룹 AI 토큰 해제.
 	_leaping = false
+	_release_leap_token()
 	if _active_leap_decal != null and is_instance_valid(_active_leap_decal) \
 			and _active_leap_decal.has_method("cancel"):
 		_active_leap_decal.call("cancel")

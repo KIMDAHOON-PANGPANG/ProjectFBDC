@@ -30,6 +30,8 @@ const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 @export var slash_attack_scene: PackedScene
 ## 근접 스윙 VFX 씬 (기본 공격). Player.tscn 에 MeleeSwing.tscn 주입.
 @export var melee_swing_scene: PackedScene
+## 마취 비도 씬 (게임 시작2 RMB). Player.tscn 에 TranqKunai.tscn 주입.
+@export var tranq_scene: PackedScene
 @export var aim_arrow_path: NodePath
 @export var sprite_rig_path: NodePath
 
@@ -43,7 +45,8 @@ var _dash_elapsed: float = 0.0
 ## 돌진 시간(초) — _fire_slash 에서 거리 ÷ slash_dash_speed 로 매번 갱신.
 var _dash_dur: float = 0.12
 var _aim_arrow: AimArrow
-var _sprite_rig: SpriteRig
+# 적은 SpriteRig, PC 는 PlayerSprite(둘 다 동일 API). 타입 고정 없이 덕타이핑.
+var _sprite_rig
 var _health: HealthComponent
 ## Foot-dust emitter — toggled on while WASD-moving / dashing / evading
 ## so the player has a clear "I am moving" cue even on an empty plane
@@ -66,6 +69,13 @@ var _evade_refill_t: float = 0.0
 # 값은 data.hit_iframe 으로 이관(CombatData/pc_combat.json 구동). iframe_bonus
 # (메타)가 더해지지만 메타 효과는 현재 초기화됨.
 var _iframe_t: float = 0.0
+
+# 일섬(대시) 직후 짧은 회복 무적. > 0 동안 is_invincible() 이 참 → 착지 지점에서 적
+# 충돌(접촉피해)/탄에 즉시 피격되는 불쾌감을 막는다. data.slash_post_grace 로 세팅.
+var _slash_grace_t: float = 0.0
+
+# 마취 비도(RMB) 재사용 대기. > 0 동안 발사 불가(1/1 충전 회복). data.tranq_cooldown.
+var _tranq_cd: float = 0.0
 
 # ── 근접 기본 공격(부채꼴 스윙) 상태 ──
 ## 스윙 간격 쿨다운. > 0 이면 아직 다음 스윙 불가(공격 속도).
@@ -185,6 +195,10 @@ func _ready() -> void:
 	_instant_slash = _GameConfigScript.instant_slash_mode
 
 	collision_layer = 1 << 1  # Player
+	# 모드2(즉발 일섬) — NPC 와 서로 밀리지 않게 PC 레이어를 비운다(적이 PC 를 못 밀침).
+	# 대신 접촉 시 _check_contact_damage 로 HP 감소. 모드1 은 PC 가 군중 헤집기(기존) 유지.
+	if _instant_slash:
+		collision_layer = 0
 	# 비대칭 충돌 — PC 는 World 만 마스크해 몬스터에 막히거나 밀리지 않는다(몬스터는
 	# PC 를 못 민다). 대신 각 몬스터가 Player 를 마스크해 PC 와 겹치면 스스로 옆으로
 	# 빠져나가므로, PC 가 군중을 헤집고 지나가면 몬스터가 밀려난다. 한 방향
@@ -192,7 +206,7 @@ func _ready() -> void:
 	collision_mask = (1 << 0)  # World only (몬스터에 안 막힘 = PC 불가침)
 
 	_aim_arrow = get_node_or_null(aim_arrow_path) as AimArrow
-	_sprite_rig = get_node_or_null(sprite_rig_path) as SpriteRig
+	_sprite_rig = get_node_or_null(sprite_rig_path)
 	if _sprite_rig != null:
 		_sprite_rig.fallback_color = Color(0.85, 0.9, 1.0)
 		_sprite_rig.set_visuals(data.visuals)
@@ -216,6 +230,9 @@ func _physics_process(delta: float) -> void:
 	_update_melee(delta)
 	# 열관리(즉발 일섬 모드) — 탈진 타이머 + 지수 감소. 모드1 이면 즉시 반환.
 	_update_heat(delta)
+	# 게임 시작2 — NPC 몸 접촉 시 HP 감소(서로 밀림 없음). 내부에서 무적/대시 중 스킵.
+	if _instant_slash:
+		_check_contact_damage()
 	# 연속 대시 사이 최소 간격.
 	if _evade_cd > 0.0:
 		_evade_cd -= delta
@@ -229,6 +246,10 @@ func _physics_process(delta: float) -> void:
 			_evade_refill_t = 0.0  # 아직 부족하면 다음 프레임에 재가동
 	if _iframe_t > 0.0:
 		_iframe_t -= delta
+	if _slash_grace_t > 0.0:
+		_slash_grace_t -= delta
+	if _tranq_cd > 0.0:
+		_tranq_cd -= delta
 	match _state:
 		State.IDLE:
 			_handle_move(delta)
@@ -236,6 +257,7 @@ func _physics_process(delta: float) -> void:
 				_check_instant_slash()
 			else:
 				_check_attack_start()
+			_check_tranq()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
 				_cooldown_t -= delta
@@ -248,6 +270,7 @@ func _physics_process(delta: float) -> void:
 				move_and_slide()
 			_update_aim(delta)
 			_check_attack_release()
+			_check_tranq()
 		State.DASHING:
 			_update_dash(delta)
 		State.COOLDOWN:
@@ -283,11 +306,14 @@ func _handle_move(delta: float) -> void:
 	var moving: bool = dir.length_squared() > 0.01
 	# (1) 캐릭터는 항상 마우스 커서 방향을 바라본다(이동 방향과 무관). 빌보드
 	# 스프라이트라 좌/우 플립으로 표현.
+	# 공격 방향(_aim_dir)은 마우스로 계속 추적 — 일섬/스윙이 이 방향으로 나간다.
 	var face := _mouse_to_world_dir()
 	if face.length_squared() > 0.0001:
 		_aim_dir = face
+	# 캐릭터(스프라이트) 방향은 WASD 이동 방향으로만 갱신 — 마우스엔 반응하지 않는다.
 	if _sprite_rig != null:
-		_sprite_rig.set_facing(_aim_dir.x)
+		if moving:
+			_sprite_rig.set_facing_vec(dir)
 		_sprite_rig.set_state(SpriteRig.State.WALK if moving else SpriteRig.State.IDLE)
 	# Dust kicks on whenever we're actually moving — gives a visible
 	# self-motion cue on top of the world-anchored grid ground.
@@ -329,6 +355,35 @@ func _check_instant_slash() -> void:
 		if _aim_arrow != null:
 			_aim_arrow.show_arrow()
 			_aim_arrow.set_charge(0.0)
+
+
+## 마취 비도(RMB) — 게임 시작2 에서 우클릭. 쿨다운(1/1)이 차 있으면 커서 방향으로
+## 곡사 발사 → 착탄 범위 적을 3초 마취(스턴). 모드1 에선 RB 가 게이지 일섬이라 비활성.
+func _check_tranq() -> void:
+	if not _instant_slash or _tranq_cd > 0.0:
+		return
+	if Input.is_action_just_pressed("slash"):
+		if _is_pointer_over_ui():
+			return
+		_fire_tranq()
+
+func _fire_tranq() -> void:
+	if tranq_scene == null:
+		return
+	_tranq_cd = data.tranq_cooldown
+	var dir: Vector3 = _aim_dir
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(1, 0, 0)
+	dir = dir.normalized()
+	var start: Vector3 = global_position + Vector3(0, 0.8, 0)
+	var goal: Vector3 = global_position + dir * data.tranq_range
+	goal.y = 0.0
+	var dart = tranq_scene.instantiate()
+	if dart.has_method("configure"):
+		dart.call("configure", start, goal, data.tranq_radius, data.tranq_stun_duration,
+			data.tranq_arc_height, data.tranq_travel_time)
+	get_tree().current_scene.add_child(dart)
+	_play_sfx("tranq")
 
 
 # ══════════════ 열관리(Heat) — 즉발 일섬 모드 전용 ══════════════
@@ -409,7 +464,8 @@ func _check_attack_release() -> void:
 		_fire_slash()
 
 func _update_aim(delta: float) -> void:
-	_charge_t = min(_charge_t + delta, data.max_charge_time)
+	# 충전 속도 배수 — charge_speed_mult(기본 0.5)만큼 천천히 차오른다(데이터 제어).
+	_charge_t = min(_charge_t + delta * data.charge_speed_mult, data.max_charge_time)
 	# 최대 차지 도달 후 오버차지 누적.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
@@ -429,17 +485,27 @@ func _update_aim(delta: float) -> void:
 		var charge_frac: float = _charge_t / max(data.max_charge_time, 0.0001)
 		_aim_arrow.set_charge(charge_frac)
 		_aim_arrow.aim_at_direction(_aim_dir)
-	if _sprite_rig != null:
-		_sprite_rig.set_facing(_aim_dir.x)
-		# 모드2 는 이동하며 차징하므로 걷기/대기 애니는 _handle_move 가 정한다.
-		if not _instant_slash:
-			_sprite_rig.set_state(SpriteRig.State.IDLE)
+	# 캐릭터 방향은 마우스에 동기화하지 않는다(공격 방향만 _aim_dir 로 추적). 모드2 는
+	# 이동하며 차징 → _handle_move 가 방향/걷기 애니를 정한다.
+	if _sprite_rig != null and not _instant_slash:
+		_sprite_rig.set_state(SpriteRig.State.IDLE)
+	# LB 차징 줌아웃(ESC 토글) — 차징 동안 카메라가 서서히 빠진다(최대값 cap).
+	_apply_charge_zoom(true)
+
+
+## LB 차징 줌아웃(ESC 토글) — 차징 중 카메라를 서서히 빼고, 비활성/꺼짐이면 복귀.
+func _apply_charge_zoom(active: bool) -> void:
+	var on: bool = active and _instant_slash and _GameConfigScript.charge_zoom_enabled
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null and rig.has_method("set_charge_zoom"):
+		rig.call("set_charge_zoom", on)
 
 
 ## ⏱ Overcharge fizzle — the charge was held past the grace window. Waste
 ## the slash, hide the arrow, and lock all charging for OVERCHARGE_LOCKOUT
 ## seconds (handled by the COOLDOWN state ticking _cooldown_t down).
 func _fizzle_charge() -> void:
+	_apply_charge_zoom(false)
 	_charge_t = 0.0
 	_overcharge_t = 0.0
 	_cooldown_t = data.overcharge_lockout
@@ -482,11 +548,21 @@ func _fire_slash() -> void:
 	# 돌진 속도(m/s) → 동적 대시 시간 = 거리 ÷ 속도(거리가 멀어도 체감 일정).
 	_dash_dur = max(slash_range / max(data.slash_dash_speed, 0.01), 0.02)
 	_set_state(State.DASHING)
+	# 일섬 대시 동안 카메라가 PC 에 바짝 붙어 "함께 이동"하도록 추적 속도를 끌어올린다
+	# (공격 후 따라붙는 랙이 아니라, 공격 중 같이 움직이는 이동감).
+	var cam_rig := get_tree().get_first_node_in_group("camera_rig")
+	if cam_rig != null and cam_rig.has_method("follow_boost"):
+		cam_rig.call("follow_boost", data.slash_cam_follow_time, data.slash_cam_follow_mult)
+	# 도착 지점 가시성 — 잠깐 줌아웃해 착지 주변(적)을 넓게 보여준다.
+	if cam_rig != null and cam_rig.has_method("zoom_punch"):
+		cam_rig.call("zoom_punch", data.slash_cam_zoom_scale, data.slash_cam_zoom_time)
+	if cam_rig != null and cam_rig.has_method("set_charge_zoom"):
+		cam_rig.call("set_charge_zoom", false)  # 차징 줌아웃 해제(발사로 전환)
 	if _aim_arrow != null:
 		_aim_arrow.hide_arrow()
+	# 일섬은 _aim_dir(마우스)로 나가지만, 캐릭터 스프라이트 방향은 WASD 그대로 둔다.
 	if _sprite_rig != null:
 		_sprite_rig.set_state(SpriteRig.State.ATTACK)
-		_sprite_rig.set_facing(_aim_dir.x)
 	# Spawn slash trail at the start of the dash.
 	_spawn_slash_attack(_dash_start, _dash_end, ext, burst_active)
 	# ⏱ Perfect-charge zen reward — full charge (>= 0.9 of max) feeds
@@ -513,6 +589,8 @@ func _update_dash(delta: float) -> void:
 		_dust_emitter.emitting = true
 	if t >= 1.0:
 		_cooldown_t = data.slash_cooldown
+		# 착지 회복 유예 — 도착 지점에서 적 충돌/탄에 즉시 피격되는 불쾌감 방지.
+		_slash_grace_t = max(_slash_grace_t, data.slash_post_grace)
 		slash_finished.emit()
 		_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
 		# Multistrike — schedule a second hit-trail along the same line,
@@ -575,7 +653,7 @@ func _mouse_to_world_dir() -> Vector3:
 		return _aim_dir
 	return dir.normalized()
 
-func take_hit(amount: int = 1) -> void:
+func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 	# ⏱ Perfect dodge — an attack arrived during the early window of an
 	# evade. Reward fires BEFORE the is_invincible early-return swallows
 	# the hit. Latched per evade so multiple attacks only reward once.
@@ -624,13 +702,15 @@ func take_hit(amount: int = 1) -> void:
 	# 4안 — 추가 피격 플래시(머티리얼 over-bright) + 주변 적 넉백.
 	if _sprite_rig != null and _sprite_rig.has_method("flash"):
 		_sprite_rig.call("flash", 0.2)
-	_knockback_nearby_enemies()
+	# 접촉 피해(모드2)는 넉백을 일으키지 않는다(서로 안 밀림). 그 외 피격은 기존대로.
+	if do_knockback:
+		_knockback_nearby_enemies()
 	var rig := get_tree().get_first_node_in_group("camera_rig")
 	if rig != null and rig.has_method("shake"):
 		rig.call("shake", 0.1, 0.2)
 
 func is_invincible() -> bool:
-	return _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0
+	return _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0
 
 ## --- Shift evade dash ---
 
@@ -664,7 +744,7 @@ func _check_evade_start() -> void:
 	_perfect_dodge_fired = false  # ⏱ fresh evade — re-arm the perfect-dodge reward
 	_set_state(State.EVADING)
 	if _sprite_rig != null:
-		_sprite_rig.set_facing(dir.x)
+		_sprite_rig.set_facing_vec(dir)
 	# Nudge the camera so it trails the dash briefly.
 	var rig := get_tree().get_first_node_in_group("camera_rig")
 	if rig != null and rig.has_method("nudge_lag"):
@@ -755,8 +835,7 @@ func _do_melee_swing() -> void:
 	dir = dir.normalized()
 	_aim_dir = dir
 	_melee_cd = data.melee_cooldown
-	if _sprite_rig != null:
-		_sprite_rig.set_facing(dir.x)
+	# 근접 스윙은 dir(마우스)로 나가지만, 캐릭터 방향은 WASD 그대로 둔다.
 	var half := deg_to_rad(data.melee_angle_deg) * 0.5
 	var r2 := data.melee_range * data.melee_range
 	var hit_any := false
@@ -853,6 +932,27 @@ func _knockback_nearby_enemies() -> void:
 			var spd: float = data.knockback_force * (1.0 - d / data.knockback_radius)
 			if e.has_method("apply_knockback"):
 				e.call("apply_knockback", to_e.normalized(), spd)
+
+
+## 게임 시작2 — NPC 몸에 닿으면 HP 감소(서로 밀림 없음 · take_hit 의 iframe 이 쿨다운).
+## 접촉 피해는 넉백을 일으키지 않는다(do_knockback=false). 무적/대시/회피 중엔 스킵.
+func _check_contact_damage() -> void:
+	# ESC 토글 — 충돌 피해 OFF 면 접촉 피해 없음.
+	if not _GameConfigScript.contact_damage_enabled:
+		return
+	if is_invincible():
+		return
+	var r2: float = data.contact_radius * data.contact_radius
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if "_dead" in e and e._dead:
+			continue
+		var to_e: Vector3 = (e as Node3D).global_position - global_position
+		to_e.y = 0.0
+		if to_e.length_squared() <= r2:
+			take_hit(data.contact_damage, false)
+			return
 
 
 # ══════════════ 4안 — HUD getters (Main reads these) ══════════════

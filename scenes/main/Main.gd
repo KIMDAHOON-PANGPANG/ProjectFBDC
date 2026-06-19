@@ -86,6 +86,7 @@ var _world_env: WorldEnvironment
 const _ExpSystemScript := preload("res://scripts/managers/ExpSystem.gd")
 const _UpgradeSystemScript := preload("res://scripts/managers/UpgradeSystem.gd")
 const _WaveManagerScript := preload("res://scripts/managers/WaveManager.gd")
+const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd")
 const _SaveSystemScript := preload("res://scripts/managers/SaveSystem.gd")
 const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
@@ -160,11 +161,24 @@ func _warm_placeholder_cache() -> void:
 	# immediate wave here. WaveManager fires t=0 "base" milestone on its
 	# first process tick to spawn the initial set.
 
+# ── ESC 개발 오버레이 / 웨이브 비율 프리셋 ──
+const _PRESET_RANGED: float = 0.90  # 원거리 프리셋의 원거리 비율
+const _PRESET_MINOR: float = 0.05   # 비주력 종류(근접 프리셋의 원거리 / 원거리 프리셋의 근접)
+const _PRESET_ELITE: float = 0.05   # 엘리트 비율(공통)
+## 0=곡선(기본) · 1=근접 웨이브 · 2=원거리 웨이브. ESC 패널에서 토글.
+var _wave_preset: int = 0
+var _dev_overlay: CanvasLayer
+var _dev_preset_label: Label
+
 func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 		return
 	_update_hud()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_toggle_dev_overlay()
 
 func _build_environment() -> void:
 	var we := WorldEnvironment.new()
@@ -631,6 +645,7 @@ func _build_chapter_systems() -> void:
 	_wave_mgr.count_alive_cb   = Callable(self, "_count_alive_mobs")
 	_wave_mgr.spawn_elites_cb  = Callable(self, "_chapter_spawn_elites")
 	_wave_mgr.spawn_boss_cb    = Callable(self, "_chapter_spawn_boss")
+	_apply_wave_preset()  # ESC 프리셋(원거리=인원 1/10) 적용 — 리로드 너머 GameConfig 로 유지.
 	# Inject the active chapter's WaveCurve. WaveManager's _process gates
 	# on `curve != null` so a missing setup just stalls the spawner — the
 	# push_warning gives the editor configuration error a single chance
@@ -678,6 +693,10 @@ func _build_chapter_systems() -> void:
 ## uses LV2 data once `lv >= 2`. Ranged mobs stay LV1 (no LV2 ranged
 ## data resource yet).
 func _request_spawn(lv: int) -> void:
+	# ESC 비율 프리셋이 켜져 있으면 곡선 대신 프리셋 비율(근접/원거리/엘리트)로 스폰.
+	if _wave_preset != 0:
+		_request_spawn_preset(lv)
+		return
 	var rr: float = 0.0
 	var lr: float = 0.0
 	if _wave_mgr != null:
@@ -690,13 +709,164 @@ func _request_spawn(lv: int) -> void:
 	if roll < rr:
 		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
 		return
-	if leaper_enemy_scene != null and roll < rr + lr:
+	# 리퍼는 동시 생존 3마리까지만 — 이미 3마리면 스폰 금지(일반 근접으로 대체).
+	if leaper_enemy_scene != null and roll < rr + lr and _alive_leaper_count() < 3:
 		_spawn_one(leaper_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 		return
 	if lv >= 2:
 		_spawn_one_lv2(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 	else:
 		_spawn_one(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
+
+
+## 살아있는(죽는 중 제외) 리퍼 수 — 동시 3마리 스폰 캡("leapers" 그룹 질의).
+func _alive_leaper_count() -> int:
+	var n: int = 0
+	for e in get_tree().get_nodes_in_group("leapers"):
+		if is_instance_valid(e) and not ("_dead" in e and e._dead):
+			n += 1
+	return n
+
+
+## ESC 패널 프리셋 스폰 — 근접/원거리/엘리트 비율(+엘리트 랜덤 효과 1~4).
+func _request_spawn_preset(lv: int) -> void:
+	var ranged_p: float = _PRESET_RANGED if _wave_preset == 2 else _PRESET_MINOR
+	var roll: float = randf()
+	if ranged_enemy_scene != null and roll < ranged_p:
+		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
+		return
+	if elite_enemy_scene != null and roll < ranged_p + _PRESET_ELITE:
+		_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, randi_range(1, 4))
+		return
+	if lv >= 2:
+		_spawn_one_lv2(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
+	else:
+		_spawn_one(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
+
+
+# ── ESC 개발 오버레이 (웨이브 비율 프리셋) ──
+
+func _toggle_dev_overlay() -> void:
+	if _dev_overlay == null:
+		return
+	_dev_overlay.visible = not _dev_overlay.visible
+
+func _set_wave_preset(p: int) -> void:
+	# 프리셋 선택 = 게임 초기화 후 그 프리셋으로 재세팅(요청). GameConfig 에 저장해
+	# 씬 리로드 너머로 유지 → 리로드된 Main 이 _apply_wave_preset 으로 읽어 적용한다.
+	_GameConfigScript.wave_preset = p
+	get_tree().reload_current_scene()
+
+## GameConfig 의 프리셋을 현재 인스턴스에 반영 — _wave_mgr(인원 배수) + 오버레이 라벨.
+## wave_mgr 생성 직후 + 오버레이 빌드 시 호출(둘 다 idempotent — 순서 무관).
+func _apply_wave_preset() -> void:
+	_wave_preset = _GameConfigScript.wave_preset
+	if _wave_mgr != null:
+		if _wave_preset == 2:
+			_wave_mgr.target_mult = 0.1   # 원거리 웨이브 = 인원 1/10
+			_wave_mgr.min_target = 3       # 너무 적지 않게 바닥 3
+		else:
+			_wave_mgr.target_mult = 1.0
+			_wave_mgr.min_target = 0
+	if _dev_preset_label != null:
+		var t: String = "기본(곡선)"
+		if _wave_preset == 1:
+			t = "근접 웨이브 (근90·원5·엘5)"
+		elif _wave_preset == 2:
+			t = "원거리 웨이브 (원90·근5·엘5 · 수 1/10)"
+		_dev_preset_label.text = "현재: " + t
+
+func _build_dev_overlay() -> void:
+	_dev_overlay = CanvasLayer.new()
+	_dev_overlay.name = "DevOverlay"
+	_dev_overlay.layer = 60
+	_dev_overlay.visible = false
+	add_child(_dev_overlay)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.position = Vector2(20, 90)
+	_dev_overlay.add_child(vbox)
+	var title := Label.new()
+	title.text = "── 웨이브 에디터 (ESC 로 닫기) ──"
+	title.add_theme_color_override("font_color", Color(1, 0.95, 0.6))
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	title.add_theme_constant_override("outline_size", 4)
+	title.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(title)
+	_dev_preset_label = Label.new()
+	_dev_preset_label.text = "현재: 기본(곡선)"
+	_dev_preset_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1))
+	_dev_preset_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_dev_preset_label.add_theme_constant_override("outline_size", 4)
+	_dev_preset_label.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(_dev_preset_label)
+	var defs: Array = [
+		{"t": "근접 웨이브 (근90·원5·엘5)", "p": 1},
+		{"t": "원거리 웨이브 (원90·근5·엘5 · 수 1/10)", "p": 2},
+		{"t": "기본 (웨이브 곡선)", "p": 0},
+	]
+	for d in defs:
+		vbox.add_child(_make_dev_button(d["t"], d["p"]))
+	_apply_wave_preset()  # 리로드 후 유지된 프리셋을 라벨에 반영.
+	# ── 옵션 토글(즉시 반영, 리로드 없음) ──
+	var opt := Label.new()
+	opt.text = "── 옵션 (토글) ──"
+	opt.add_theme_color_override("font_color", Color(1, 0.95, 0.6))
+	opt.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	opt.add_theme_constant_override("outline_size", 4)
+	opt.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(opt)
+	vbox.add_child(_make_toggle_button("LB 차징 줌아웃", "charge_zoom"))
+	vbox.add_child(_make_toggle_button("몬스터 충돌 피해", "contact_dmg"))
+
+func _make_dev_button(label: String, preset: int) -> Button:
+	var btn := Button.new()
+	btn.text = label
+	_style_dev_btn(btn)
+	btn.pressed.connect(_set_wave_preset.bind(preset))
+	return btn
+
+func _style_dev_btn(btn: Button) -> void:
+	btn.custom_minimum_size = Vector2(300, 40)
+	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_color_override("font_color", Color(1, 1, 1))
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.18, 0.18, 0.22, 0.95)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	btn.add_theme_stylebox_override("normal", style)
+	var hover := style.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.28, 0.32, 0.42, 0.98)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", hover)
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+
+## ESC 옵션 토글 버튼(ON/OFF) — GameConfig 플래그를 즉시 토글(리로드 없이 반영).
+func _make_toggle_button(label: String, key: String) -> Button:
+	var btn := Button.new()
+	_style_dev_btn(btn)
+	_refresh_toggle_text(btn, label, key)
+	btn.pressed.connect(_on_toggle.bind(btn, label, key))
+	return btn
+
+func _on_toggle(btn: Button, label: String, key: String) -> void:
+	if key == "charge_zoom":
+		_GameConfigScript.charge_zoom_enabled = not _GameConfigScript.charge_zoom_enabled
+	elif key == "contact_dmg":
+		_GameConfigScript.contact_damage_enabled = not _GameConfigScript.contact_damage_enabled
+	_refresh_toggle_text(btn, label, key)
+
+func _refresh_toggle_text(btn: Button, label: String, key: String) -> void:
+	var on: bool = false
+	if key == "charge_zoom":
+		on = _GameConfigScript.charge_zoom_enabled
+	elif key == "contact_dmg":
+		on = _GameConfigScript.contact_damage_enabled
+	btn.text = label + ": " + ("ON" if on else "OFF")
+
 
 ## Live mob count consumed by WaveManager for the deficit calculation.
 ## Excludes the boss (its own `boss` group) so jam keeps spawning around it.
@@ -869,6 +1039,7 @@ func _advance_chapter() -> void:
 	_wave_mgr.count_alive_cb   = Callable(self, "_count_alive_mobs")
 	_wave_mgr.spawn_elites_cb  = Callable(self, "_chapter_spawn_elites")
 	_wave_mgr.spawn_boss_cb    = Callable(self, "_chapter_spawn_boss")
+	_apply_wave_preset()  # ESC 프리셋 — 챕터 전환 후에도 유지.
 	var curve_idx: int = _current_chapter - 1
 	if curve_idx >= 0 and curve_idx < chapter_curves.size() and chapter_curves[curve_idx] != null:
 		_wave_mgr.set_curve(chapter_curves[curve_idx])
@@ -1045,6 +1216,7 @@ func _build_hud() -> void:
 	vbox.add_child(_zen_label)
 
 	_build_slash_gauge(canvas)
+	_build_dev_overlay()
 
 ## 일섬 게이지 바 — 화면 하단 중앙. 0~100% 로 차오르고, 100% 도달 시 골드로
 ## 바뀌며 "READY" 표기 (우클릭으로 일섬 발동). `_update_hud` 가 매 프레임

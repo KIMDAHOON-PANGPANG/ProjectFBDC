@@ -19,6 +19,10 @@ const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/range
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 ## 스무스 넉백 컴포넌트(피격/피탄 시 부드럽게 밀림).
 const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
+## 전체 원거리 적 중 동시에 사격(텔레그래프)할 수 있는 비율 — 나머지는 추적/대기.
+const _FIRE_FRACTION: float = 0.25
+## 머리 위 HP 바(모든 몬스터 공통 — 코드 인스턴스).
+const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -46,6 +50,7 @@ func _ready() -> void:
 	_CombatDataScript.apply_to_enemy(self, "ranged")
 
 	add_to_group("enemies")
+	add_to_group("ranged_enemies")  # 동시 사격 캡(텔레그래프 회전) 계산용.
 	collision_layer = 1 << 2  # Enemy
 	collision_mask = (1 << 0) | (1 << 1)  # World + Player — PC 가 밀침(자기 빠져나감). PC 는 안 막힘.
 
@@ -59,6 +64,13 @@ func _ready() -> void:
 		_health.setup(data.max_hp)
 		_health.setup_armor(armor_max, stagger_duration)
 		_health.died.connect(_on_died)
+		# 머리 위 HP 바 — 모든 몬스터 공통(원거리). 코드 인스턴스.
+		var bar := _HpBar3DScene.instantiate()
+		if "follow_offset" in bar:
+			bar.follow_offset = Vector3(0, 1.55, 0)
+		add_child(bar)
+		if bar.has_method("attach_health"):
+			bar.call("attach_health", _health)
 
 	_player = get_tree().get_first_node_in_group("player")
 
@@ -113,11 +125,18 @@ func _physics_process(delta: float) -> void:
 	# Fire when in range and roughly facing.
 	_attack_cd -= delta
 	if not _aiming and dist <= data.ranged_attack_range and _attack_cd <= 0.0:
-		# Frustum gate: only AIM at the PC when the PC is visible.
-		# Off-screen shooters stay quiet (no AIM, no shot).
-		if _player_in_view():
+		# 가시성 게이트(PC 가 화면에 보일 때만) + 동시 사격 캡(전체 원거리의 ~25%만
+		# 동시에 쏘고 나머지는 추적/대기 — 활성 텔레그래프 수로 회전 제어).
+		if _player_in_view() and _can_fire_now():
 			_begin_aim_shot()
 			_attack_cd = data.ranged_attack_cooldown + aim_lock_duration
+
+## 동시 사격 캡 — 활성 텔레그래프(aim_lasers) 수가 전체 원거리의 _FIRE_FRACTION 미만일
+## 때만 새로 쏜다. 레이저가 곧 슬롯이라(발사 후 자동 소멸) 누수 없이 자연 회전한다.
+func _can_fire_now() -> bool:
+	var total: int = get_tree().get_nodes_in_group("ranged_enemies").size()
+	var cap: int = max(1, int(ceil(float(total) * _FIRE_FRACTION)))
+	return get_tree().get_nodes_in_group("aim_lasers").size() < cap
 
 ## Returns true if the camera rig considers the PC visible.
 ## Used to gate the AIM telegraph so off-screen archers stay quiet.

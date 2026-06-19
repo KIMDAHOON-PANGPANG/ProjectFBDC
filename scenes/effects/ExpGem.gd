@@ -13,17 +13,23 @@ extends Node3D
 
 # 자석 반경 축소(사용자 밸런스) — 사실상 붙어야 먹힘. 슬래시 대시로 젬 위를
 # 지나가며 줍는 플레이를 유도.
-@export var magnet_radius: float = 1.0
+# 자석 권역 — PC 가 다가오면 졸졸 따라붙어 빨려든다(이지인 가속 커브).
+@export var magnet_radius: float = 3.5
 @export var pickup_radius: float = 0.6
-@export var magnet_speed: float = 14.0
-## Despawn if never collected so abandoned gems don't pile up forever.
-@export var lifetime: float = 30.0
+@export var magnet_speed: float = 18.0
+## 자석 가속 램프(초) — magnet_min_speed→magnet_speed 로 이 시간에 걸쳐 이지인.
+@export var magnet_ramp: float = 0.35
+## 램프 시작 속도(졸졸 시작) — 0이면 움직이는 PC 를 못 따라가므로 최소값 유지.
+@export var magnet_min_speed: float = 3.0
+# 라이프타임 없음 — 줍기 전까진 사라지지 않는다(요청).
 
 var exp_value: int = 1
 var _player: Node3D
 var _collected: bool = false
 var _mesh: MeshInstance3D
 var _age: float = 0.0
+## 자석 권역 안에 머문 시간 — 호밍 속도 이지인 램프용.
+var _home_t: float = 0.0
 
 
 ## Set BEFORE add_child so _ready's visual build reads the right size/color.
@@ -63,9 +69,6 @@ func _process(delta: float) -> void:
 	if _collected:
 		return
 	_age += delta
-	if _age >= lifetime:
-		queue_free()
-		return
 	# Gentle bob so the gem reads as a live pickup, not ground litter.
 	if _mesh != null:
 		_mesh.position.y = 0.5 + sin(_age * 4.0) * 0.08
@@ -79,9 +82,14 @@ func _process(delta: float) -> void:
 		_collect()
 		return
 	if dist <= magnet_radius:
-		# Accelerate as it nears the PC — snappy "vacuum" feel.
-		var speed: float = magnet_speed * (1.0 - dist / magnet_radius) + 3.0
+		# 자석 권역 진입 — 호밍 시간 누적. 속도는 이지인(졸졸→빨라짐) 커브로 램프하고
+		# PC 를 매 프레임 재추적하므로, 움직이는 PC 뒤를 졸졸 따라붙어 빨려든다.
+		_home_t += delta
+		var k: float = clamp(_home_t / max(magnet_ramp, 0.0001), 0.0, 1.0)
+		var speed: float = lerp(magnet_min_speed, magnet_speed, k * k)  # ease-in
 		global_position += to_pc.normalized() * speed * delta
+	else:
+		_home_t = 0.0  # 권역 벗어나면 램프 리셋
 
 
 func _collect() -> void:

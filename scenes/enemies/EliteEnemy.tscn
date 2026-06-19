@@ -1,19 +1,12 @@
-[gd_scene load_steps=7 format=3 uid="uid://b8elite00001"]
+[gd_scene load_steps=6 format=3 uid="uid://b8elite00001"]
 
 [ext_resource type="Script" path="res://scenes/enemies/EliteEnemy.gd" id="1_elite"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
 [ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
+[ext_resource type="Texture2D" path="res://resources/enemies/BaseSkeleton.png" id="4_skel"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_elite"]
 size = Vector3(0.63, 1.05, 0.63)
-
-[sub_resource type="BoxMesh" id="BoxMesh_elite"]
-size = Vector3(0.9, 1.5, 0.9)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_elite"]
-shading_mode = 0
-albedo_color = Color(0.45, 0.25, 0.7, 1)
-roughness = 0.9
 
 [node name="EliteEnemy" type="CharacterBody3D"]
 transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
@@ -28,10 +21,13 @@ telegraph_scene = ExtResource("3_fantel")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
 shape = SubResource("BoxShape3D_elite")
 
-[node name="Visual" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
-mesh = SubResource("BoxMesh_elite")
-surface_material_override/0 = SubResource("StandardMaterial3D_elite")
+[node name="Visual" type="Sprite3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+pixel_size = 0.024
+billboard = 1
+texture_filter = 0
+alpha_cut = 1
+texture = ExtResource("4_skel")
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")

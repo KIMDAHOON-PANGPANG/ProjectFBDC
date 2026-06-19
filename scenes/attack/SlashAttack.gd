@@ -115,11 +115,14 @@ func _on_area_entered(area: Area3D) -> void:
 	_try_kill(area)
 
 func _try_kill(node: Node) -> void:
-	# 적 발사체는 격추만 한다(적 처치/보스 데미지로 치지 않음 — hit_enemy 미발생).
+	# 적 발사체 — 격추 대신 반사(되받아치기). reflect 가 있으면 역방향으로 되돌려
+	# 적을 맞히고, 없으면 기존처럼 격추. 어느 쪽이든 적 처치/보스 데미지로 치지 않음.
 	var pr := node
 	while pr != null:
 		if pr.is_in_group("enemy_projectiles"):
-			if pr.has_method("take_hit"):
+			if pr.has_method("reflect"):
+				pr.call("reflect")
+			elif pr.has_method("take_hit"):
 				pr.call("take_hit")
 			return
 		pr = pr.get_parent()

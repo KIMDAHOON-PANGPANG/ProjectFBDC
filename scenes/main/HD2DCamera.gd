@@ -21,6 +21,9 @@ extends Node3D
 @export_group("Follow")
 @export var follow_speed_xz: float = 7.0
 @export var follow_speed_y: float = 5.0
+## LB(모드2 일섬) 차징 동안 카메라가 서서히 빠지는 줌아웃 — 최대 배수(cap)와 속도(/초).
+@export var charge_zoom_max: float = 1.4
+@export var charge_zoom_rate: float = 2.0
 
 var _cam: Camera3D
 var _target: Node3D
@@ -28,6 +31,11 @@ var _target: Node3D
 # producing a brief "camera trails the player" feel after big PC actions.
 var _lag_timer: float = 0.0
 var _lag_factor: float = 1.0
+## Follow-boost state. While >0 the xz follow speed is multiplied UP by
+## `_boost_mult` (>1) so the camera sticks tight to the PC and moves WITH it
+## — used by the slash dash for a "공격과 함께 이동" feel (not a post-action lag).
+var _boost_timer: float = 0.0
+var _boost_mult: float = 1.0
 var _base_follow_xz: float
 # Shake state — Camera3D is offset by a random vector that decays toward 0
 # over `_shake_total` seconds. Pure visual; doesn't move the rig itself.
@@ -39,6 +47,16 @@ var _shake_amp: float = 0.0
 # by shake_curve(...). shake(...) resets to false for the linear feel.
 var _shake_use_curve: bool = false
 var _cam_base_origin: Vector3
+# Zoom-punch state — temporarily scales the camera's local offset (dolly out,
+# >1) then eases back over `_zoom_total` seconds. Used by the slash to widen the
+# view at the landing so the destination enemies are readable.
+var _zoom_t: float = 0.0
+var _zoom_total: float = 0.0
+var _zoom_scale_target: float = 1.0
+# LB 차징 줌아웃(ESC 토글) — active 동안 base origin 을 charge_zoom_max 로 서서히
+# 밀어냈다가(최대값 cap), 해제 시 1.0 으로 복귀. zoom_punch 와 max 로 합쳐진다.
+var _charge_zoom: float = 1.0
+var _charge_zoom_active: bool = false
 ## 히트스탑 재진입 가드(겹쳐서 Engine.time_scale 이 꼬이지 않게).
 var _hitstop_active: bool = false
 
@@ -83,6 +101,12 @@ func _process(delta: float) -> void:
 		xz_speed = _base_follow_xz * _lag_factor
 		if _lag_timer <= 0.0:
 			_lag_factor = 1.0
+	# 일섬 대시 — 추적 속도를 끌어올려 카메라가 PC 에 바짝 붙어 함께 이동.
+	if _boost_timer > 0.0:
+		_boost_timer -= delta
+		xz_speed = max(xz_speed, _base_follow_xz * _boost_mult)
+		if _boost_timer <= 0.0:
+			_boost_mult = 1.0
 	var tp := _target.global_position
 	var p := global_position
 	var ax: float = clamp(xz_speed * delta, 0.0, 1.0)
@@ -91,28 +115,41 @@ func _process(delta: float) -> void:
 	p.z = lerp(p.z, tp.z, ax)
 	p.y = lerp(p.y, tp.y, ay)
 	global_position = p
-	_update_shake(delta)
+	_update_cam_local(delta)
 
-## Apply a decaying random offset to the Camera3D's local position so the
-## image shakes without disturbing the follow rig. Decay is linear by
-## default; shake_curve(...) flips us into an ease-out (pow(decay, 2))
-## profile that hits hard and falls off fast.
-func _update_shake(delta: float) -> void:
+## Combined camera-local update: zoom-punch (dolly out, eased back) baked into
+## the base origin, plus a decaying random shake offset on top. Both leave the
+## follow rig untouched — only the Camera3D's local position moves. Shake decay
+## is linear by default; shake_curve(...) flips it to ease-out (pow(decay, 2)).
+func _update_cam_local(delta: float) -> void:
 	if _cam == null:
 		return
+	# Zoom punch — base origin scaled out by an eased factor that returns to 1.0.
+	var zoom: float = 1.0
+	if _zoom_t > 0.0:
+		_zoom_t -= delta
+		var zf: float = clamp(_zoom_t / max(_zoom_total, 0.0001), 0.0, 1.0)
+		zoom = lerp(1.0, _zoom_scale_target, zf)
+		if _zoom_t <= 0.0:
+			_zoom_scale_target = 1.0
+	# LB 차징 줌아웃(토글) — active 동안 charge_zoom_max 로 서서히 빠졌다가 복귀.
+	var ct: float = charge_zoom_max if _charge_zoom_active else 1.0
+	_charge_zoom = move_toward(_charge_zoom, ct, charge_zoom_rate * delta)
+	zoom = max(zoom, _charge_zoom)
+	var base: Vector3 = _cam_base_origin * zoom
+	# Shake offset on top of the (possibly zoomed) base.
+	var off := Vector3.ZERO
 	if _shake_t > 0.0:
 		_shake_t -= delta
 		var decay: float = clamp(_shake_t / max(_shake_total, 0.0001), 0.0, 1.0)
 		if _shake_use_curve:
 			decay = pow(decay, 2.0)
-		var off := Vector3(
+		off = Vector3(
 			randf_range(-1.0, 1.0) * _shake_amp * decay,
 			randf_range(-1.0, 1.0) * _shake_amp * decay * 0.5,
 			randf_range(-1.0, 1.0) * _shake_amp * decay,
 		)
-		_cam.position = _cam_base_origin + off
-		if _shake_t <= 0.0:
-			_cam.position = _cam_base_origin
+	_cam.position = base + off
 
 ## Trigger a brief camera shake. `amplitude` is in world units (mild ≈ 0.08,
 ## sharp ≈ 0.25, screen-rattle ≈ 0.5). `duration` in seconds.
@@ -140,6 +177,26 @@ func shake_curve(amplitude: float, duration: float) -> void:
 func nudge_lag(duration: float, factor: float) -> void:
 	_lag_timer = max(_lag_timer, duration)
 	_lag_factor = clamp(factor, 0.05, 1.0)
+
+## 일섬 대시처럼 "공격과 함께 카메라가 같이 이동"하는 느낌을 주려고, duration 동안
+## xz 추적 속도를 mult 배(>1)로 끌어올려 PC 에 바짝 붙여 함께 움직이게 한다. 끝나면 복귀.
+func follow_boost(duration: float, mult: float) -> void:
+	_boost_timer = max(_boost_timer, duration)
+	_boost_mult = max(_boost_mult, max(mult, 1.0))
+
+## 일섬 직후 도착 지점 가시성 — 카메라를 잠깐 뒤로 빼(줌아웃) 착지 주변을 넓게
+## 보여준다. scale(>1)배로 로컬 오프셋을 늘렸다가 duration 동안 1.0 으로 복귀.
+func zoom_punch(scale: float, duration: float) -> void:
+	if duration <= 0.0:
+		return
+	_zoom_scale_target = max(_zoom_scale_target, max(scale, 1.0))
+	_zoom_t = max(_zoom_t, duration)
+	_zoom_total = _zoom_t
+
+## LB 차징 줌아웃 토글 — active=true 면 매 프레임 charge_zoom_max 로 서서히 빠지고,
+## false 면 1.0 으로 복귀(_update_cam_local 의 move_toward). Player 가 차징 중 호출.
+func set_charge_zoom(active: bool) -> void:
+	_charge_zoom_active = active
 
 ## 극소량 히트스탑 — Engine.time_scale 을 잠깐 낮췄다 복구해 타격감(역경직)을 준다.
 ## BulletTime(per-enemy time_scale_mult)과 독립이라 충돌하지 않는다. 복구 타이머는

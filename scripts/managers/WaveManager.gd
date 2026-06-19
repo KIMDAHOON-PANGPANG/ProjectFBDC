@@ -35,6 +35,11 @@ var _tick_accum: float = 0.0
 var _elites_fired: bool = false
 var _boss_fired: bool = false
 
+## 웨이브 인원 배수(ESC 비율 프리셋). 1.0=곡선 그대로. 원거리 프리셋이 0.1 로 줄인다.
+var target_mult: float = 1.0
+## target_mult 적용 시 최소 동시 인원 바닥(너무 적지 않게 — 요청: "너무 적지도 많지도").
+var min_target: int = 0
+
 
 ## Inject the active chapter's curve. Resets all run-state so the same
 ## WaveManager node can be reused if Main wants to switch chapters
@@ -82,6 +87,9 @@ func _maintain_population() -> void:
 	if not request_spawn_cb.is_valid() or not count_alive_cb.is_valid():
 		return
 	var target: int = curve.target_for_elapsed(_elapsed)
+	# 웨이브 비율 프리셋(ESC 패널)이 인원 배수를 걸 수 있다 — 원거리 웨이브는 1/10.
+	if not is_equal_approx(target_mult, 1.0):
+		target = max(min_target, int(ceil(float(target) * target_mult)))
 	var lv: int = curve.lv_for_elapsed(_elapsed)
 	var alive: int = count_alive_cb.call()
 	var deficit: int = target - alive

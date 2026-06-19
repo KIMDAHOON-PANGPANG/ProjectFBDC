@@ -101,3 +101,13 @@ func armor_frac() -> float:
 func clear_stagger() -> void:
 	_staggered = false
 	_stagger_t = 0.0
+
+## 외부(마취 비도 AOE)에서 강제 경직(스턴) — 아머와 무관하게 duration 초 정지.
+## 적의 _physics_process 가 is_staggered() 로 멈추고 tick_stagger 가 타이머를 깎는다.
+## 기존 경직보다 길면 연장(짧으면 유지). 사망한 대상엔 무효.
+func force_stagger(duration: float) -> void:
+	if hp <= 0 or duration <= 0.0:
+		return
+	_staggered = true
+	_stagger_t = max(_stagger_t, duration)
+	staggered.emit(duration)

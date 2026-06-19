@@ -21,6 +21,12 @@ extends Resource
 ## short slashes without changing the max-range commitment.
 @export var max_charge_time: float = 0.72
 
+## 일섬 충전(공격 길이) 속도 배수. 1.0 = 기본, 0.5 = 50% 느림(요청 기본값).
+## `_update_aim` 에서 _charge_t 누적(delta)에 곱한다 — 작을수록 길이가 천천히 차오른다.
+## 실제 풀차징 시간 = max_charge_time / charge_speed_mult (예: 0.72 / 0.5 = 1.44s).
+## LB 롱프레스(모드2 즉발 일섬) · RB 차징(모드1) 양쪽 충전에 공통 적용.
+@export var charge_speed_mult: float = 0.5
+
 ## Width of the slash hitbox along the path (in world units).
 @export var slash_width: float = 1.4
 
@@ -44,6 +50,20 @@ extends Resource
 ## 일섬 타격 범위 (m) — x=폭(좌우), y=높이(상하), z=전방 길이 가산(돌진 거리에
 ## 더해지는 추가 판정 길이; 0 이면 돌진 경로 그대로). 박스 판정 크기.
 @export var slash_hit_extents: Vector3 = Vector3(1.4, 1.0, 0.0)
+## 일섬 대시 시 카메라가 "공격과 함께 같이 이동"하도록 — follow_boost(시간, 배수).
+## HD2DCamera follow_speed_xz 에 배수(>1)를 곱해 대시 동안 PC 에 바짝 붙여 함께
+## 움직인다(공격 후 따라붙는 느낌이 아니라 공격 중 이동감). mult↑ 일수록 더 밀착.
+@export var slash_cam_follow_time: float = 0.25
+@export var slash_cam_follow_mult: float = 3.0
+
+# ── 접촉 피해 (게임 시작2 전용) ──
+# 모드2 는 PC 레이어를 비워 NPC 와 서로 밀리지 않는다(Player._ready). 대신 NPC 몸에
+# 닿으면 아래 값으로 HP 가 깎여 "닿으면 아프다"는 위협을 만든다.
+@export_group("Contact Damage (게임 시작2)")
+## NPC 몸과 접촉 시 HP 감소량. 피격 iframe(hit_iframe)이 연속 피해 쿨다운 역할.
+@export var contact_damage: int = 1
+## 접촉 판정 반경(m, PC 중심↔적 중심). PC 캡슐(≈0.5) + 적 캡슐 근사.
+@export var contact_radius: float = 0.95
 
 @export_group("Evade Dash")
 ## Distance covered by a Shift-dash, in world units. (CSV: evade_distance)
@@ -117,8 +137,15 @@ extends Resource
 # CombatData(pc_combat.json) 가 이 값들을 덮어쓴다. 기본값은 기존 코드 상수와
 # 동일하므로 JSON/로더가 없어도 동작 불변.
 @export_group("Combat Tuning (이관)")
-## 피격 후 무적 시간(초). 기존 Player.HIT_IFRAME.
-@export var hit_iframe: float = 0.5
+## 피격 후 무적 시간(초). 요청: 1초. 이 동안 플래시 머티리얼 깜빡임으로 무적 표시.
+@export var hit_iframe: float = 1.0
+## 일섬(대시) 직후 짧은 회복 무적(초) — 착지 지점에서 적 충돌/탄에 즉시 피격되는
+## 불쾌감을 막는다. is_invincible 에 포함(접촉피해/피탄 공통). 0 = 끔.
+@export var slash_post_grace: float = 0.4
+## 일섬 직후 도착 지점 가시성 — 카메라를 잠깐 뒤로 빼(줌아웃) 착지 주변을 넓게 보여준다.
+## scale=거리 배수(>1, 1.18=18% 줌아웃), time=유지 시간(초). HD2DCamera.zoom_punch.
+@export var slash_cam_zoom_scale: float = 1.18
+@export var slash_cam_zoom_time: float = 0.45
 ## 피격/피탄 넉백 — 반경(AOE) / 최대 밀침 속도(유닛/초). 적의 Knockback 컴포넌트가
 ## 이 속도로 밀려난 뒤 부드럽게(스무스) 감쇠하며 멈춘다. (예전: 즉시 위치 이동)
 @export var knockback_radius: float = 4.0
@@ -159,5 +186,21 @@ extends Resource
 @export var heat_decay_delay: float = 4.0
 ## 지수 감소 계수 k (per second). H *= e^(-k·dt). 클수록 빨리 식음.
 @export var heat_decay_rate: float = 1.0
+
+# ── 마취 비도 (Tranq Dart) — "게임 시작 2" 우클릭(RMB). 곡사로 날아가 착탄 범위
+# 안의 적을 스턴(마취)시킨다. 하데스 캐스트(1/1)식 — 쿨다운으로 충전 회복. ──
+@export_group("Tranq Dart (마취 비도 · 게임 시작2 RMB)")
+## 적 마취(스턴) 지속 시간(초). 범위 내 모든 적이 이 시간만큼 정지.
+@export var tranq_stun_duration: float = 3.0
+## 재사용 대기(초) — 1/1 충전이 회복되는 시간.
+@export var tranq_cooldown: float = 6.0
+## 착탄 범위 반경(m) — 이 안의 적이 스턴.
+@export var tranq_radius: float = 3.0
+## 곡사 사거리(m) — 커서 방향으로 이만큼 떨어진 지점에 떨어진다.
+@export var tranq_range: float = 9.0
+## 곡사 포물선 정점 높이(m).
+@export var tranq_arc_height: float = 3.5
+## 비행 시간(초) — 던져서 착탄까지.
+@export var tranq_travel_time: float = 0.6
 
 @export var visuals: CharacterVisuals

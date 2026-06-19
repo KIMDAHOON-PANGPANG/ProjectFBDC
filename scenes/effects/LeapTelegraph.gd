@@ -17,6 +17,9 @@ extends Node3D
 @export var zone_color: Color = Color(0.92, 0.15, 0.15, 0.34)
 @export var fill_color: Color = Color(1.0, 0.32, 0.2, 0.55)
 @export var ground_y_offset: float = 0.05
+## 슬램(내려찍기) 카메라 쉐이크 — 강력한 타격 연출. 일반 스윙(0.04)보다 크게.
+@export var shake_amp: float = 0.22
+@export var shake_dur: float = 0.35
 
 var _zone: MeshInstance3D
 var _fill: MeshInstance3D
@@ -98,6 +101,10 @@ func _slam() -> void:
 			d.y = 0.0
 			if d.length() <= radius:
 				pc.call("take_hit", damage)
+		# 강력한 내려찍기 — 카메라 쉐이크(100% 차오름 = 착지 슬램 순간).
+		var rig := tree.get_first_node_in_group("camera_rig")
+		if rig != null and rig.has_method("shake"):
+			rig.call("shake", shake_amp, shake_dur)
 	# 슬램 플래시 — 잠깐 밝게 부풀렸다 페이드.
 	if _fill_mat != null:
 		_fill_mat.albedo_color = Color(1.0, 0.95, 0.85, 0.85)

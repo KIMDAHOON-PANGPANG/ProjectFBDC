@@ -63,7 +63,7 @@ var _dead: bool = false
 ## rooted and prevents a second telegraph stacking on the first.
 var _attacking: bool = false
 var _label: Label3D
-var _mesh: MeshInstance3D
+var _sprite: Sprite3D
 ## 스무스 넉백 상태(피격/피탄 시 밀림).
 var _kb = _KnockbackScript.new()
 
@@ -102,17 +102,17 @@ func _ready() -> void:
 		_label.text = str(max_hp)
 		_label.modulate = _color_for_type(effect_type)
 
-	_mesh = get_node_or_null(mesh_path) as MeshInstance3D
-	# Sub-resource materials in .tscn are shared across instances by default.
-	# Duplicate so per-enemy flashes and death fades don't bleed into siblings,
-	# then tint the copy with the per-type RGB so the body matches the label.
-	if _mesh != null:
-		var src_mat := _mesh.get_surface_override_material(0)
-		if src_mat != null:
-			var mat_copy := src_mat.duplicate() as StandardMaterial3D
-			if mat_copy != null:
-				mat_copy.albedo_color = _color_for_type(effect_type)
-			_mesh.set_surface_override_material(0, mat_copy)
+	# 해골 스프라이트 — 타입색으로 틴트(빨강/초록/파랑/노랑)해 실루엣과 라벨색을
+	# 일치시킨다. 알파 안전(d3d12): transparent + ALPHA_CUT_DISCARD + NEAREST.
+	_sprite = get_node_or_null(mesh_path) as Sprite3D
+	if _sprite != null:
+		_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_sprite.shaded = false
+		_sprite.transparent = true
+		_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		_sprite.alpha_scissor_threshold = 0.5
+		_sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_sprite.modulate = _color_for_type(effect_type)
 
 	_player = get_tree().get_first_node_in_group("player")
 
@@ -226,19 +226,16 @@ func _on_damaged(_amount: int) -> void:
 	# Visual feedback per hit: brief flash on the cube.
 	# Skip on lethal hit — the death fade owns the material from there, and
 	# our flash tween would fight its alpha tween.
-	if _mesh == null or _health == null:
+	if _sprite == null or _health == null:
 		return
 	if _health.hp <= 0:
 		return
-	var mat := _mesh.get_surface_override_material(0) as StandardMaterial3D
-	if mat == null:
-		return
-	var original: Color = mat.albedo_color
-	# Preserve the current alpha in the flash color so we don't pop transparency.
-	var flash: Color = Color(1.0, 1.0, 1.0, original.a)
+	var original: Color = _sprite.modulate
+	# 과하게 밝게 번쩍 → 원래 타입색으로 복귀(알파 유지).
+	var flash: Color = Color(2.5, 2.5, 2.5, original.a)
 	var t := create_tween()
-	t.tween_property(mat, "albedo_color", flash, 0.04)
-	t.tween_property(mat, "albedo_color", original, 0.12)
+	t.tween_property(_sprite, "modulate", flash, 0.04)
+	t.tween_property(_sprite, "modulate", original, 0.12)
 
 func _on_died() -> void:
 	if _dead:
@@ -266,11 +263,8 @@ func _play_death_fade() -> void:
 	var duration := 0.45
 	var t := create_tween()
 	t.set_parallel(true)
-	if _mesh != null:
-		var mat := _mesh.get_surface_override_material(0) as StandardMaterial3D
-		if mat != null:
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			t.tween_property(mat, "albedo_color:a", 0.0, duration)
+	if _sprite != null:
+		t.tween_property(_sprite, "modulate:a", 0.0, duration)
 	if _label != null:
 		t.tween_property(_label, "modulate:a", 0.0, duration)
 	t.tween_property(self, "position:y", position.y - 0.6, duration)

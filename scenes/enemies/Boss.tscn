@@ -4,23 +4,13 @@
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
 [ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
 [ext_resource type="PackedScene" path="res://scenes/effects/BossSignal.tscn" id="4_bsignal"]
+[ext_resource type="Texture2D" path="res://resources/enemies/BaseSkeleton.png" id="5_skel"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_boss"]
 size = Vector3(2.1, 2.1, 2.1)
 
-[sub_resource type="BoxMesh" id="BoxMesh_boss"]
-size = Vector3(3.0, 3.0, 3.0)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_boss"]
-shading_mode = 0
-albedo_color = Color(0.1, 0.1, 0.12, 1)
-emission_enabled = true
-emission = Color(0.7, 0.1, 0.1, 1)
-emission_energy_multiplier = 0.3
-roughness = 0.9
-
 [node name="Boss" type="CharacterBody3D"]
-transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, 0, 0, 0)
 script = ExtResource("1_boss")
 boss_id = 1
 number_label_path = NodePath("HPLabel")
@@ -33,10 +23,13 @@ boss_signal_scene = ExtResource("4_bsignal")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 shape = SubResource("BoxShape3D_boss")
 
-[node name="Visual" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
-mesh = SubResource("BoxMesh_boss")
-surface_material_override/0 = SubResource("StandardMaterial3D_boss")
+[node name="Visual" type="Sprite3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+pixel_size = 0.075
+billboard = 1
+texture_filter = 0
+alpha_cut = 1
+texture = ExtResource("5_skel")
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")

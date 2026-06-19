@@ -1,8 +1,8 @@
-[gd_scene load_steps=13 format=3 uid="uid://b8plr000001"]
+[gd_scene load_steps=14 format=3 uid="uid://b8plr000001"]
 
 [ext_resource type="Script" path="res://scenes/player/Player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
-[ext_resource type="Script" path="res://scripts/components/SpriteRig.gd" id="3_rig"]
+[ext_resource type="Script" path="res://scenes/player/PlayerSprite.gd" id="3_rig"]
 [ext_resource type="PackedScene" path="res://scenes/ui/AimArrow.tscn" id="4_arrow"]
 [ext_resource type="PackedScene" path="res://scenes/attack/SlashAttack.tscn" id="5_slash"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HpBar3D.tscn" id="6_hpbar"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/attack/MeleeSwing.tscn" id="8_melee"]
 [ext_resource type="PackedScene" path="res://scenes/ui/DodgeStackBar3D.tscn" id="9_dodge"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HeatBar3D.tscn" id="10_heat"]
+[ext_resource type="PackedScene" path="res://scenes/attack/TranqKunai.tscn" id="11_tranq"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
@@ -26,6 +27,7 @@ aim_arrow_path = NodePath("AimArrow")
 sprite_rig_path = NodePath("SpriteRig")
 slash_attack_scene = ExtResource("5_slash")
 melee_swing_scene = ExtResource("8_melee")
+tranq_scene = ExtResource("11_tranq")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
@@ -35,16 +37,9 @@ shape = SubResource("CapsuleShape3D_player")
 script = ExtResource("2_health")
 max_hp = 3
 
-[node name="SpriteRig" type="Node3D" parent="."]
-script = ExtResource("3_rig")
-sprite_3d_path = NodePath("Sprite3D")
-fallback_color = Color(0.7, 0.85, 1, 1)
-
-[node name="Sprite3D" type="Sprite3D" parent="SpriteRig"]
+[node name="SpriteRig" type="Sprite3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
-pixel_size = 0.02
-billboard = 1
-texture_filter = 0
+script = ExtResource("3_rig")
 
 [node name="AimArrow" parent="." instance=ExtResource("4_arrow")]
 
