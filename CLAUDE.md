@@ -6,6 +6,18 @@
 
 HD-2D 핵앤슬래시 + Vampire Survivors 류 메타 진행 + 인왕(Nioh) 풍 텔레그래프 전투. 거합 사무라이 단일 캐릭터, 챕터제, 인게임은 웨이브 방식. Godot 4.7 / d3d12 / Forward Mobile.
 
+## 개발 파이프라인 (자동 적용 — 별도 언급 불필요)
+
+**코드 구현/수정 요청은 항상 `dev-pipeline`으로 처리한다.** 사용자가 명시적으로 자동화를 요청했으므로 Workflow 툴 상시 허가 상태.
+
+파이프라인: **Opus 4.8 리드**(복잡도 판정 + 설계) → **Sonnet 4.6 구현** → **Opus 4.8 교차검증**
+
+적용 대상: 파일을 수정하는 모든 구현 요청.  
+제외: 질문, 탐색/분석만, 단순 파일 읽기.
+
+에이전트: `.claude/agents/lead-programmer.md` (Opus 4.8) · `.claude/agents/programmer.md` (Sonnet 4.6)  
+스킬/스크립트: `.claude/skills/dev-pipeline/SKILL.md`
+
 ## 빠른 명령
 
 - 게임 실행 (OutGame 메인 메뉴부터): F5 또는 `godot --path . scenes/main/OutGame.tscn`
@@ -138,6 +150,8 @@ data/               — upgrades.csv(레벨업 효과 — UpgradeSystem 로더, 
 - 적/이펙트는 group 기반으로 식별: `"enemies"`, `"elites"`, `"boss"`, `"melee_enemies"`, `"player"`, `"camera_rig"`.
 - 데이터 튜닝은 `.tres` 리소스 우선. 코드 상수는 시스템 동작 자체에만.
 - 한 `.gd` 파일이 **600줄**을 넘으면 `refactor-pass` 스킬 권유 신호 (휴리스틱).
+- ⚠ **레벨업/카드 효과는 Player 의 런타임 보너스 변수**(런마다 1.0/0 으로 리셋, 예: `move_speed_mult`/`exp_magnet_mult`/`slash_size_mult`)로 구현하고 **공유 `PlayerData.tres`(또는 어떤 `.tres`)도 직접 변형 금지**. Godot 가 리소스를 캐시하므로 `player.data.X *= …` 같은 변형은 **런 간 값이 영구 누적**된다(질풍 카드 이속 누적 버그 사례). HP 처럼 인스턴스(`HealthComponent.max_hp`)에 적용하는 건 OK.
+- **Resource `@export` 제거 시 동반 정리**: 그 export 를 `.tscn`/`.tres` 가 set 하고 있으면 거기서도 그 줄을 제거(안 하면 고아 속성 → 로드 경고)하고, 값을 bridge 하는 코드(`CombatData._apply_*` 등 `obj.export = …`)도 함께 제거. 안 하면 런타임에 없는 프로퍼티 set → 에러. 죽은 코드 판정 grep 은 **문자열 `"name"`(call/has_method/connect/get) + `.tscn` 프로퍼티**까지 확인.
 
 ## 작업 환경 / 워크플로우
 
