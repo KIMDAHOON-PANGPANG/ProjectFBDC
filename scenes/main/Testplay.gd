@@ -74,9 +74,13 @@ var _exp_system: Node
 var _player_hud: Control
 const _PlayerHudScene := preload("res://scenes/ui/PlayerHud.gd")
 const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
+const _SkillViewerScript := preload("res://scenes/ui/SkillViewer.gd")
 var _world_env: WorldEnvironment
 var _elite_effect_service: Node
 var _bullet_time_service: Node
+var _skill_viewer: CanvasLayer
+## 현재 런에서 선택한 카드 목록 [{id, name}, ...].
+var _selected_cards: Array = []
 
 func _ready() -> void:
 	_warm_placeholder_cache()
@@ -283,6 +287,10 @@ func award_exp_for_kill(enemy: Node) -> void:
 	# 4안 — 처치 시 일섬 게이지 (mirror).
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
 		_player.call("gain_gauge_on_kill")
+	# 잡몹 처치 시 열기 -5(엘리트/보스 제외) — Main 미러.
+	var is_minor: bool = not (enemy.is_in_group("elites") or enemy.is_in_group("boss"))
+	if is_minor and _player != null and is_instance_valid(_player) and _player.has_method("add_heat"):
+		_player.call("add_heat", -5.0)
 
 
 func _drop_exp_gem(enemy: Node, value: int) -> void:
@@ -375,6 +383,12 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 	# 레벨업 직후 — 자기 중심 원형으로 적을 약하게 밀어낸다(피해 없음) + 링 연출.
 	if _player != null and is_instance_valid(_player) and _player.has_method("levelup_pushback"):
 		_player.call("levelup_pushback")
+	# 카드 기록 — Main 미러.
+	var card_data = _UpgradeSystemScript.card_by_id(card_id)
+	var card_name: String = (String(card_data.get("name", card_id)) if card_data != null else card_id)
+	_selected_cards.append({"id": card_id, "name": card_name})
+	if _skill_viewer != null and _skill_viewer.has_method("refresh"):
+		_skill_viewer.call("refresh", _selected_cards)
 
 ## --- Elite death payloads (M8 — delegate to shared service) ---
 
@@ -539,6 +553,9 @@ func _build_help_label() -> void:
 	# 하단 중앙 PC HUD(초상화 + HP + 열기/일섬 스택 + 회피 스택 + 레벨). exp_system 은 아레나 셋업에서 주입.
 	_player_hud = _PlayerHudScene.new()
 	canvas.add_child(_player_hud)
+	# 카드 빌드 뷰어 — Tab 토글 오버레이(layer=70, 정지 없음).
+	_skill_viewer = _SkillViewerScript.new()
+	add_child(_skill_viewer)
 
 ## --- Button callbacks ---
 

@@ -104,8 +104,12 @@ const _ZenSystemScript := preload("res://scripts/managers/ZenSystem.gd")
 # from the spawn helpers.
 const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectService.gd")
 const _BulletTimeServiceScript := preload("res://scripts/managers/BulletTimeService.gd")
+const _SkillViewerScript := preload("res://scenes/ui/SkillViewer.gd")
 var _elite_effect_service: Node
 var _bullet_time_service: Node
+var _skill_viewer: CanvasLayer
+## 현재 런에서 선택한 카드 목록 [{id, name}, ...].
+var _selected_cards: Array = []
 var _exp_system: Node
 var _exp_bar: CanvasLayer
 var _wave_mgr: Node
@@ -165,11 +169,16 @@ func _warm_placeholder_cache() -> void:
 	# first process tick to spawn the initial set.
 
 # ── ESC 개발 오버레이 / 웨이브 비율 프리셋 ──
-const _PRESET_RANGED: float = 0.90  # 원거리 프리셋의 원거리 비율
-const _PRESET_MINOR: float = 0.05   # 비주력 종류(근접 프리셋의 원거리 / 원거리 프리셋의 근접)
-const _PRESET_ELITE: float = 0.05   # 엘리트 비율(공통)
-## 원거리 프리셋에서 PC 를 방해하려 항상 깔아두는 근접몹(잡몹+슬래머) 최소 인원(포위감).
-const _PRESET2_MELEE_FLOOR: int = 5
+# preset=1(근접 밀리): 근접90 / 원거리5 / 엘리트5
+const _P1_MELEE: float = 0.90
+const _P1_RANGED: float = 0.05
+const _P1_ELITE: float = 0.05
+# preset=2(일섬): 원거리60 / 근접35 / 엘리트5 · 총인구 ×0.2
+const _P2_RANGED: float = 0.60
+const _P2_MELEE: float = 0.35
+const _P2_ELITE: float = 0.05
+## 일섬 프리셋에서 PC 동선 방해용 근접몹 최소 인원(포위감). floor 3으로 낮춤.
+const _PRESET2_MELEE_FLOOR: int = 3
 ## 근접 스폰 중 슬래머(내려찍기) 비율.
 const _SLAMMER_RATIO: float = 0.3
 ## 주술사 단일 스폰 굴림 확률(없을 때만 — ~20틱 내 등장).
@@ -547,6 +556,10 @@ func award_exp_for_kill(enemy: Node) -> void:
 	# 4안 — 처치 시 일섬 게이지 충전.
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
 		_player.call("gain_gauge_on_kill")
+	# 잡몹 처치 시 열기 -5(엘리트/보스 제외) — 연속 처치로 열기 감소.
+	var is_minor: bool = not (enemy.is_in_group("elites") or enemy.is_in_group("boss"))
+	if is_minor and _player != null and is_instance_valid(_player) and _player.has_method("add_heat"):
+		_player.call("add_heat", -5.0)
 
 
 ## 처치 즉시 EXP — 0(사용자 밸런스). 적을 죽이는 것만으로는 거의 차지 않고,
@@ -813,26 +826,25 @@ func _request_spawn_preset(lv: int) -> void:
 	if _try_spawn_sorcerer():
 		return
 	if _wave_preset == 2:
-		# 원거리 웨이브 — 근접몹(잡몹+슬래머) 최소 4마리 바닥 유지(PC 동선 방해).
+		# 일섬 웨이브(원거리60·근접35·엘리트5) — 근접 최소 3마리 바닥 유지.
 		if _alive_melee_count() < _PRESET2_MELEE_FLOOR:
 			_spawn_melee_or_slammer(lv)
 			return
 		var r2: float = randf()
-		if ranged_enemy_scene != null and r2 < _PRESET_RANGED:
+		if ranged_enemy_scene != null and r2 < _P2_RANGED:
 			_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
 			return
-		if elite_enemy_scene != null and r2 < _PRESET_RANGED + _PRESET_ELITE:
+		if elite_enemy_scene != null and r2 < _P2_RANGED + _P2_ELITE:
 			_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, randi_range(1, 4))
 			return
 		_spawn_melee_or_slammer(lv)
 		return
-	# 프리셋 1(근접 웨이브) 또는 기타 — 비주력 원거리 5% + 엘리트 5%.
-	var ranged_p: float = _PRESET_MINOR
+	# 프리셋 1(근접 밀리: 근접90·원거리5·엘리트5) 또는 기타.
 	var roll: float = randf()
-	if ranged_enemy_scene != null and roll < ranged_p:
+	if ranged_enemy_scene != null and roll < _P1_RANGED:
 		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
 		return
-	if elite_enemy_scene != null and roll < ranged_p + _PRESET_ELITE:
+	if elite_enemy_scene != null and roll < _P1_RANGED + _P1_ELITE:
 		_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, randi_range(1, 4))
 		return
 	_spawn_melee_or_slammer(lv)
@@ -844,8 +856,8 @@ func _apply_wave_preset() -> void:
 	_wave_preset = _GameConfigScript.wave_preset
 	if _wave_mgr != null:
 		if _wave_preset == 2:
-			_wave_mgr.target_mult = 0.5    # 원거리 웨이브 — 곡선 형태대로 램프(few→many→rest)
-			_wave_mgr.min_target = 5        # 바닥 5 (초반 가볍게 시작, 스토리보드)
+			_wave_mgr.target_mult = 0.2    # 일섬 웨이브 — 총 인구 대폭 감소(총수 적고 원거리 비중↑)
+			_wave_mgr.min_target = 3        # 바닥 3(초반 가볍게 시작)
 		else:
 			_wave_mgr.target_mult = 1.0
 			_wave_mgr.min_target = 0
@@ -1165,6 +1177,12 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 	# 레벨업 직후 — 자기 중심 원형으로 적을 약하게 밀어낸다(피해 없음) + 링 연출.
 	if _player != null and is_instance_valid(_player) and _player.has_method("levelup_pushback"):
 		_player.call("levelup_pushback")
+	# 카드 기록 — 이름 조회 후 _selected_cards 에 추가, SkillViewer 갱신.
+	var card_data = _UpgradeSystemScript.card_by_id(card_id)
+	var card_name: String = (String(card_data.get("name", card_id)) if card_data != null else card_id)
+	_selected_cards.append({"id": card_id, "name": card_name})
+	if _skill_viewer != null and _skill_viewer.has_method("refresh"):
+		_skill_viewer.call("refresh", _selected_cards)
 
 ## --- Elite death payloads ---
 
@@ -1236,6 +1254,9 @@ func _build_hud() -> void:
 
 	# ESC 일시정지 메뉴 + 툴 에디터(PauseOverlay) — process_mode ALWAYS 라 정지 중에도 동작.
 	add_child(_PauseOverlayScene.instantiate())
+	# 카드 빌드 뷰어 — Tab 토글 오버레이(layer=70, 정지 없음).
+	_skill_viewer = _SkillViewerScript.new()
+	add_child(_skill_viewer)
 
 func _update_hud() -> void:
 	if _player == null or not is_instance_valid(_player):

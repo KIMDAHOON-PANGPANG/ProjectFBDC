@@ -16,6 +16,8 @@ var _menu: VBoxContainer
 var _tools: VBoxContainer
 var _zoom_btn: Button
 var _contact_btn: Button
+var _resource_btn: Button
+var _aim_btn: Button
 ## 몬스터 리스트(검색 에디터) 패널 + 검색창 + 필터용 행 캐시.
 var _monsters: VBoxContainer
 var _mon_search: LineEdit
@@ -91,11 +93,27 @@ func _on_toggle(key: String) -> void:
 		_GameConfigScript.contact_damage_enabled = not _GameConfigScript.contact_damage_enabled
 	_refresh_toggles()
 
+func _on_set_resource() -> void:
+	_GameConfigScript.slash_resource_mode = 1 - _GameConfigScript.slash_resource_mode
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+func _on_set_aim() -> void:
+	_GameConfigScript.slash_aim_mode = 1 - _GameConfigScript.slash_aim_mode
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
 func _refresh_toggles() -> void:
 	if _zoom_btn != null:
 		_zoom_btn.text = "LB 차징 줌아웃: " + ("ON" if _GameConfigScript.charge_zoom_enabled else "OFF")
 	if _contact_btn != null:
 		_contact_btn.text = "몬스터 충돌 피해: " + ("ON" if _GameConfigScript.contact_damage_enabled else "OFF")
+	if _resource_btn != null:
+		var rm: int = _GameConfigScript.slash_resource_mode
+		_resource_btn.text = "[PLACEHOLDER] 일섬 자원: " + ("열기" if rm == 0 else "쿨다운")
+	if _aim_btn != null:
+		var am: int = _GameConfigScript.slash_aim_mode
+		_aim_btn.text = "[PLACEHOLDER] 일섬 에임: " + ("차징" if am == 0 else "즉발")
 
 func _build() -> void:
 	# 어둡게 — 전체 화면 반투명 검정(ESC 눌렀음을 시각화 + 게임 클릭 차단). 리사이즈 추종.
@@ -128,14 +146,18 @@ func _build() -> void:
 	_tools.add_child(_title("── 툴 에디터 ──"))
 	_tools.add_child(_info("현재: " + _mode_name()))
 	_tools.add_child(_info("── 모드 (선택 시 재시작) ──"))
-	_tools.add_child(_btn("근접 밀리 모드", _set_mode.bind(false, 0)))
-	_tools.add_child(_btn("근접 몬스터 일섬 모드", _set_mode.bind(true, 1)))
-	_tools.add_child(_btn("원거리 몬스터 일섬 모드", _set_mode.bind(true, 2)))
+	_tools.add_child(_btn("근접 밀리 모드 (근90·원5·엘5)", _set_mode.bind(false, 0)))
+	_tools.add_child(_btn("근접 몬스터 일섬 모드 (근90·원5·엘5)", _set_mode.bind(true, 1)))
+	_tools.add_child(_btn("원거리 몬스터 일섬 모드 (원60·근35·엘5·총×0.2)", _set_mode.bind(true, 2)))
 	_tools.add_child(_info("── 옵션 (토글) ──"))
 	_zoom_btn = _btn("", _on_toggle.bind("charge_zoom"))
 	_tools.add_child(_zoom_btn)
 	_contact_btn = _btn("", _on_toggle.bind("contact_dmg"))
 	_tools.add_child(_contact_btn)
+	_resource_btn = _btn("", _on_set_resource)
+	_tools.add_child(_resource_btn)
+	_aim_btn = _btn("", _on_set_aim)
+	_tools.add_child(_aim_btn)
 	_tools.add_child(_btn("닫기", _close_tools))
 	_refresh_toggles()
 	_tools.visible = false

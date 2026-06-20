@@ -75,9 +75,20 @@ func _process(delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
 		return
-	# LB 공격(슬래시 대시) 중엔 자석/획득 안 함 — 일반 이동으로만 줍게(요청).
-	if _player.has_method("is_slashing") and bool(_player.call("is_slashing")):
-		_home_t = 0.0
+	# 슬래시 대시 + 착지 유예 중엔 강흡인(×3 반경) — 대시 방향 젬을 자동 수집.
+	var vacuuming: bool = false
+	if _player.has_method("is_slash_vacuuming"):
+		vacuuming = bool(_player.call("is_slash_vacuuming"))
+	elif _player.has_method("is_slashing"):
+		vacuuming = bool(_player.call("is_slashing"))
+	if vacuuming:
+		var eff_vac: float = magnet_radius * 3.0
+		if "exp_magnet_mult" in _player:
+			eff_vac *= maxf(0.1, float(_player.exp_magnet_mult))
+		var to_vac: Vector3 = _player.global_position - global_position
+		to_vac.y = 0.0
+		if to_vac.length() <= eff_vac:
+			_collect()
 		return
 	var to_pc: Vector3 = _player.global_position - global_position
 	to_pc.y = 0.0

@@ -26,3 +26,9 @@ static var charge_zoom_enabled: bool = false
 ## 몬스터 몸 충돌 시 HP 감소(접촉 피해) on/off. 기본 꺼짐 — 근접 모드(게임 시작) 기본 OFF.
 ## 거합(게임 시작 2)은 OutGame 시작 핸들러가 ON 으로 설정. ESC 툴 에디터로 토글.
 static var contact_damage_enabled: bool = false
+
+## D-3 플래그(선언만 — 동작 배선은 다음 세션).
+## 일섬 자원 방식: 0=열기(Heat, 모드2 기본) / 1=쿨다운.
+static var slash_resource_mode: int = 0
+## 일섬 에임 방식(즉발 일섬 모드 전용): 0=차징(기본) / 1=즉발.
+static var slash_aim_mode: int = 0

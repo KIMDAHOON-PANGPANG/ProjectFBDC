@@ -556,6 +556,16 @@ func _update_heat(delta: float) -> void:
 			_heat = 0.0
 
 
+## 외부 호출용 열기 가감(예: 잡몹 처치 -5, 패리 성공 0). 즉발 일섬 모드가 아니거나
+## 탈진 중이면 음수 가산도 무시(탈진은 _update_heat 가 자연 만료). 스케일은 _heat 와 동일.
+func add_heat(delta_pct: float) -> void:
+	if not _instant_slash:
+		return
+	if _overheated:
+		return
+	_heat = clamp(_heat + delta_pct, 0.0, data.heat_overheat_threshold)
+
+
 ## 일섬 발사마다 호출 — 기본 획득에, 직전 일섬 후 combo_window 초 이내면
 ## combo_mult 를 곱한다. 임계 도달 시 탈진 진입.
 func _add_heat() -> void:
@@ -872,9 +882,14 @@ var move_speed_mult: float = 1.0
 func is_invincible() -> bool:
 	return god_mode or _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0
 
-## LB 공격(일섬 대시) 중인가 — ExpGem 이 이 동안 획득/자석 안 함(요청).
+## LB 공격(일섬 대시) 중인가.
 func is_slashing() -> bool:
 	return _state == State.DASHING
+
+## 슬래시 대시 또는 착지 직후 유예(slash_post_grace) 동안 젬 강흡인 상태.
+## ExpGem 이 is_slashing 대신 이 게터를 우선 사용(grace 동안도 ×3 흡인 유지).
+func is_slash_vacuuming() -> bool:
+	return _state == State.DASHING or _slash_grace_t > 0.0
 
 
 ## 아레나 — 회피 스택 즉시 가득.
@@ -990,6 +1005,7 @@ func on_parry_success() -> void:
 		counter_step_until_msec = Time.get_ticks_msec() + 1000
 	if _zen_system != null and _zen_system.has_method("add"):
 		_zen_system.call("add", 1)
+	_heat = 0.0  # 패리 성공 → 열기 즉시 0%
 	_play_sfx("parry")
 
 

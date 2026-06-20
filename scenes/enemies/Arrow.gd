@@ -26,7 +26,7 @@ func _ready() -> void:
 	if get_node_or_null("CollisionShape3D") == null:
 		var cs := CollisionShape3D.new()
 		var sh := BoxShape3D.new()
-		sh.size = Vector3(0.4, 0.2, 0.2)
+		sh.size = Vector3(0.2, 0.2, 0.2)
 		cs.shape = sh
 		add_child(cs)
 
@@ -40,8 +40,7 @@ func _ready() -> void:
 		var mi := MeshInstance3D.new()
 		mi.name = "ArrowMesh"
 		var box := BoxMesh.new()
-		# Long along +X (forward), thin on Y/Z so it reads as a shaft.
-		box.size = Vector3(0.6, 0.08, 0.1)
+		box.size = Vector3(0.25, 0.25, 0.25)
 		mi.mesh = box
 		# Shift up so the shaft sits ~chest-high on the PC instead of
 		# clipping the ground plane.

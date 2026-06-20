@@ -25,10 +25,10 @@ extends Node
 signal exp_changed(current: int, threshold: int)
 signal leveled_up(new_level: int)
 
-@export var first_threshold: int = 14
-@export var threshold_step: int = 8
+@export var first_threshold: int = 12
+@export var threshold_step: int = 7
 ## Quadratic accelerator on top of the linear step. 0.0 = pure linear.
-@export var threshold_accel: float = 1.5
+@export var threshold_accel: float = 1.3
 ## Multiplier applied to EXP gains (extended by Greed upgrade).
 var gain_multiplier: float = 1.0
 
