@@ -15,8 +15,6 @@ var time_scale_mult: float = 1.0
 var _dir: Vector3 = Vector3.FORWARD
 var _life: float = 0.0
 var _consumed: bool = false
-## 일섬으로 되받아쳤는지 — true 면 팩션이 Enemy 타격(PC 제외)으로 바뀐다.
-var _reflected: bool = false
 
 func _ready() -> void:
 	collision_layer = 1 << 4  # EnemyAttack
@@ -85,61 +83,40 @@ func take_hit(_amount: int = 0) -> void:
 	_consumed = true
 	queue_free()
 
-## ⏱ 일섬이 격추 대신 호출 — 탄을 날아온 방향의 반대로 되받아쳐 적을 맞힌다.
-## 팩션을 PlayerAttack(layer) + Enemy(mask) 로 바꿔 PC 는 다시 맞지 않는다.
-## 비관통: _on_hit 에서 첫 적 명중 시 소멸. enemy_projectiles 그룹에서 빠져
-## 일섬에 재반사되지 않는다.
-func reflect() -> void:
-	if _consumed or _reflected:
-		return
-	_reflected = true
-	_dir = -_dir
-	var yaw := atan2(-_dir.z, _dir.x)
-	rotation = Vector3(0.0, yaw, 0.0)
-	speed *= 1.5  # 되받아치는 손맛 — 약간 더 빠르게.
-	collision_layer = 1 << 3              # PlayerAttack
-	collision_mask = (1 << 0) | (1 << 2)  # World + Enemy (Player 제외 → PC 안 맞음)
-	remove_from_group("enemy_projectiles")
-	# 시각 — 청록으로 바꿔 "되받아친 탄" 가독성.
-	var mi := get_node_or_null("ArrowMesh") as MeshInstance3D
-	if mi != null and mi.material_override is StandardMaterial3D:
-		var m := mi.material_override as StandardMaterial3D
-		m.albedo_color = Color(0.5, 1.0, 1.0)
-		m.emission_enabled = true
-		m.emission = Color(0.4, 0.95, 1.0)
-		m.emission_energy_multiplier = 1.8
-
 func _on_hit(node: Node) -> void:
 	if _consumed:
-		return
-	if _reflected:
-		# 반사된 탄 — 적만 타격(PC 는 mask 제외라 애초에 트리거 안 됨). 비관통.
-		var t: Node = node
-		while t != null:
-			if t.is_in_group("enemies") or t.is_in_group("boss"):
-				if t.has_method("take_hit"):
-					if t.is_in_group("boss"):
-						t.call("take_hit", 1)
-					else:
-						t.call("take_hit")
-				_consumed = true
-				queue_free()
-				return
-			t = t.get_parent()
-		if node is StaticBody3D:  # 벽/월드면 소멸.
-			_consumed = true
-			queue_free()
 		return
 	# Ignore the spawner enemy and other enemies
 	if node is MeleeEnemy or node is RangedEnemy:
 		return
-	if node.has_method("take_hit") and node.is_in_group("player"):
-		node.call("take_hit", damage)
+	# PC 명중 — 맞은 노드(또는 그 부모 Hurtbox)에서 "player" 그룹 노드를 찾는다.
+	# 모드2 는 PC body 가 collision_layer=0(서로 안 밀림/보스 돌진 관통)이라 화살이 PC
+	# body 를 못 잡으므로, Player.tscn 의 Hurtbox Area(Player 레이어)가 대신 잡히고
+	# 여기서 부모 PC 로 거슬러 올라간다(모드1 은 PC body 가 직접 잡힘).
+	var pc := _find_player(node)
+	if pc != null:
+		# 저스트 패리 — 패리 윈도우 중이면 피해 없이 쳐냄(소멸) + 패리 연출.
+		if pc.has_method("is_parrying") and bool(pc.call("is_parrying")):
+			if pc.has_method("on_projectile_parried"):
+				pc.call("on_projectile_parried")
+			_consumed = true
+			queue_free()
+			return
+		if pc.has_method("take_hit"):
+			pc.call("take_hit", damage)
 		_consumed = true
 		queue_free()
 		return
 	# Treat anything else as world / wall
 	if node is StaticBody3D or node is CharacterBody3D:
-		# If it's the player CharacterBody3D it should be in 'player' group above
 		_consumed = true
 		queue_free()
+
+## 맞은 노드에서 부모를 거슬러 "player" 그룹 노드를 찾는다(Hurtbox→PC).
+func _find_player(node: Node) -> Node:
+	var n: Node = node
+	while n != null:
+		if n.is_in_group("player"):
+			return n
+		n = n.get_parent()
+	return null

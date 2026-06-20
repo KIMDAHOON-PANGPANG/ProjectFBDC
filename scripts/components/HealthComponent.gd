@@ -28,6 +28,14 @@ func setup(new_max: int) -> void:
 	max_hp = new_max
 	hp = new_max
 
+## 레벨 스케일링 — 스폰 직후 최대 HP 를 extra 만큼 올린다(현재 hp 도 함께 상승).
+## Main 이 다중타 위협(엘리트/주술사/슬래머/보스)에 레벨당 +1 적용하는 데 쓴다.
+func add_max_hp(extra: int) -> void:
+	if extra <= 0:
+		return
+	max_hp += extra
+	hp += extra
+
 ## 아머/경직 셋업 — 적 _ready 에서 HP setup 직후 호출(CombatData 가 채운 값 사용).
 func setup_armor(new_armor_max: int, new_stagger_duration: float) -> void:
 	armor_max = max(new_armor_max, 0)

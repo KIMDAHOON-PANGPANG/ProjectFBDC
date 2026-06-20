@@ -1,0 +1,159 @@
+[gd_resource type="Resource" script_class="MonsterTable" format=3 uid="uid://c2fb742yp02nc"]
+
+[ext_resource type="Script" uid="uid://ciw88qemrj1op" path="res://scripts/resources/MonsterStats.gd" id="1_qopk3"]
+[ext_resource type="Script" uid="uid://q3mf4b2tdvg8" path="res://scripts/resources/MonsterTable.gd" id="2_xt266"]
+
+[sub_resource type="Resource" id="Resource_oa4n6"]
+script = ExtResource("1_qopk3")
+id = 101
+key = "melee"
+display_name = "해골 검사"
+concept = "기본 추적 근접 · 부채꼴 스윙 · 일섬 한 방"
+color = "e8e6dc"
+icon = "res://resources/enemies/BaseSkeleton.png"
+
+[sub_resource type="Resource" id="Resource_5olke"]
+script = ExtResource("1_qopk3")
+id = 102
+key = "ranged"
+display_name = "독뼈 궁수"
+concept = "거리 유지 · 조준 텔레그래프 후 화살 발사 · 1방컷"
+color = "8fc94a"
+icon = "res://resources/enemies/PoisonSkeleton.png"
+attack_range = 8.0
+attack_cooldown = 2.1
+
+[sub_resource type="Resource" id="Resource_uxeti"]
+script = ExtResource("1_qopk3")
+id = 103
+key = "elite"
+display_name = "정예 해골"
+concept = "정예 4타입(폭발/보너스/불릿타임/보호막) · 타입별 색·HP(1/3/5/7방)"
+color = "ffd24a"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 1.8
+attack_cooldown = 1.6
+fan_radius = 2.0
+fan_angle_deg = 80.0
+separation_radius = 1.6
+separation_weight = 1.8
+armor_max = 4
+
+[sub_resource type="Resource" id="Resource_nctmb"]
+script = ExtResource("1_qopk3")
+id = 104
+key = "leaper"
+display_name = "도약 해골"
+concept = "중거리 곡선 점프 후 원형 슬램(내려찍기) · 동시 3마리 · 1방컷"
+color = "d16bff"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 2.2
+max_hp = 2
+attack_cooldown = 1.0
+leap_chance = 0.9
+
+[sub_resource type="Resource" id="Resource_2oklf"]
+script = ExtResource("1_qopk3")
+id = 105
+key = "slammer"
+display_name = "강타 해골"
+concept = "걸어와 2초 힘주기 후 광역 원형 슬램 · 회피 전용 · 2방컷"
+color = "d97333"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 1.8
+max_hp = 2
+
+[sub_resource type="Resource" id="Resource_nwco5"]
+script = ExtResource("1_qopk3")
+id = 106
+key = "sorcerer"
+display_name = "주술사"
+concept = "넓은 시야 · PC 주변 360° 보라 장판으로 동선 방해 · 추격 시 텔레포트 · 5방컷"
+color = "9e52ff"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 1.6
+max_hp = 5
+
+[sub_resource type="Resource" id="Resource_3utxy"]
+script = ExtResource("1_qopk3")
+id = 201
+key = "boss"
+display_name = "멧돼지 보스 I"
+concept = "먼 거리 호밍 데칼 후 직진 돌진 · 추적/돌진/정지 상태머신"
+color = "e63a3a"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 1.2
+max_hp = 15
+attack_range = 2.4
+attack_cooldown = 2.0
+attack_damage = 2
+fan_radius = 3.0
+fan_angle_deg = 90.0
+armor_max = 6
+stagger_duration = 0.6
+parry_yellow_ratio = 0.7
+
+[sub_resource type="Resource" id="Resource_dedpa"]
+script = ExtResource("1_qopk3")
+id = 202
+key = "boss"
+display_name = "멧돼지 보스 II"
+concept = "더 빠른 돌진 · WHITE 시그널"
+color = "a64be6"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 1.2
+max_hp = 22
+attack_range = 2.4
+attack_cooldown = 1.8
+attack_damage = 2
+fan_radius = 3.3
+fan_angle_deg = 90.0
+armor_max = 7
+stagger_duration = 0.6
+charge_range = 24.0
+charge_windup = 0.9
+charge_speed = 20.0
+charge_distance = 18.0
+charge_recover = 0.8
+charge_cooldown = 1.4
+charge_width = 2.6
+parry_yellow_ratio = 0.6
+enable_white_signal = true
+white_ratio = 0.2
+
+[sub_resource type="Resource" id="Resource_3asjn"]
+script = ExtResource("1_qopk3")
+id = 203
+key = "boss"
+display_name = "멧돼지 보스 III"
+concept = "최속 돌진 · WHITE/PURPLE/GREEN 다중 시그널 · dmg3"
+color = "3ad9c8"
+icon = "res://resources/enemies/BaseSkeleton.png"
+move_speed = 1.2
+max_hp = 30
+attack_range = 2.4
+attack_cooldown = 1.6
+attack_damage = 2
+fan_radius = 3.6
+fan_angle_deg = 90.0
+armor_max = 8
+stagger_duration = 0.6
+charge_range = 26.0
+charge_windup = 0.8
+charge_speed = 22.0
+charge_distance = 20.0
+charge_damage = 3
+charge_recover = 0.7
+charge_cooldown = 1.2
+charge_width = 2.8
+parry_yellow_ratio = 0.45
+enable_white_signal = true
+white_ratio = 0.15
+enable_purple_signal = true
+purple_ratio = 0.2
+enable_green_signal = true
+green_ratio = 0.1
+
+[resource]
+script = ExtResource("2_xt266")
+monsters = Array[ExtResource("1_qopk3")]([SubResource("Resource_oa4n6"), SubResource("Resource_5olke"), SubResource("Resource_uxeti"), SubResource("Resource_nctmb"), SubResource("Resource_2oklf"), SubResource("Resource_nwco5"), SubResource("Resource_3utxy"), SubResource("Resource_dedpa"), SubResource("Resource_3asjn")])

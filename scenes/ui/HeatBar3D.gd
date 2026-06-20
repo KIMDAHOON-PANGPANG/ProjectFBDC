@@ -84,19 +84,19 @@ func _face_camera() -> void:
 
 
 func _build() -> void:
-	add_child(_rect(bar_width + 0.04, bar_height + 0.04, border_color, Vector3(0, 0, -0.004)))  # 테두리
-	add_child(_rect(bar_width, bar_height, bg_color, Vector3(0, 0, -0.002)))                    # 배경
+	add_child(_rect(bar_width + 0.04, bar_height + 0.04, border_color, Vector3(0, 0, -0.004), 100))  # 테두리
+	add_child(_rect(bar_width, bar_height, bg_color, Vector3(0, 0, -0.002), 101))                    # 배경
 	# 5칸 pip — 균등 간격 + 작은 갭. 좌→우로 채워진다.
 	var gap: float = 0.018
 	var pw: float = (bar_width - gap * float(PIPS - 1)) / float(PIPS)
 	var x0: float = -bar_width * 0.5 + pw * 0.5
 	for i in PIPS:
-		var pip := _rect(pw * 0.9, bar_height * 0.72, empty_color, Vector3(x0 + float(i) * (pw + gap), 0, 0.0))
+		var pip := _rect(pw * 0.9, bar_height * 0.72, empty_color, Vector3(x0 + float(i) * (pw + gap), 0, 0.0), 102)
 		add_child(pip)
 		_pips.append(pip)
 
 
-func _rect(w: float, h: float, col: Color, pos: Vector3) -> MeshInstance3D:
+func _rect(w: float, h: float, col: Color, pos: Vector3, priority: int = 100) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2(w, h)
@@ -106,6 +106,8 @@ func _rect(w: float, h: float, col: Color, pos: Vector3) -> MeshInstance3D:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = col
 	mat.no_depth_test = true
+	# 바 내부 레이어 차등(테두리<배경<pip) → no_depth_test 라도 pip 이 배경에 안 가려짐. 100+ 라 VFX(0) 위.
+	mat.render_priority = priority
 	m.material_override = mat
 	m.position = pos
 	return m

@@ -1,0 +1,231 @@
+extends CharacterBody3D
+
+## 주술사(마법사) 엘리트 — 단일(싱글톤) 출현. 넓은 시야로 PC 를 보면 PC 주변 360° 에
+## 보라색 장판(SorcererZone)을 흩뿌려 동선을 방해(LoL 모르가나 W). 5방컷. PC 가 가까이
+## 쫓아오면 화면 반대편 끝으로 텔레포트(20초 쿨). class_name 없이 씬/덕타이핑으로 사용.
+
+@export var effect_type: int = 0  # 죽어도 엘리트 페이로드 트리거 안 함(0)
+@export var max_hp: int = 5
+@export var move_speed: float = 1.6
+## 시야 — PC 가 이 거리 안이면 "본다"(장판 시전 가능).
+@export var vision_range: float = 14.0
+## 장판 시전 파라미터(enemy.csv 106).
+@export var zone_count: int = 3
+@export var zone_radius: float = 2.0
+@export var zone_spread: float = 2.6   # PC 중심에서 각 장판 중심까지 거리
+@export var zone_duration: float = 3.0
+@export var zone_slow_mult: float = 0.45
+## 장판 전조(흐릿하게 채워지는) 시간 — 이 시간 후에 진한 장판이 발동한다.
+@export var zone_precursor: float = 2.0
+@export var cast_cooldown: float = 4.5
+## 텔레포트 — PC 가 teleport_range 안에 들어오면 teleport_dist 만큼 반대편으로 점멸.
+@export var teleport_cooldown: float = 20.0
+@export var teleport_range: float = 4.0
+@export var teleport_dist: float = 14.0
+## 카이팅 선호 거리 폭(너무 가까우면 물러나고 멀면 접근, 시야 유지).
+@export var keep_band: float = 1.2
+@export var armor_max: int = 0
+@export var stagger_duration: float = 0.4
+
+@export var number_label_path: NodePath
+@export var mesh_path: NodePath
+
+const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
+const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
+const _ZoneScript := preload("res://scenes/effects/SorcererZone.gd")
+
+const _TINT := Color(0.62, 0.32, 1.0)  # 보라 — 마법사
+
+var time_scale_mult: float = 1.0
+var _player: Node3D
+var _health: HealthComponent
+var _label: Label3D
+var _sprite: Sprite3D
+var _dead: bool = false
+var _cast_cd: float = 1.5      # 첫 시전까지 약간 텀
+var _teleport_cd: float = 0.0
+var _kb = _KnockbackScript.new()
+
+
+func _ready() -> void:
+	add_to_group("enemies")
+	add_to_group("elites")
+	add_to_group("sorcerers")  # 싱글톤 캡(Main._alive_sorcerer_count)
+	collision_layer = 1 << 2  # Enemy
+	collision_mask = (1 << 0) | (1 << 1)  # World + Player
+
+	# 데이터 — enemy.csv(106) 시야/장판/텔레포트/HP 적용.
+	_CombatDataScript.apply_to_enemy(self, "sorcerer")
+
+	_health = get_node_or_null("HealthComponent") as HealthComponent
+	if _health != null:
+		_health.setup(max_hp)
+		_health.setup_armor(armor_max, stagger_duration)
+		_health.died.connect(_on_died)
+		_health.damaged.connect(_on_damaged)
+		var bar := _HpBar3DScene.instantiate()
+		if "follow_offset" in bar:
+			bar.follow_offset = Vector3(0, 1.7, 0)
+		add_child(bar)
+		if bar.has_method("attach_health"):
+			bar.call("attach_health", _health)
+
+	_label = get_node_or_null(number_label_path) as Label3D
+	if _label != null:
+		_label.text = str(max_hp)
+		_label.modulate = _TINT
+
+	_sprite = get_node_or_null(mesh_path) as Sprite3D
+	if _sprite != null:
+		_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_sprite.shaded = false
+		_sprite.transparent = true
+		_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		_sprite.alpha_scissor_threshold = 0.5
+		_sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_sprite.modulate = _TINT
+
+	_player = get_tree().get_first_node_in_group("player")
+
+
+func _physics_process(delta: float) -> void:
+	if _dead:
+		return
+	delta *= time_scale_mult
+	if _cast_cd > 0.0:
+		_cast_cd -= delta
+	if _teleport_cd > 0.0:
+		_teleport_cd -= delta
+	_kb.integrate(self, delta)
+	if _health != null:
+		_health.tick_stagger(delta)
+		if _health.is_staggered():
+			velocity = Vector3.ZERO
+			move_and_slide()
+			return
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group("player")
+		velocity = Vector3.ZERO
+		move_and_slide()
+		return
+
+	var to_player := _player.global_position - global_position
+	to_player.y = 0.0
+	var dist := to_player.length()
+
+	# PC 가 너무 가까이 쫓아오면 → 화면 반대편 끝으로 텔레포트(쿨 차면).
+	if dist <= teleport_range and _teleport_cd <= 0.0:
+		_do_teleport()
+		return
+
+	# 시야 안 + 시전 쿨 차면 → PC 주변 360° 장판 흩뿌리기.
+	if dist <= vision_range and _cast_cd <= 0.0:
+		_do_cast()
+		_cast_cd = cast_cooldown
+
+	# 카이팅 — 선호 거리 유지(너무 가까우면 물러나고 멀면 접근).
+	var keep: float = teleport_range + 4.0
+	var dir := to_player.normalized() if dist > 0.001 else Vector3.ZERO
+	var move := Vector3.ZERO
+	if dist < keep - keep_band:
+		move = -dir
+	elif dist > keep + keep_band:
+		move = dir
+	velocity.x = move.x * move_speed * time_scale_mult
+	velocity.z = move.z * move_speed * time_scale_mult
+	velocity.y = 0.0
+	move_and_slide()
+
+
+## PC 주변 360° 에 zone_count 개의 장판을 균등+지터 각도로 흩뿌린다.
+func _do_cast() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var scene := get_tree().current_scene
+	if scene == null:
+		return  # 안전 가드(헤드리스/씬 전환 중 등 current_scene 없을 때).
+	var base: Vector3 = (_player as Node3D).global_position
+	var start_ang: float = randf() * TAU
+	var n: int = max(1, zone_count)
+	for i in n:
+		var ang: float = start_ang + TAU * float(i) / float(n) + randf_range(-0.45, 0.45)
+		var off := Vector3(cos(ang), 0.0, sin(ang)) * zone_spread
+		var z = _ZoneScript.new()
+		scene.add_child(z)
+		if z.has_method("configure"):
+			z.call("configure", base + off, zone_radius, zone_duration, zone_slow_mult, zone_precursor)
+	# 시전 연출 — 보라 섬광(잠깐 밝게).
+	if _sprite != null:
+		var orig: Color = _sprite.modulate
+		var t := create_tween()
+		t.tween_property(_sprite, "modulate", Color(2.0, 1.6, 2.5, orig.a), 0.06)
+		t.tween_property(_sprite, "modulate", orig, 0.16)
+
+
+## 화면 반대편 끝(유저 반대 방향)으로 점멸 — teleport_dist 만큼 PC 에서 멀어진 지점.
+func _do_teleport() -> void:
+	var flee_dir := Vector3(1, 0, 0)
+	var base: Vector3 = global_position
+	if _player != null and is_instance_valid(_player):
+		var away := global_position - (_player as Node3D).global_position
+		away.y = 0.0
+		if away.length() > 0.1:
+			flee_dir = away.normalized()
+		base = (_player as Node3D).global_position
+	var dest := base + flee_dir * teleport_dist
+	global_position = Vector3(dest.x, global_position.y, dest.z)
+	velocity = Vector3.ZERO
+	_teleport_cd = teleport_cooldown
+	# 점멸 연출 — 사라졌다 나타나는 알파 펄스.
+	if _sprite != null:
+		var orig: Color = _sprite.modulate
+		_sprite.modulate = Color(orig.r, orig.g, orig.b, 0.15)
+		var t := create_tween()
+		t.tween_property(_sprite, "modulate:a", orig.a, 0.25)
+
+
+func apply_knockback(dir: Vector3, speed: float) -> void:
+	_kb.push(dir, speed)
+
+
+## SlashAttack/스윙이 호출(argless) — 엘리트처럼 1뎀씩(5방컷).
+func take_hit(amount: int = 1) -> void:
+	if _dead:
+		return
+	if _health != null:
+		_health.take_damage(amount)
+
+
+func _on_damaged(_amount: int) -> void:
+	if _label != null and _health != null:
+		_label.text = str(max(_health.hp, 0))
+	if _sprite == null or _health == null or _health.hp <= 0:
+		return
+	var orig: Color = _sprite.modulate
+	var flash := Color(2.5, 2.5, 2.5, orig.a)
+	var t := create_tween()
+	t.tween_property(_sprite, "modulate", flash, 0.04)
+	t.tween_property(_sprite, "modulate", orig, 0.12)
+
+
+func _on_died() -> void:
+	if _dead:
+		return
+	_dead = true
+	_kb.vel = Vector3.ZERO
+	if _health != null:
+		_health.clear_stagger()
+	set_meta("death_position", global_position)
+	set_physics_process(false)
+	collision_layer = 0
+	collision_mask = 0
+	var duration := 0.45
+	var t := create_tween()
+	t.set_parallel(true)
+	if _sprite != null:
+		t.tween_property(_sprite, "modulate:a", 0.0, duration)
+	if _label != null:
+		t.tween_property(_label, "modulate:a", 0.0, duration)
+	t.tween_property(self, "position:y", position.y - 0.6, duration)
+	t.chain().tween_callback(queue_free)

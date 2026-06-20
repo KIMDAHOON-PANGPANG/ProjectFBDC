@@ -12,6 +12,8 @@ extends CanvasLayer
 
 signal retry_pressed
 signal quit_pressed
+## 이어서 하기 — 진행(레벨/카드/스탯) 유지하고 같은 PC 부활. Main 이 받아 revive + 재개.
+signal continue_pressed
 
 @export var bg_color: Color = Color(0, 0, 0, 0.78)
 @export var title_color: Color = Color(0.88, 0.22, 0.22, 1.0)
@@ -21,6 +23,7 @@ var _title: Label
 var _stats_box: VBoxContainer
 var _retry_btn: Button
 var _quit_btn: Button
+var _continue_btn: Button
 var _result: Dictionary = {}
 var _best: Dictionary = {}
 var _beat: Dictionary = {}
@@ -65,6 +68,8 @@ func _build() -> void:
 	_stats_box.add_theme_constant_override("separation", 6)
 	add_child(_stats_box)
 
+	_continue_btn = _make_btn("이어서 하기", _on_continue_pressed)
+	add_child(_continue_btn)
 	_retry_btn = _make_btn("다시 도전", _on_retry_pressed)
 	add_child(_retry_btn)
 	_quit_btn = _make_btn("메뉴로", _on_quit_pressed)
@@ -91,13 +96,15 @@ func _layout() -> void:
 	_title.size = Vector2(w, 80)
 	_stats_box.position = Vector2((w - 360.0) * 0.5, h * 0.4)
 	_stats_box.size = Vector2(360.0, 0.0)
-	# Retry on the left, Quit on the right — both centered as a pair.
+	# 이어서 하기 | 다시 도전 | 메뉴로 — 3개 가로 중앙 정렬.
 	var btn_w: float = 200.0
-	var gap: float = 24.0
-	var pair_w: float = btn_w * 2.0 + gap
-	var left_x: float = (w - pair_w) * 0.5
-	_retry_btn.position = Vector2(left_x, h * 0.72)
-	_quit_btn.position = Vector2(left_x + btn_w + gap, h * 0.72)
+	var gap: float = 14.0
+	var row_w: float = btn_w * 3.0 + gap * 2.0
+	var left_x: float = (w - row_w) * 0.5
+	var by: float = h * 0.72
+	_continue_btn.position = Vector2(left_x, by)
+	_retry_btn.position = Vector2(left_x + btn_w + gap, by)
+	_quit_btn.position = Vector2(left_x + (btn_w + gap) * 2.0, by)
 
 
 func _refresh_stats() -> void:
@@ -170,6 +177,12 @@ func _on_retry_pressed() -> void:
 		return
 	tree.paused = false
 	tree.reload_current_scene()
+
+
+## 이어서 하기 — Main 이 PC 를 revive + 재개한다. 화면은 스스로 닫는다.
+func _on_continue_pressed() -> void:
+	continue_pressed.emit()
+	queue_free()
 
 
 func _on_quit_pressed() -> void:

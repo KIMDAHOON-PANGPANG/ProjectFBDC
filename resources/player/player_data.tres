@@ -1,8 +1,21 @@
-[gd_resource type="Resource" script_class="PlayerData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="PlayerData" format=3 uid="uid://c6a3ng63ex8vl"]
 
-[ext_resource type="Script" path="res://scripts/resources/PlayerData.gd" id="1_pd"]
-[ext_resource type="Resource" path="res://resources/player/player_visuals.tres" id="2_pv"]
+[ext_resource type="Script" uid="uid://boa84yxuc2knl" path="res://scripts/resources/PlayerData.gd" id="1_pd"]
+[ext_resource type="Resource" uid="uid://b8plrvis0001" path="res://resources/player/player_visuals.tres" id="2_pv"]
 
 [resource]
 script = ExtResource("1_pd")
+move_speed = 3.9
+max_slash_range = 9.0
+max_charge_time = 0.9
+slash_width = 1.2
+slash_cooldown = 0.3
+max_ammo = 4
+reload_time = 2.0
+fire_cooldown = 0.4
+kunai_speed = 7.5
+slash_gauge_max = 120.0
+slash_gauge_on_kill = 2.5
+slash_gauge_on_gem = 1.2
+slash_gauge_on_perfect_dodge = 15.0
 visuals = ExtResource("2_pv")

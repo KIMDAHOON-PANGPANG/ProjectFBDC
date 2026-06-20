@@ -84,19 +84,19 @@ func _rebuild(maxs: int) -> void:
 	var start_x: float = -total_w * 0.5
 	for i in maxs:
 		var cx: float = start_x + i * (cell_size + cell_gap) + cell_size * 0.5
-		add_child(_quad(cell_size + 0.03, border_color, Vector3(cx, 0, -0.004)))  # 테두리
-		add_child(_quad(cell_size, bg_color, Vector3(cx, 0, -0.002)))             # 배경
+		add_child(_quad(cell_size + 0.03, border_color, Vector3(cx, 0, -0.004), 100))  # 테두리
+		add_child(_quad(cell_size, bg_color, Vector3(cx, 0, -0.002), 101))             # 배경
 		# fill 캐리어 — 칸 하단에 원점, fill quad 의 하단 모서리를 원점에 맞춰
 		# scale.y 가 곧 채움 비율(아래→위로 차오름).
 		var carrier := Node3D.new()
 		carrier.position = Vector3(cx, -cell_size * 0.5, 0)
 		add_child(carrier)
-		var fill := _quad(cell_size, fill_color, Vector3(0, cell_size * 0.5, 0))
+		var fill := _quad(cell_size, fill_color, Vector3(0, cell_size * 0.5, 0), 102)
 		carrier.add_child(fill)
 		_fill_carriers.append(carrier)
 
 
-func _quad(size: float, col: Color, pos: Vector3) -> MeshInstance3D:
+func _quad(size: float, col: Color, pos: Vector3, priority: int = 100) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2(size, size)
@@ -106,6 +106,8 @@ func _quad(size: float, col: Color, pos: Vector3) -> MeshInstance3D:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = col
 	mat.no_depth_test = true
+	# 칸 내부 레이어 차등(테두리<배경<fill) → no_depth_test 라도 fill 이 배경에 안 가려짐.
+	mat.render_priority = priority
 	m.material_override = mat
 	m.position = pos
 	return m

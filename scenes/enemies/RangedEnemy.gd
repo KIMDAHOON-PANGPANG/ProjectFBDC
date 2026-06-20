@@ -10,9 +10,12 @@ extends CharacterBody3D
 ## When null we skip the telegraph (fall back to legacy instant fire).
 @export var aim_laser_scene: PackedScene
 @export var aim_lock_duration: float = 1.0
-## ── 경직(아머 게이지) ── 0 = 아머 없음. enemy.csv 로 조절.
+## ── 경직(아머 게이지) ── 0 = 아머 없음.
 @export var armor_max: int = 0
 @export var stagger_duration: float = 0.4
+## ── 군집 분리 (Boid) ── 원거리끼리 겹치지 않게 PC 링 둘레로 360° 분산.
+@export var separation_radius: float = 2.5
+@export var separation_weight: float = 1.5
 
 const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/ranged_visuals.tres")
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
@@ -110,8 +113,12 @@ func _physics_process(delta: float) -> void:
 		desired_dir = -dir
 	elif dist > keep + band:
 		desired_dir = dir
-	velocity.x = desired_dir.x * data.move_speed * time_scale_mult
-	velocity.z = desired_dir.z * data.move_speed * time_scale_mult
+	# 군집 분리 — 다른 원거리에서 멀어지는 힘을 섞어 PC 둘레로 골고루 퍼진다(겹침 방지).
+	var move := desired_dir + _separation_vector() * separation_weight
+	if move.length() > 1.0:
+		move = move.normalized()
+	velocity.x = move.x * data.move_speed * time_scale_mult
+	velocity.z = move.z * data.move_speed * time_scale_mult
 	velocity.y = 0.0
 	move_and_slide()
 
@@ -137,6 +144,26 @@ func _can_fire_now() -> bool:
 	var total: int = get_tree().get_nodes_in_group("ranged_enemies").size()
 	var cap: int = max(1, int(ceil(float(total) * _FIRE_FRACTION)))
 	return get_tree().get_nodes_in_group("aim_lasers").size() < cap
+
+## Boid 분리 — "ranged_enemies" 그룹 중 separation_radius 안 이웃에서 멀어지는 합력.
+## keep_distance(반경 고정)와 합쳐지면 원거리들이 PC 둘레 360° 로 자연 분산(겹침 방지).
+func _separation_vector() -> Vector3:
+	if separation_radius <= 0.0:
+		return Vector3.ZERO
+	var avoid := Vector3.ZERO
+	var my_pos := global_position
+	for other in get_tree().get_nodes_in_group("ranged_enemies"):
+		if other == self or not is_instance_valid(other):
+			continue
+		if "_dead" in other and other._dead:
+			continue
+		var d: Vector3 = my_pos - (other as Node3D).global_position
+		d.y = 0.0
+		var dd := d.length()
+		if dd < separation_radius and dd > 0.01:
+			avoid += d.normalized() * (1.0 - dd / separation_radius)
+	return avoid
+
 
 ## Returns true if the camera rig considers the PC visible.
 ## Used to gate the AIM telegraph so off-screen archers stay quiet.
@@ -196,11 +223,11 @@ func _fire_arrow_direct(direction: Vector3) -> void:
 func apply_knockback(dir: Vector3, speed: float) -> void:
 	_kb.push(dir, speed)
 
-func take_hit() -> void:
+func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
 	if _health != null:
-		_health.take_damage(1)
+		_health.take_damage(amount)
 	else:
 		_on_died()
 

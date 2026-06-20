@@ -70,7 +70,7 @@ func _build() -> void:
 	list.add_theme_constant_override("separation", 8)
 	scroll.add_child(list)
 
-	for card in _UpgradeScript.CARDS:
+	for card in _UpgradeScript.all_cards():
 		var row := _build_row(card)
 		_rows.append(row)
 		list.add_child(row)

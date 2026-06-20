@@ -17,7 +17,9 @@ extends Node3D
 
 @export var player_scene: PackedScene
 @export var melee_enemy_scene: PackedScene
+@export var slammer_enemy_scene: PackedScene
 @export var elite_enemy_scene: PackedScene
+@export var sorcerer_enemy_scene: PackedScene
 @export var boss_scene: PackedScene
 ## Optional second boss — when wired, the right-side panel adds a
 ## separate button for it. Left null means only one "보스" button shows.
@@ -105,8 +107,11 @@ func _ready() -> void:
 	_build_ground()
 	_spawn_camera()
 	_build_chapter_systems()
-	_build_button_panel()
 	_build_help_label()
+	# 밸런싱 아레나 디버그 패널(F1 토글) — 무적/배속/스탯주입/PC 라이브 튜닝/TTK readout.
+	var arena = preload("res://scenes/ui/ArenaDebug.gd").new()
+	add_child(arena)
+	arena.call("setup", _player, _exp_system, self)
 
 func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
@@ -377,6 +382,9 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 	var tree := get_tree()
 	if tree != null:
 		tree.paused = false
+	# 레벨업 직후 — 자기 중심 원형으로 적을 약하게 밀어낸다(피해 없음) + 링 연출.
+	if _player != null and is_instance_valid(_player) and _player.has_method("levelup_pushback"):
+		_player.call("levelup_pushback")
 
 ## --- Elite death payloads (M8 — delegate to shared service) ---
 
@@ -477,6 +485,8 @@ func _build_button_panel() -> void:
 		{"label": "엘리트 2 (보너스 슬래시)", "cb": Callable(self, "_on_spawn_elite_2")},
 		{"label": "엘리트 3 (불릿타임)", "cb": Callable(self, "_on_spawn_elite_3")},
 		{"label": "엘리트 4 (보호막)", "cb": Callable(self, "_on_spawn_elite_4")},
+		{"label": "내려찍기 슬래머", "cb": Callable(self, "_on_spawn_slammer")},
+		{"label": "주술사 (마법사)", "cb": Callable(self, "_on_spawn_sorcerer")},
 		{"label": "보스 1 (Ch1)", "cb": Callable(self, "_on_spawn_boss")},
 	]
 	# Bosses 2/3 only show if their scenes are wired — keeps the panel
@@ -624,6 +634,64 @@ func _refresh_slash_gauge() -> void:
 
 ## --- Button callbacks ---
 
+## 아레나 패널(ArenaDebug) — 종류 kind 를 count 마리 스폰(수량 지정).
+func arena_spawn(kind: String, count: int) -> void:
+	var n: int = clampi(count, 1, 50)
+	var scene: PackedScene = null
+	match kind:
+		"mob": scene = melee_enemy_scene
+		"leaper": scene = load("res://scenes/enemies/Leaper.tscn")
+		"slammer": scene = slammer_enemy_scene
+		"ranged": scene = load("res://scenes/enemies/RangedEnemy.tscn")
+		"sorcerer": scene = sorcerer_enemy_scene
+	for i in n:
+		match kind:
+			"elite1": _spawn_elite(1)
+			"elite2": _spawn_elite(2)
+			"elite3": _spawn_elite(3)
+			"elite4": _spawn_elite(4)
+			"boss1": _spawn_boss()
+			"boss2": _spawn_boss_2()
+			"boss3": _spawn_boss_3()
+			_:
+				if scene != null:
+					_spawn_mob(scene)
+
+
+## 아레나 웨이브 — "웨이브 시작" 버튼이 토글. 정지 상태로 시작, 누르면 chapter_1 곡선으로 자동 스폰.
+var _wave_mgr: Node = null
+var _wave_running: bool = false
+
+func toggle_wave() -> bool:
+	if _wave_mgr == null:
+		_wave_mgr = preload("res://scripts/managers/WaveManager.gd").new()
+		_wave_mgr.name = "ArenaWave"
+		add_child(_wave_mgr)
+		_wave_mgr.request_spawn_cb = Callable(self, "_wave_spawn")
+		_wave_mgr.count_alive_cb = Callable(self, "_wave_count_alive")
+	_wave_running = not _wave_running
+	if _wave_running:
+		_wave_mgr.set_curve(load("res://resources/chapters/chapter_1.tres"))  # 시계 리셋
+	_wave_mgr.enabled = _wave_running
+	return _wave_running
+
+func _wave_spawn(_lv: int) -> void:
+	var r: float = 0.0
+	if _wave_mgr != null and _wave_mgr.has_method("ranged_ratio"):
+		r = float(_wave_mgr.call("ranged_ratio"))
+	if randf() < r:
+		_spawn_mob(load("res://scenes/enemies/RangedEnemy.tscn"))
+	else:
+		_spawn_mob(melee_enemy_scene)
+
+func _wave_count_alive() -> int:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(e) and not e.is_in_group("boss"):
+			n += 1
+	return n
+
+
 func _on_spawn_regular_10() -> void:
 	for i in range(regular_mob_count):
 		_spawn_mob(melee_enemy_scene)
@@ -640,6 +708,14 @@ func _on_spawn_elite_3() -> void:
 
 func _on_spawn_elite_4() -> void:
 	_spawn_elite(4)
+
+
+func _on_spawn_slammer() -> void:
+	_spawn_mob(slammer_enemy_scene)
+
+
+func _on_spawn_sorcerer() -> void:
+	_spawn_mob(sorcerer_enemy_scene)
 
 
 func _on_spawn_boss() -> void:

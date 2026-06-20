@@ -19,8 +19,10 @@ static var instant_slash_mode: bool = false
 ## 새 Main 이 `_apply_wave_preset` 로 읽어 적용 → "초기화 후 그 프리셋으로 재세팅".
 static var wave_preset: int = 0
 
-## ESC 옵션 토글(개발) — 리로드 없이 즉시 반영, 씬 너머로 유지.
-## LB(모드2 일섬) 차징 동안 카메라가 서서히 빠지는(줌아웃, 최대값 cap) 효과 on/off.
+## ESC 옵션 토글 — 리로드 없이 즉시 반영, 씬 너머로 유지. LB 일섬 차징 동안 카메라가
+## 서서히 빠지는(줌, 최대값 cap) 효과 on/off. 기본값은 모드 시작 시 설정 — 일섬 모드 ON,
+## 근접 밀리 모드만 OFF(OutGame 시작 핸들러 + PauseOverlay._set_mode). 직접 Main 부팅=밀리=OFF.
 static var charge_zoom_enabled: bool = false
-## 몬스터 몸 충돌 시 HP 감소(모드2 접촉 피해) on/off. 기본 켜짐.
-static var contact_damage_enabled: bool = true
+## 몬스터 몸 충돌 시 HP 감소(접촉 피해) on/off. 기본 꺼짐 — 근접 모드(게임 시작) 기본 OFF.
+## 거합(게임 시작 2)은 OutGame 시작 핸들러가 ON 으로 설정. ESC 툴 에디터로 토글.
+static var contact_damage_enabled: bool = false

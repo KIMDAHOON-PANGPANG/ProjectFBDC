@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CharacterVisuals" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterVisuals.gd" id="1_vis"]
+[ext_resource type="Texture2D" path="res://resources/enemies/BaseSkeleton.png" id="2_bs"]
+
+[resource]
+script = ExtResource("1_vis")
+idle = ExtResource("2_bs")
+placeholder_tint = Color(0.85, 0.45, 0.2, 1)
+flip_h_on_facing = true
+default_facing_right = false

@@ -22,6 +22,8 @@ signal boss_defeated
 
 ## Attack-type enum used by the critical-hit signal. Picked at attack start.
 enum AttackType { YELLOW, RED }
+## 멧돼지 AI 상태 — 추적 / 돌진 호밍 윈드업 / 돌진 / 회복.
+enum BState { CHASE, WINDUP, CHARGE, RECOVER }
 
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
@@ -51,8 +53,28 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 @export var attack_damage: int = 2
 @export var fan_radius: float = 3.0
 @export var fan_angle_deg: float = 90.0
-## Shared FanTelegraph PackedScene wired in Boss.tscn.
+## Shared FanTelegraph PackedScene wired in Boss.tscn. (돌진 보스 전환으로 미사용 — 추후 정리)
 @export var telegraph_scene: PackedScene
+
+@export_group("Charge (멧돼지 돌진 — 기본 패턴)")
+## 돌진을 시작할 수 있는 최대 거리(유닛). "아주 먼 거리에서" — 크게.
+@export var charge_range: float = 22.0
+## 호밍 텔레그래프 시간(초) — 이 동안 데칼이 PC 를 따라다니다 고정 후 돌진.
+@export var charge_windup: float = 1.0
+## 돌진 속도(유닛/초) — 빠르게.
+@export var charge_speed: float = 18.0
+## 돌진 거리(유닛) — 길게.
+@export var charge_distance: float = 16.0
+## 돌진 적중 데미지.
+@export var charge_damage: int = 2
+## 돌진 후 정지(초) — "잠시 정지" 회복.
+@export var charge_recover: float = 0.9
+## 돌진 쿨다운(초) — 다음 돌진까지 간격.
+@export var charge_cooldown: float = 1.6
+## 돌진 판정/데칼 폭(유닛).
+@export var charge_width: float = 2.4
+## 돌진 레인 데칼 — Boss.tscn 에 ChargeTelegraph.tscn 주입.
+@export var charge_telegraph_scene: PackedScene
 
 @export_group("Critical Attack")
 ## Floating YELLOW/RED icon spawned at the boss's head during a wind-up.
@@ -145,12 +167,20 @@ var _active_signal: Node = null
 var _label: Label3D
 var _sprite: Sprite3D
 
+# ── 멧돼지 돌진 상태 ──
+var _bstate: int = BState.CHASE
+var _charge_dir: Vector3 = Vector3.FORWARD
+var _windup_t: float = 0.0
+var _recover_t: float = 0.0
+var _charge_t: float = 0.0
+var _charge_start: Vector3 = Vector3.ZERO
+var _charge_hit_done: bool = false
+var _charge_decal: Node3D = null
+
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group("boss")
-	# This boss is a melee-style brawler — opt-in to the shared melee
-	# telegraph attack. A future ranged boss simply leaves this line out.
-	add_to_group("melee_enemies")
+	# 돌진(멧돼지) 보스 — 근접 부채 패턴을 안 쓰므로 melee_enemies 그룹 미가입.
 	collision_layer = 1 << 2  # Enemy
 	# 비대칭 충돌 — 보스는 Player 를 마스크해 PC 와 겹치면 스스로 빠져나간다(=PC 가
 	# 밀침). PC 는 Enemy 를 마스크하지 않아 보스에 안 막히고 안 밀린다. 한 방향
@@ -234,236 +264,116 @@ func _physics_process(delta: float) -> void:
 			move_and_slide()
 			return
 
-	# Post-parry stun: locked in place, no actions, no attacks. The
-	# block_duration timer flips _blocked back off so the next tick
-	# resumes normal chase/attack flow.
-	if _blocked:
-		velocity = Vector3.ZERO
-		move_and_slide()
+	# ── 멧돼지 AI: 추적 → 돌진(호밍 윈드업 → 고정 → 돌진) → 잠시 정지 ──
+	match _bstate:
+		BState.CHASE:
+			_state_chase(delta)
+		BState.WINDUP:
+			_state_windup(delta)
+		BState.CHARGE:
+			_state_charge(delta)
+		BState.RECOVER:
+			_state_recover(delta)
+
+# ══════════════ 멧돼지 돌진 AI (추적 → 호밍 윈드업 → 돌진 → 정지) ══════════════
+
+## 추적 — PC 로 천천히 다가간다. 돌진 사거리 안 + 쿨 차면 윈드업 진입.
+func _state_chase(delta: float) -> void:
+	var to := _player.global_position - global_position
+	to.y = 0.0
+	var dist := to.length()
+	if _attack_cd <= 0.0 and dist <= charge_range and dist > 0.5:
+		_begin_windup(to.normalized())
 		return
-
-	# Rooted during the wind-up: stand still and let the FanTelegraph
-	# resolve. Position/direction were locked when the telegraph spawned.
-	if _attacking:
-		velocity = Vector3.ZERO
-		move_and_slide()
-		return
-
-	var to_player := _player.global_position - global_position
-	to_player.y = 0.0
-	var dist := to_player.length()
-
-	if dist <= attack_range:
-		velocity = Vector3.ZERO
-		if _attack_cd <= 0.0:
-			_begin_telegraph(to_player)
-		move_and_slide()
-		return
-
-	# No detection_range gate — the boss always closes on the PC, so the
-	# player can't kite indefinitely by sprinting away. Boss movement is
-	# slow enough on its own (move_speed = 1.5) that this stays fair.
-
-	var dir := to_player.normalized()
+	var dir := to.normalized()
 	velocity.x = dir.x * move_speed * time_scale_mult
 	velocity.z = dir.z * move_speed * time_scale_mult
 	velocity.y = 0.0
 	move_and_slide()
 
-## Spawn the shared melee FanTelegraph at the boss's feet AND a
-## BossSignal (YELLOW or RED) above its head. The boss commits to
-## position + direction NOW; damage resolves ~0.5s later when the sweep
-## crosses the PC. On YELLOW attacks a 0.3s parry window opens around
-## the sweep moment — see _on_parried for what parrying does.
-func _begin_telegraph(to_player_xz: Vector3) -> void:
-	if telegraph_scene == null:
-		_attack_cd = attack_cooldown
-		return
-	# Pick this swing's critical-hit color. Override family rolls first
-	# (WHITE / PURPLE / GREEN — all RED semantics, visual only), in
-	# probability order; whatever probability mass is left flows to the
-	# standard YELLOW/RED split. Single `randf()` keeps the distribution
-	# clean without compounding rolls.
-	_color_override = 0
-	var roll: float = randf()
-	var consumed: float = 0.0
-	if enable_white_signal and roll < consumed + white_ratio:
-		_color_override = 1
-		_attack_type = AttackType.RED
-	consumed += (white_ratio if enable_white_signal else 0.0)
-	if _color_override == 0 and enable_purple_signal and roll < consumed + purple_ratio:
-		_color_override = 2
-		_attack_type = AttackType.RED
-	consumed += (purple_ratio if enable_purple_signal else 0.0)
-	if _color_override == 0 and enable_green_signal and roll < consumed + green_ratio:
-		_color_override = 3
-		_attack_type = AttackType.RED
-	consumed += (green_ratio if enable_green_signal else 0.0)
-	if _color_override == 0:
-		# Standard split over the remaining probability mass.
-		var remaining: float = max(1.0 - consumed, 0.01)
-		var split_roll: float = (roll - consumed) / remaining
-		_attack_type = AttackType.YELLOW if split_roll < parry_yellow_ratio else AttackType.RED
+## 윈드업 시작 — 제자리에 서서 돌진 레인 데칼 생성(이후 매 프레임 호밍).
+func _begin_windup(dir: Vector3) -> void:
+	_bstate = BState.WINDUP
+	_windup_t = charge_windup
+	_charge_dir = dir
+	velocity = Vector3.ZERO
+	move_and_slide()
+	if charge_telegraph_scene != null:
+		_charge_decal = charge_telegraph_scene.instantiate()
+		get_tree().current_scene.add_child(_charge_decal)
+		if _charge_decal.has_method("set_lane"):
+			_charge_decal.call("set_lane", global_position, _charge_dir, charge_width, charge_distance)
 
-	# Floating head-icon — visible the whole wind-up, plus a brief grace
-	# so it doesn't pop out the same frame the sweep ends. cancel() on
-	# parry trims it immediately.
-	if boss_signal_scene != null:
-		var signal_node := boss_signal_scene.instantiate()
-		get_tree().current_scene.add_child(signal_node)
-		if signal_node.has_method("configure"):
-			var color: Color = _signal_color_for(_attack_type)
-			var lifetime: float = _FAN_TELEGRAPH_TIME + _FAN_SWEEP_TIME + 0.1
-			signal_node.call("configure", self, color, lifetime, 3.4)
-		_active_signal = signal_node
+## 윈드업 — 데칼이 charge_windup 초 동안 PC 를 호밍하며 따라다닌다. 끝나면 고정 + 돌진.
+func _state_windup(delta: float) -> void:
+	velocity = Vector3.ZERO
+	move_and_slide()
+	_windup_t -= delta
+	# 호밍 — PC 방향으로 매 프레임 재조준.
+	var to := _player.global_position - global_position
+	to.y = 0.0
+	if to.length_squared() > 0.0001:
+		_charge_dir = to.normalized()
+	if _charge_decal != null and is_instance_valid(_charge_decal) and _charge_decal.has_method("set_lane"):
+		_charge_decal.call("set_lane", global_position, _charge_dir, charge_width, charge_distance)
+	if _windup_t <= 0.0:
+		# 고정 — 데칼 색 진하게, 카메라 짧게 흔들(돌진 직전 긴장).
+		if _charge_decal != null and is_instance_valid(_charge_decal) and _charge_decal.has_method("lock"):
+			_charge_decal.call("lock")
+		var rig := get_tree().get_first_node_in_group("camera_rig")
+		if rig != null and rig.has_method("shake"):
+			rig.call("shake", 0.12, 0.18)
+		_bstate = BState.CHARGE
+		_charge_start = global_position
+		_charge_t = 0.0
+		_charge_hit_done = false
 
-	# post-M6 — color override morphs the swing's payload, not just the
-	# head-icon color:
-	#   WHITE  (잡기)  = double damage (single big hit)
-	#   PURPLE (광역)  = ×1.5 radius, ×1.3 angle (wide AoE)
-	#   GREEN  (다단)  = standard fan + scheduled followup sweep
-	# GREEN's followup is fired below after the first fan spawns.
-	var fan_radius_now: float = fan_radius
-	var fan_angle_now: float = fan_angle_deg
-	var dmg_now: int = attack_damage
-	match _color_override:
-		1:
-			dmg_now = attack_damage * 2
-		2:
-			fan_radius_now = fan_radius * 1.5
-			fan_angle_now = fan_angle_deg * 1.3
-		# GREEN's first swing is normal — followup is the second hit.
+## 돌진 — 고정된 방향으로 빠르게 직진. charge_distance 만큼(또는 안전 캡) 가면 멈춘다.
+## 지나가며 PC 와 가까워지면 1회 데미지.
+func _state_charge(delta: float) -> void:
+	velocity.x = _charge_dir.x * charge_speed * time_scale_mult
+	velocity.z = _charge_dir.z * charge_speed * time_scale_mult
+	velocity.y = 0.0
+	move_and_slide()
+	if not _charge_hit_done and _player != null and is_instance_valid(_player):
+		var d := _player.global_position - global_position
+		d.y = 0.0
+		if d.length() <= charge_width * 0.5 + _PC_RADIUS + 0.4:
+			_charge_hit_done = true
+			if _player.has_method("take_hit"):
+				_player.call("take_hit", charge_damage)
+	_charge_t += delta
+	var traveled := (global_position - _charge_start).length()
+	var max_t: float = charge_distance / maxf(charge_speed, 1.0) + 0.4  # 벽 막힘 등 안전 캡
+	if traveled >= charge_distance or _charge_t >= max_t:
+		_end_charge()
 
-	var fan := telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(fan)
-	if fan.has_method("configure"):
-		# Boss uses a slightly longer sweep so the wider swing reads.
-		fan.call("configure", global_position, to_player_xz,
-			fan_radius_now, fan_angle_now, dmg_now,
-			_FAN_TELEGRAPH_TIME, _FAN_SWEEP_TIME)
-	if fan.has_signal("tree_exited"):
-		fan.tree_exited.connect(_on_telegraph_done, CONNECT_ONE_SHOT)
-	_active_telegraph = fan
+func _end_charge() -> void:
+	_bstate = BState.RECOVER
+	_recover_t = charge_recover
+	_attack_cd = charge_cooldown
+	velocity = Vector3.ZERO
+	move_and_slide()
+	if _charge_decal != null and is_instance_valid(_charge_decal):
+		_charge_decal.queue_free()
+	_charge_decal = null
 
-	# GREEN — schedule a second sweep 0.35s after the first one finishes.
-	# Position + direction snapshotted at telegraph time; the followup
-	# doesn't re-aim because the player would already be reacting to the
-	# first swing.
-	if _color_override == 3:
-		var followup_pos: Vector3 = global_position
-		var followup_dir: Vector3 = to_player_xz
-		var followup_delay: float = _FAN_TELEGRAPH_TIME + _FAN_SWEEP_TIME + 0.35
-		get_tree().create_timer(followup_delay).timeout.connect(
-			_spawn_green_followup.bind(followup_pos, followup_dir))
-
-	_attacking = true
-	_attack_cd = attack_cooldown + 0.5
-
-	# YELLOW only: schedule the parry window to open right before the
-	# sweep moment and close shortly after. RED attacks skip this — they
-	# can't be parried, only dodged.
-	if _attack_type == AttackType.YELLOW:
-		var open_delay: float = max(_FAN_TELEGRAPH_TIME - parry_window_pre_sweep, 0.0)
-		var window_len: float = parry_window_pre_sweep + parry_window_post_sweep
-		get_tree().create_timer(open_delay).timeout.connect(_open_parry_window)
-		get_tree().create_timer(open_delay + window_len).timeout.connect(_close_parry_window)
-
-func _signal_color_for(t: int) -> Color:
-	match _color_override:
-		1:
-			return Color(0.97, 0.97, 1.0, 1.0)   # WHITE — 잡기 (시각만)
-		2:
-			return Color(0.78, 0.42, 0.95, 1.0)  # PURPLE — 광역 (시각만)
-		3:
-			return Color(0.42, 0.92, 0.45, 1.0)  # GREEN — 다단 (시각만)
-	if t == AttackType.YELLOW:
-		return Color(1.0, 0.85, 0.15, 1.0)
-	return Color(0.95, 0.15, 0.15, 1.0)
-
-func _open_parry_window() -> void:
-	if _dead or _blocked or not _attacking:
-		return
-	if _attack_type != AttackType.YELLOW:
-		return
-	_parry_open = true
-
-func _close_parry_window() -> void:
-	_parry_open = false
-
-func _on_telegraph_done() -> void:
-	_attacking = false
-	_active_telegraph = null
-	# If the signal is still around (lifetime tail), let it self-fade.
+## 잠시 정지 — 돌진 후 회복. 끝나면 추적으로.
+func _state_recover(delta: float) -> void:
+	velocity = Vector3.ZERO
+	move_and_slide()
+	_recover_t -= delta
+	if _recover_t <= 0.0:
+		_bstate = BState.CHASE
 
 
-## GREEN signal followup — spawn a second fan at the snapshotted
-## position/direction. Uses a faster telegraph so the second hit reads
-## as a quick chain rather than a separate attack.
-func _spawn_green_followup(pos: Vector3, dir: Vector3) -> void:
-	if _dead:
-		return
-	if telegraph_scene == null:
-		return
-	var fan := telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(fan)
-	if fan.has_method("configure"):
-		fan.call("configure", pos, dir,
-			fan_radius, fan_angle_deg, attack_damage,
-			_FAN_TELEGRAPH_TIME * 0.5, _FAN_SWEEP_TIME)
-
-## take_hit fires when SlashAttack's volume overlaps the boss. During an
-## open YELLOW parry window this is a parry — cancel the swing instead
-## of taking damage. Otherwise normal damage path. `amount` defaults to 1
-## so legacy callers (every non-boss take_hit was 1-shot lethal) keep
-## working; SlashAttack passes 3 during the post-parry chain window.
+## take_hit — 돌진 보스는 패리 패턴이 없다(돌진은 회피 전용). 그냥 피해.
+## amount 기본 1, SlashAttack 의 perfect-parry chain(parry_boost_dmg) 경로도 그대로 받는다.
 func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
-	if _parry_open and _attack_type == AttackType.YELLOW:
-		_on_parried()
-		return
 	if _health != null:
 		_health.take_damage(amount)
-
-func _on_parried() -> void:
-	_parry_open = false
-	# Kill the in-flight wind-up so the swing visually aborts mid-arc.
-	if _active_telegraph != null and is_instance_valid(_active_telegraph):
-		_active_telegraph.queue_free()
-	_active_telegraph = null
-	if _active_signal != null and is_instance_valid(_active_signal) \
-			and _active_signal.has_method("cancel"):
-		_active_signal.call("cancel")
-	_active_signal = null
-	# Curve-decay shake — punchy front, fast tail.
-	var rig := get_tree().get_first_node_in_group("camera_rig")
-	if rig != null and rig.has_method("shake_curve"):
-		rig.call("shake_curve", parry_shake_amp, parry_shake_dur)
-	# Drop attack lock and enter block stun. Attack cooldown gets set to
-	# the block duration so the next attack can't fire before the stun
-	# wears off (and naturally fires soon after we wake up).
-	_attacking = false
-	_blocked = true
-	_attack_cd = block_duration
-	get_tree().create_timer(block_duration).timeout.connect(_end_block)
-	# ⏱ Perfect-parry chain — open a short reward window where the next
-	# slash on this (or any) boss deals `parry_boost_dmg` instead of 1.
-	# SlashAttack reads `parry_boost_until_msec` off the player group;
-	# we stamp it here and let it expire naturally without explicit clear.
-	if _player != null and is_instance_valid(_player) \
-			and "parry_boost_until_msec" in _player:
-		_player.parry_boost_until_msec = Time.get_ticks_msec() + parry_boost_window_ms
-	# Notify the PC so parry-triggered cards (Counter Step today; Zen
-	# meter / etc. later) can branch off a single integration point.
-	if _player != null and is_instance_valid(_player) \
-			and _player.has_method("on_parry_success"):
-		_player.on_parry_success()
-
-func _end_block() -> void:
-	# Defensive: if the boss died mid-block, just stay dead.
-	if _dead:
-		return
-	_blocked = false
 
 ## If the PC's XZ position is inside our extended footprint (boss half-
 ## size + PC radius + slack), snap them outward along the axis with the
@@ -518,6 +428,10 @@ func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
+	# 돌진/윈드업 중 죽으면 레인 데칼이 남으니 정리.
+	if _charge_decal != null and is_instance_valid(_charge_decal):
+		_charge_decal.queue_free()
+	_charge_decal = null
 	if _health != null:
 		_health.clear_stagger()
 	# Stash death position for the EXP gem drop (tree_exited is too late).

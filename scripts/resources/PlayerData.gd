@@ -187,20 +187,28 @@ extends Resource
 ## 지수 감소 계수 k (per second). H *= e^(-k·dt). 클수록 빨리 식음.
 @export var heat_decay_rate: float = 1.0
 
-# ── 마취 비도 (Tranq Dart) — "게임 시작 2" 우클릭(RMB). 곡사로 날아가 착탄 범위
-# 안의 적을 스턴(마취)시킨다. 하데스 캐스트(1/1)식 — 쿨다운으로 충전 회복. ──
-@export_group("Tranq Dart (마취 비도 · 게임 시작2 RMB)")
-## 적 마취(스턴) 지속 시간(초). 범위 내 모든 적이 이 시간만큼 정지.
-@export var tranq_stun_duration: float = 3.0
-## 재사용 대기(초) — 1/1 충전이 회복되는 시간.
-@export var tranq_cooldown: float = 6.0
-## 착탄 범위 반경(m) — 이 안의 적이 스턴.
-@export var tranq_radius: float = 3.0
-## 곡사 사거리(m) — 커서 방향으로 이만큼 떨어진 지점에 떨어진다.
-@export var tranq_range: float = 9.0
-## 곡사 포물선 정점 높이(m).
-@export var tranq_arc_height: float = 3.5
-## 비행 시간(초) — 던져서 착탄까지.
-@export var tranq_travel_time: float = 0.6
+# ── 저스트 패리 (Parry) — "게임 시작 2" 우클릭(RMB). attack1 휘두르기로 패리
+# 윈도우 진입, 그 동안 발사체에 맞으면 피해 없이 쳐낸다. ──
+@export_group("Parry (저스트 패리 · 게임 시작2 RMB)")
+## 패리 유효 시간(초) — 휘두른 뒤 이 동안 발사체를 쳐낼 수 있다.
+@export var parry_window: float = 0.2
+## 재사용 대기(초) — 연타 방지.
+@export var parry_cooldown: float = 0.45
+## attack1 휘두르기 연출 길이(초) — 스프라이트 1회 재생 시간.
+@export var parry_anim_dur: float = 0.3
+## 가드백 — 패리 성공 시 PC 가 뒤로(에임 반대) 짧게 밀리는 연출. speed=초기속도(m/s), dur=지속(초).
+@export var parry_guardback_speed: float = 6.0
+@export var parry_guardback_dur: float = 0.16
+## 패리 히트스탑(순간 멈칫) — scale=느려지는 배수(작을수록 강함), dur=시간(초). 멜리(0.05/0.045)보다 확실히 강하게.
+@export var parry_hitstop_scale: float = 0.035
+@export var parry_hitstop_dur: float = 0.22
+
+# ── 레벨업 넉백 (Level-up Pushback) — 카드 선택 직후 자기 중심 원형으로 적을
+# 약하게 밀어낸다(피해 없음). ──
+@export_group("Level-up Pushback (레벨업 원형 넉백)")
+## 밀어내는 반경(m).
+@export var levelup_push_radius: float = 5.0
+## 넉백 속도(유닛/초). 약하게(요청) — 적 Knockback 이 이 속도로 밀렸다 감쇠.
+@export var levelup_push_speed: float = 6.0
 
 @export var visuals: CharacterVisuals

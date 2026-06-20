@@ -118,7 +118,7 @@ func _build() -> void:
 	var bm := QuadMesh.new()
 	bm.size = Vector2(width + 0.04, height + 0.04)
 	_border.mesh = bm
-	_border.material_override = _make_unshaded(border_color)
+	_border.material_override = _make_unshaded(border_color, 100)
 	_border.position = Vector3(0, 0, -0.003)
 	add_child(_border)
 
@@ -127,7 +127,7 @@ func _build() -> void:
 	var bgm := QuadMesh.new()
 	bgm.size = Vector2(width, height)
 	_bg.mesh = bgm
-	_bg.material_override = _make_unshaded(bg_color)
+	_bg.material_override = _make_unshaded(bg_color, 101)
 	add_child(_bg)
 
 	# Fill: a Node3D carrier pinned to the BG's LEFT edge, holding a quad
@@ -142,7 +142,7 @@ func _build() -> void:
 	var fm := QuadMesh.new()
 	fm.size = Vector2(width, height)
 	_fill.mesh = fm
-	_fill.material_override = _make_unshaded(fill_color)
+	_fill.material_override = _make_unshaded(fill_color, 102)
 	# Place the quad center at +width/2 inside the carrier so the quad's
 	# LEFT edge coincides with the carrier origin (which is at the BG's
 	# left edge). Now scaling the carrier just clips the right side.
@@ -159,11 +159,11 @@ func _build() -> void:
 	var am := QuadMesh.new()
 	am.size = Vector2(width, height)
 	_armor_fill.mesh = am
-	_armor_fill.material_override = _make_unshaded(armor_color)
+	_armor_fill.material_override = _make_unshaded(armor_color, 103)
 	_armor_fill.position = Vector3(width * 0.5, 0, 0)
 	_armor_carrier.add_child(_armor_fill)
 
-func _make_unshaded(color: Color) -> StandardMaterial3D:
+func _make_unshaded(color: Color, priority: int = 100) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = color
@@ -172,6 +172,9 @@ func _make_unshaded(color: Color) -> StandardMaterial3D:
 	# _face_camera(). Per-mesh billboarding rotates each mesh around its
 	# own center, which makes the fill drift left of the BG once HP drops.
 	mat.no_depth_test = true
+	# 같은 바 내부도 레이어별 우선순위 차등(테두리<배경<HP<아머) → no_depth_test 라도
+	# 빨강 HP fill 이 검은 배경에 안 가려진다. 100+ 라 VFX/지오메트리(0) 보다 항상 위.
+	mat.render_priority = priority
 	return mat
 
 ## Connect to a HealthComponent so we auto-refresh on damage/heal events.

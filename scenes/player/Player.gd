@@ -30,14 +30,15 @@ const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 @export var slash_attack_scene: PackedScene
 ## 근접 스윙 VFX 씬 (기본 공격). Player.tscn 에 MeleeSwing.tscn 주입.
 @export var melee_swing_scene: PackedScene
-## 마취 비도 씬 (게임 시작2 RMB). Player.tscn 에 TranqKunai.tscn 주입.
-@export var tranq_scene: PackedScene
 @export var aim_arrow_path: NodePath
 @export var sprite_rig_path: NodePath
 
 var _state: int = State.IDLE
 var _charge_t: float = 0.0
 var _aim_dir: Vector3 = Vector3(1, 0, 0)
+## 가드백 — 패리 직후 PC 가 에임 반대로 짧게 밀린다(감쇠).
+var _guardback_t: float = 0.0
+var _guardback_vel: Vector3 = Vector3.ZERO
 var _cooldown_t: float = 0.0
 var _dash_start: Vector3
 var _dash_end: Vector3
@@ -74,8 +75,23 @@ var _iframe_t: float = 0.0
 # 충돌(접촉피해)/탄에 즉시 피격되는 불쾌감을 막는다. data.slash_post_grace 로 세팅.
 var _slash_grace_t: float = 0.0
 
-# 마취 비도(RMB) 재사용 대기. > 0 동안 발사 불가(1/1 충전 회복). data.tranq_cooldown.
-var _tranq_cd: float = 0.0
+# 저스트 패리(RMB). _parry_t > 0 동안 패리 윈도우(발사체 쳐냄). _parry_cd 는 재사용 대기.
+var _parry_t: float = 0.0
+var _parry_cd: float = 0.0
+# 회피율(레벨업) — take_hit 에서 이 확률로 피해 회피. 0~1.
+var dodge_chance: float = 0.0
+# 레벨업 효과 런타임 보너스(데이터 .tres 를 안 건드려 런 리셋 안전).
+var slash_size_mult: float = 1.0    # 기본 공격(일섬) 범위 배수
+## 기본 공격력(레벨업 "참격 강화" 카드). 슬래시/스윙이 다중타 적·보스에 주는 데미지.
+var attack_power: int = 1
+## 회피 스택 충전 시간 배수(레벨업 "보법" 카드, ×(1-N)). 작을수록 빨리 충전. 0.4 바닥.
+var evade_refill_mult: float = 1.0
+var charge_speed_bonus: float = 0.0 # 충전 속도 가산(높을수록 빨리 참)
+var overheat_dur_reduce: float = 0.0 # 탈진 지속 감소(초)
+var heat_delay_reduce: float = 0.0   # 열 감소 시작 유예 감소(초)
+## 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속. _zone_slow_t > 0 이면 _handle_move 적용.
+var _zone_slow_t: float = 0.0
+var _zone_slow_mult: float = 1.0
 
 # ── 근접 기본 공격(부채꼴 스윙) 상태 ──
 ## 스윙 간격 쿨다운. > 0 이면 아직 다음 스윙 불가(공격 속도).
@@ -230,16 +246,16 @@ func _physics_process(delta: float) -> void:
 	_update_melee(delta)
 	# 열관리(즉발 일섬 모드) — 탈진 타이머 + 지수 감소. 모드1 이면 즉시 반환.
 	_update_heat(delta)
-	# 게임 시작2 — NPC 몸 접촉 시 HP 감소(서로 밀림 없음). 내부에서 무적/대시 중 스킵.
-	if _instant_slash:
-		_check_contact_damage()
+	# 몬스터 몸 접촉 시 HP 감소(무적/대시 중 스킵). contact_damage_enabled 토글이 게이트 —
+	# 근접 모드 기본 OFF, 거합(게임 시작2) 기본 ON(OutGame 시작 핸들러가 설정).
+	_check_contact_damage()
 	# 연속 대시 사이 최소 간격.
 	if _evade_cd > 0.0:
 		_evade_cd -= delta
 	# 회피 스택 리필 — 가득 차지 않았으면 한 칸씩 차오른다(칸당 evade_refill_time 초).
 	if _evade_stacks < data.evade_max_stacks:
 		if _evade_refill_t <= 0.0:
-			_evade_refill_t = data.evade_refill_time
+			_evade_refill_t = data.evade_refill_time * evade_refill_mult
 		_evade_refill_t -= delta
 		if _evade_refill_t <= 0.0:
 			_evade_stacks += 1
@@ -248,8 +264,12 @@ func _physics_process(delta: float) -> void:
 		_iframe_t -= delta
 	if _slash_grace_t > 0.0:
 		_slash_grace_t -= delta
-	if _tranq_cd > 0.0:
-		_tranq_cd -= delta
+	if _parry_t > 0.0:
+		_parry_t -= delta
+	if _parry_cd > 0.0:
+		_parry_cd -= delta
+	if _zone_slow_t > 0.0:
+		_zone_slow_t -= delta
 	match _state:
 		State.IDLE:
 			_handle_move(delta)
@@ -257,7 +277,7 @@ func _physics_process(delta: float) -> void:
 				_check_instant_slash()
 			else:
 				_check_attack_start()
-			_check_tranq()
+			_check_parry()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
 				_cooldown_t -= delta
@@ -270,7 +290,7 @@ func _physics_process(delta: float) -> void:
 				move_and_slide()
 			_update_aim(delta)
 			_check_attack_release()
-			_check_tranq()
+			_check_parry()
 		State.DASHING:
 			_update_dash(delta)
 		State.COOLDOWN:
@@ -298,9 +318,18 @@ func _handle_move(delta: float) -> void:
 	# 열관리 — 탈진(오버히트) 중엔 이동속도 감소.
 	if _overheated:
 		speed_mult *= data.heat_overheat_move_mult
+	# 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속 — PC 동선 방해.
+	if _zone_slow_t > 0.0:
+		speed_mult *= _zone_slow_mult
 	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
 	velocity.x = dir.x * data.move_speed * speed_mult
 	velocity.z = dir.z * data.move_speed * speed_mult
+	# 가드백 — 패리 직후 에임 반대로 밀린다. 남은 시간 비례 감쇠(부드럽게 멈춤).
+	if _guardback_t > 0.0:
+		_guardback_t -= delta
+		var gb_frac: float = clampf(_guardback_t / maxf(data.parry_guardback_dur, 0.001), 0.0, 1.0)
+		velocity.x += _guardback_vel.x * gb_frac
+		velocity.z += _guardback_vel.z * gb_frac
 	velocity.y = 0.0
 	move_and_slide()
 	var moving: bool = dir.length_squared() > 0.01
@@ -357,33 +386,143 @@ func _check_instant_slash() -> void:
 			_aim_arrow.set_charge(0.0)
 
 
-## 마취 비도(RMB) — 게임 시작2 에서 우클릭. 쿨다운(1/1)이 차 있으면 커서 방향으로
-## 곡사 발사 → 착탄 범위 적을 3초 마취(스턴). 모드1 에선 RB 가 게이지 일섬이라 비활성.
-func _check_tranq() -> void:
-	if not _instant_slash or _tranq_cd > 0.0:
+## 저스트 패리(RMB) — 게임 시작2 우클릭. 쿨다운이 차 있으면 attack1 휘두르기로
+## 패리 윈도우(parry_window) 진입. 그 동안 발사체에 맞으면 피해 없이 쳐낸다.
+## 모드1 에선 RB 가 게이지 일섬이라 비활성.
+func _check_parry() -> void:
+	if not _instant_slash or _parry_cd > 0.0:
 		return
 	if Input.is_action_just_pressed("slash"):
 		if _is_pointer_over_ui():
 			return
-		_fire_tranq()
+		_start_parry()
 
-func _fire_tranq() -> void:
-	if tranq_scene == null:
-		return
-	_tranq_cd = data.tranq_cooldown
-	var dir: Vector3 = _aim_dir
+func _start_parry() -> void:
+	_parry_t = data.parry_window
+	_parry_cd = data.parry_cooldown
+	# attack1 휘두르기 — 패리 연출 길이만큼 1회 재생(이동/걷기 애니가 덮지 않게 oneshot).
+	if _sprite_rig != null and _sprite_rig.has_method("play_oneshot"):
+		_sprite_rig.call("play_oneshot", "attack1", data.parry_anim_dur)
+	elif _sprite_rig != null:
+		_sprite_rig.set_state(SpriteRig.State.ATTACK)
+	_play_sfx("parry_swing")
+
+## 패리 윈도우 활성 여부 — Arrow._on_hit 이 발사체 쳐냄 판정에 쓴다.
+func is_parrying() -> bool:
+	return _parry_t > 0.0
+
+## 발사체가 패리 윈도우 중 적중 — Arrow 가 호출. 피해 없이 "쳐냈다" 연출:
+## 카메라 흔들림 + 자기 히트스탑(타격감) + 반짝 스파크 + 패리 보상(Zen/카운터).
+func on_projectile_parried() -> void:
+	_parry_t = 0.0  # 한 번 쳐내면 윈도우 소진(연타 방지)
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null:
+		if rig.has_method("shake"):
+			rig.call("shake", 0.18, 0.25)
+		if rig.has_method("hitstop"):
+			rig.call("hitstop", data.parry_hitstop_scale, data.parry_hitstop_dur)
+	# 가드백 — 에임 반대 방향으로 짧게 밀려난다(쳐낸 반동, 밀리는 손맛).
+	_apply_guardback(-_aim_dir)
+	if _sprite_rig != null and _sprite_rig.has_method("flash"):
+		_sprite_rig.call("flash", 0.22)
+	_spawn_parry_spark()
+	on_parry_success()  # Zen +1 / 카운터스텝 보상 재사용
+	_play_sfx("parry")
+
+
+## 가드백 적용 — dir 방향으로 초기속도를 주고 _handle_move 가 감쇠하며 민다.
+func _apply_guardback(dir: Vector3) -> void:
 	if dir.length_squared() < 0.0001:
-		dir = Vector3(1, 0, 0)
-	dir = dir.normalized()
-	var start: Vector3 = global_position + Vector3(0, 0.8, 0)
-	var goal: Vector3 = global_position + dir * data.tranq_range
-	goal.y = 0.0
-	var dart = tranq_scene.instantiate()
-	if dart.has_method("configure"):
-		dart.call("configure", start, goal, data.tranq_radius, data.tranq_stun_duration,
-			data.tranq_arc_height, data.tranq_travel_time)
-	get_tree().current_scene.add_child(dart)
-	_play_sfx("tranq")
+		return
+	_guardback_vel = dir.normalized() * data.parry_guardback_speed
+	_guardback_t = data.parry_guardback_dur
+
+## "쳐냈다" 반짝 — PC 앞에 흰/금 링이 잠깐 번쩍 퍼지고 사라진다.
+func _spawn_parry_spark() -> void:
+	# "쳐냈다" FX — 노란 섬광 입자가 사방으로 튀는 1회 버스트. 균일한 원형 셸이 안 되게
+	# 속도 편차 크게 + 약한 중력 + 댐핑으로 불규칙하게 흩뿌린다(원형 X, 섬광 O).
+	var p := CPUParticles3D.new()
+	get_tree().current_scene.add_child(p)
+	p.global_position = global_position + Vector3(0, 0.9, 0)
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 20
+	p.lifetime = 0.35
+	p.local_coords = false
+	p.direction = Vector3(0, 0.5, 0)
+	p.spread = 130.0
+	p.initial_velocity_min = 2.5
+	p.initial_velocity_max = 13.0      # 편차 크게 → 깔끔한 원 안 됨
+	p.gravity = Vector3(0, -9.0, 0)    # 살짝 떨어지며 흩어짐(대칭 깨짐)
+	p.damping_min = 1.0
+	p.damping_max = 4.0
+	p.scale_amount_min = 0.04
+	p.scale_amount_max = 0.14
+	# 노란 섬광 → 투명으로 페이드(입자 수명 동안). vertex_color 로 입혀짐.
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1.0, 0.95, 0.45, 1.0))
+	grad.set_color(1, Color(1.0, 0.8, 0.25, 0.0))
+	p.color_ramp = grad
+	var qm := QuadMesh.new()
+	qm.size = Vector2(0.13, 0.13)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_color = Color(1, 1, 1, 1)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.9, 0.3)
+	mat.emission_energy_multiplier = 1.8
+	qm.material = mat
+	p.mesh = qm
+	p.emitting = true
+	get_tree().create_timer(p.lifetime + 0.3).timeout.connect(p.queue_free)
+
+
+## 레벨업 직후(카드 선택 완료) — 자기 중심 원형으로 적을 약하게 밀어낸다(피해 없음)
+## + 링 연출. Main._on_upgrade_card_selected 가 호출.
+func levelup_pushback() -> void:
+	if data == null:
+		return
+	var r: float = data.levelup_push_radius
+	var sp: float = data.levelup_push_speed
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if "_dead" in e and e._dead:
+			continue
+		var to_e: Vector3 = (e as Node3D).global_position - global_position
+		to_e.y = 0.0
+		if to_e.length() > r or to_e.length_squared() < 0.0001:
+			continue
+		if e.has_method("apply_knockback"):
+			e.call("apply_knockback", to_e.normalized(), sp)
+	_spawn_pushback_ring(r)
+
+func _spawn_pushback_ring(r: float) -> void:
+	var ring := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 1.0
+	cyl.bottom_radius = 1.0
+	cyl.height = 0.05
+	ring.mesh = cyl
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.7, 0.9, 1.0, 0.55)
+	mat.emission_enabled = true
+	mat.emission = Color(0.6, 0.85, 1.0)
+	mat.emission_energy_multiplier = 2.0
+	ring.material_override = mat
+	get_tree().current_scene.add_child(ring)
+	ring.global_position = global_position + Vector3(0, 0.08, 0)
+	ring.scale = Vector3(0.2, 1.0, 0.2)
+	var t := ring.create_tween()
+	t.set_parallel(true)
+	t.tween_property(ring, "scale", Vector3(r, 1.0, r), 0.3)
+	t.tween_property(mat, "albedo_color:a", 0.0, 0.4)
+	t.chain().tween_callback(ring.queue_free)
 
 
 # ══════════════ 열관리(Heat) — 즉발 일섬 모드 전용 ══════════════
@@ -405,7 +544,7 @@ func _update_heat(delta: float) -> void:
 	if _heat <= 0.0:
 		return
 	var since: float = float(Time.get_ticks_msec() - _heat_last_msec) / 1000.0
-	if since > data.heat_decay_delay:
+	if since > max(0.0, data.heat_decay_delay - heat_delay_reduce):
 		# 지수 감소 — dH/dt = -k·H → H *= e^(-k·dt). 커브로 부드럽게 식음.
 		_heat *= exp(-data.heat_decay_rate * delta)
 		if _heat < 0.5:
@@ -430,7 +569,7 @@ func _add_heat() -> void:
 ## 발사 봉인(_check_instant_slash). 진입 연출은 빨강 플래시 + 카메라 쉐이크.
 func _enter_overheat() -> void:
 	_overheated = true
-	_overheat_t = data.heat_overheat_duration
+	_overheat_t = max(0.5, data.heat_overheat_duration - overheat_dur_reduce)
 	_heat = data.heat_overheat_threshold
 	if _sprite_rig != null and _sprite_rig.has_method("flash"):
 		_sprite_rig.call("flash", 0.45)
@@ -465,7 +604,7 @@ func _check_attack_release() -> void:
 
 func _update_aim(delta: float) -> void:
 	# 충전 속도 배수 — charge_speed_mult(기본 0.5)만큼 천천히 차오른다(데이터 제어).
-	_charge_t = min(_charge_t + delta * data.charge_speed_mult, data.max_charge_time)
+	_charge_t = min(_charge_t + delta * (data.charge_speed_mult + charge_speed_bonus), data.max_charge_time)
 	# 최대 차지 도달 후 오버차지 누적.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
@@ -538,6 +677,8 @@ func _fire_slash() -> void:
 		slash_range = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
 	# 범위(Vector3) — 젠 버스트면 폭(x)만 배수로 키운다.
 	var ext: Vector3 = data.slash_hit_extents
+	# 레벨업 "기본 공격 범위" — 일섬 판정 박스 폭/길이가산을 배수.
+	ext = Vector3(ext.x * slash_size_mult, ext.y, ext.z * slash_size_mult)
 	if burst_active:
 		ext = Vector3(ext.x * data.zen_burst_width_mult, ext.y, ext.z)
 		if _zen_system != null and _zen_system.has_method("consume_burst"):
@@ -609,6 +750,7 @@ func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector
 	var ext: Vector3 = extents if extents.length_squared() > 0.0001 else data.slash_hit_extents
 	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
+	attack.attack_power = attack_power
 	# ⏱ Zen burst payload — SlashAttack._resolve_boss_damage checks this
 	# meta and returns 5 (vs. 1 / 3) when set. Cheap to carry on the
 	# node; auto-frees with the attack.
@@ -673,6 +815,12 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 	# damage landed.
 	if is_invincible():
 		return
+	# 회피율(레벨업) — 무적과 별개로 확률 회피. 성공 시 피해 없이 흘린다.
+	if dodge_chance > 0.0 and randf() < dodge_chance:
+		if _sprite_rig != null and _sprite_rig.has_method("flash"):
+			_sprite_rig.call("flash", 0.12)
+		_play_sfx("dodge")
+		return
 	# Shield absorb — yellow elite charges. Consume one charge, skip
 	# damage, still trigger i-frame + a softer shake so the absorb reads
 	# as a defensive "ting" instead of a free pass.
@@ -709,8 +857,18 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 	if rig != null and rig.has_method("shake"):
 		rig.call("shake", 0.1, 0.2)
 
+## 밸런싱 아레나 무적 토글(ArenaDebug 패널) — 켜면 절대 안 죽는다(관찰용).
+var god_mode: bool = false
+
 func is_invincible() -> bool:
-	return _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0
+	return god_mode or _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0
+
+
+## 아레나 — 회피 스택 즉시 가득.
+func refill_evade() -> void:
+	if data != null:
+		_evade_stacks = data.evade_max_stacks
+		_evade_refill_t = 0.0
 
 ## --- Shift evade dash ---
 
@@ -763,6 +921,20 @@ func _update_evade(delta: float) -> void:
 	if t >= 1.0:
 		_set_state(State.IDLE)
 
+## 이어서 하기(사망 화면) — 같은 노드를 되살린다: 풀 HP + 2초 무적 + 스프라이트 복원.
+## 사망 시 노드가 free 되기 전(트리 정지 중)이라 같은 PC 를 그대로 살려 진행 유지.
+func revive() -> void:
+	if _health != null:
+		_health.hp = _health.max_hp
+		_health.damaged.emit(0)
+	_iframe_t = 2.0
+	if _sprite_rig != null and _sprite_rig.has_method("revive_reset"):
+		_sprite_rig.call("revive_reset")
+	if _sprite_rig != null and _sprite_rig.has_method("start_iframe_blink"):
+		_sprite_rig.call("start_iframe_blink", 2.0)
+	_set_state(State.IDLE)
+
+
 func _on_died() -> void:
 	# Phoenix — one-shot revival: full HP, 2s of i-frame, skip the
 	# death.emit / sprite tween entirely. _phoenix_used latches so a
@@ -798,6 +970,13 @@ func on_parry_success() -> void:
 	if _zen_system != null and _zen_system.has_method("add"):
 		_zen_system.call("add", 1)
 	_play_sfx("parry")
+
+
+## 주술사 장판(SorcererZone)이 PC 가 장판 안에 있는 동안 매 프레임 호출 — 이동 감속.
+## 짧은 duration 으로 갱신만 하므로 장판을 벗어나면 곧 풀린다(자연 만료).
+func apply_zone_slow(duration: float, mult: float) -> void:
+	_zone_slow_t = maxf(_zone_slow_t, duration)
+	_zone_slow_mult = clampf(mult, 0.1, 1.0)
 
 
 ## Wired by Main / Testplay after building ZenSystem. Holds the ref so
@@ -855,7 +1034,7 @@ func _do_melee_swing() -> void:
 				continue
 		var hp := (e as Node3D).get_node_or_null("HealthComponent")
 		if hp != null and hp is HealthComponent:
-			(hp as HealthComponent).take_damage(data.melee_damage)
+			(hp as HealthComponent).take_damage(data.melee_damage + (attack_power - 1))
 			hit_any = true
 	# 발사체(적 화살)도 부채 안에 들어오면 격추한다.
 	for p in get_tree().get_nodes_in_group("enemy_projectiles"):
@@ -980,7 +1159,7 @@ func get_max_evade_stacks() -> int:
 func evade_refill_frac() -> float:
 	if _evade_stacks >= data.evade_max_stacks:
 		return 1.0
-	return clamp(1.0 - _evade_refill_t / max(data.evade_refill_time, 0.01), 0.0, 1.0)
+	return clamp(1.0 - _evade_refill_t / max(data.evade_refill_time * evade_refill_mult, 0.01), 0.0, 1.0)
 
 
 # ────── M7 sound hook helpers ──────

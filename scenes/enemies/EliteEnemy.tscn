@@ -11,7 +11,6 @@ size = Vector3(0.63, 1.05, 0.63)
 [node name="EliteEnemy" type="CharacterBody3D"]
 transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
 script = ExtResource("1_elite")
-number_label_path = NodePath("NumberLabel")
 mesh_path = NodePath("Visual")
 effect_type = 1
 max_hp = 3
@@ -32,13 +31,3 @@ texture = ExtResource("4_skel")
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
 max_hp = 3
-
-[node name="NumberLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.95, 0)
-billboard = 1
-pixel_size = 0.012
-text = "1"
-font_size = 96
-outline_size = 12
-outline_modulate = Color(0, 0, 0, 1)
-modulate = Color(1, 0.7, 0.2, 1)

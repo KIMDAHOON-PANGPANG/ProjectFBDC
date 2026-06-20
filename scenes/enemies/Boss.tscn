@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
 [ext_resource type="PackedScene" path="res://scenes/effects/BossSignal.tscn" id="4_bsignal"]
 [ext_resource type="Texture2D" path="res://resources/enemies/BaseSkeleton.png" id="5_skel"]
+[ext_resource type="PackedScene" path="res://scenes/effects/ChargeTelegraph.tscn" id="6_chg"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_boss"]
 size = Vector3(2.1, 2.1, 2.1)
@@ -18,6 +19,7 @@ mesh_path = NodePath("Visual")
 max_hp = 15
 telegraph_scene = ExtResource("3_fantel")
 boss_signal_scene = ExtResource("4_bsignal")
+charge_telegraph_scene = ExtResource("6_chg")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

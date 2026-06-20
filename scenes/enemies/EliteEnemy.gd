@@ -212,11 +212,11 @@ func _on_telegraph_done() -> void:
 func apply_knockback(dir: Vector3, speed: float) -> void:
 	_kb.push(dir, speed)
 
-func take_hit() -> void:
+func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
 	if _health != null:
-		_health.take_damage(1)
+		_health.take_damage(amount)
 
 func _on_damaged(_amount: int) -> void:
 	# Always refresh the head-icon to show hits remaining — even on the
@@ -290,13 +290,13 @@ func _color_for_type(t: int) -> Color:
 func _hp_for_type(t: int) -> int:
 	match t:
 		1:
-			return 1  # Explosion — fragile, fires often
+			return 2  # 폭발 — 가장 약함(머리 숫자 제거 → HP 바로 표시)
 		2:
-			return 3  # Bonus PC action
+			return 3  # 보너스 액션
 		3:
-			return 5  # Bullet-time — hardest to earn
+			return 4  # 불릿타임
 		4:
-			return 7  # Shield — even rarer than bullet-time
+			return 5  # 보호막 — 가장 단단
 	return 3
 
 ## Local separation: scan the "elites" group, sum up repulsion vectors from

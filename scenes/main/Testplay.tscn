@@ -14,12 +14,16 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/Boss3.tscn" id="12_boss3"]
 [ext_resource type="PackedScene" path="res://scenes/effects/ExpGem.tscn" id="12_expgem"]
 [ext_resource type="PackedScene" path="res://scenes/ui/AimCursor.tscn" id="13_aim"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Slammer.tscn" id="14_slammer"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Sorcerer.tscn" id="15_sorcerer"]
 
 [node name="Testplay" type="Node3D" unique_id=350878978]
 script = ExtResource("1_testplay")
 player_scene = ExtResource("2_player")
 melee_enemy_scene = ExtResource("3_melee")
+slammer_enemy_scene = ExtResource("14_slammer")
 elite_enemy_scene = ExtResource("4_elite")
+sorcerer_enemy_scene = ExtResource("15_sorcerer")
 boss_scene = ExtResource("5_boss")
 boss_scene_2 = ExtResource("11_boss2")
 boss_scene_3 = ExtResource("12_boss3")

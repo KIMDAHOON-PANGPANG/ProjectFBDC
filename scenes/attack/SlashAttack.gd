@@ -11,6 +11,9 @@ signal hit_enemy(enemy: Node)
 @export var fade_after: float = 0.35
 @export var color: Color = Color(1.0, 0.9, 0.5, 0.85)
 
+## 기본 공격력(레벨업 "참격 강화" 카드). Player 가 스폰 시 주입 — 다중타 적/보스에
+## 이 값만큼 데미지(잡몹/리퍼는 한 방 처치 유지). 보스는 보스데미지 + (이 값 - 1).
+var attack_power: int = 1
 var _length: float = 1.0
 var _width: float = 1.4
 ## 범위 Vector3 분해 — _width=x(폭) · _height=y(높이) · _len_pad=z(전방 길이 가산).
@@ -115,14 +118,11 @@ func _on_area_entered(area: Area3D) -> void:
 	_try_kill(area)
 
 func _try_kill(node: Node) -> void:
-	# 적 발사체 — 격추 대신 반사(되받아치기). reflect 가 있으면 역방향으로 되돌려
-	# 적을 맞히고, 없으면 기존처럼 격추. 어느 쪽이든 적 처치/보스 데미지로 치지 않음.
+	# 적 발사체는 격추만 한다(적 처치/보스 데미지로 치지 않음 — hit_enemy 미발생).
 	var pr := node
 	while pr != null:
 		if pr.is_in_group("enemy_projectiles"):
-			if pr.has_method("reflect"):
-				pr.call("reflect")
-			elif pr.has_method("take_hit"):
+			if pr.has_method("take_hit"):
 				pr.call("take_hit")
 			return
 		pr = pr.get_parent()
@@ -134,9 +134,9 @@ func _try_kill(node: Node) -> void:
 			# 1-shot lethal so passing an arg would either be ignored or
 			# (worse) shift their argless signature. Branch on group.
 			if target.is_in_group("boss"):
-				target.call("take_hit", _resolve_boss_damage())
+				target.call("take_hit", _resolve_boss_damage() + (attack_power - 1))
 			else:
-				target.call("take_hit")
+				target.call("take_hit", attack_power)
 			hit_enemy.emit(target)
 			return
 		var hp := target.get_node_or_null("HealthComponent")

@@ -83,8 +83,8 @@ func _build() -> void:
 	spacer2.custom_minimum_size = Vector2(0, 18)
 	center.add_child(spacer2)
 
-	center.add_child(_make_button("게임 시작", _on_start_pressed))
-	center.add_child(_make_button("게임 시작 2 (즉발 일섬)", _on_start2_pressed))
+	center.add_child(_make_button("게임 시작", _on_start2_pressed))
+	center.add_child(_make_button("밸런싱 아레나 (F1 패널)", _on_arena_pressed))
 	center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
 	center.add_child(_make_button("카드 해금", _on_card_unlock_pressed))
 	center.add_child(_make_button("종료", _on_quit_pressed))
@@ -137,16 +137,18 @@ func _make_button(label: String, cb: Callable) -> Button:
 	return btn
 
 
-func _on_start_pressed() -> void:
-	# 기본(4안) 컨트롤 — LB 근접 스윙 + RB 게이지 일섬.
-	_GameConfig.instant_slash_mode = false
-	get_tree().change_scene_to_file(_MAIN_PATH)
-
-
 func _on_start2_pressed() -> void:
-	# 옛날 거합 컨트롤 — LB 클릭에 일섬 즉발(차징 없음).
+	# 게임 시작 — 일섬(즉발) 모드 + 기본 웨이브. 모드 전환은 인게임 ESC 툴 에디터에서.
 	_GameConfig.instant_slash_mode = true
+	_GameConfig.wave_preset = 0
+	_GameConfig.contact_damage_enabled = false
+	_GameConfig.charge_zoom_enabled = true   # 일섬 모드 — 카메라 줌 기본 ON(밀리만 OFF)
 	get_tree().change_scene_to_file(_MAIN_PATH)
+
+
+## 밸런싱 전용 아레나(Testplay) 입장 — 우측 스폰 버튼 + F1 디버그 패널(무적/배속/스탯주입/TTK).
+func _on_arena_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/main/Testplay.tscn")
 
 
 func _on_meta_pressed() -> void:

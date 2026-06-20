@@ -12,7 +12,7 @@ extends CharacterBody3D
 
 ## 행동 타입 — CHASER = 추적 후 근접(부채) 공격 전용. LEAPER = 리프(곡선 점프
 ## + 빨간 원형 슬램) 전용. Leaper.tscn 이 LEAPER 로 설정해 베리에이션2 가 된다.
-enum Behavior { CHASER, LEAPER }
+enum Behavior { CHASER, LEAPER, SLAMMER }
 @export var behavior: int = Behavior.CHASER
 ## 비주얼 교체(리퍼 색 구분 등). null 이면 DEFAULT_VISUALS 사용.
 @export var visuals_override: CharacterVisuals
@@ -42,6 +42,17 @@ enum Behavior { CHASER, LEAPER }
 @export var leap_pre_time: float = 0.32
 ## 빨간 원형 데칼 텔레그래프(LeapTelegraph) — MeleeEnemy.tscn 에서 주입.
 @export var leap_telegraph_scene: PackedScene
+
+## ── 슬래머(내려찍기) 어택 ── SLAMMER behavior: 걸어와 제자리에서 slam_windup(2초)
+## "힘주기" → slam_radius 넓은 원형 슬램(회피 전용). 기본 근접보다 느리지만 광역.
+## PC 위치를 중심으로 데칼을 깔아 가만히 있으면 못 피한다. enemy.csv(105) 로 조절.
+@export var slam_range: float = 2.2
+@export var slam_windup: float = 2.0
+@export var slam_radius: float = 2.8
+@export var slam_damage: int = 1
+@export var slam_cooldown: float = 1.8
+## 슬램 데칼(LeapTelegraph 재사용) — Slammer.tscn 에서 주입.
+@export var slam_telegraph_scene: PackedScene
 
 ## ── 군집 분리 (Boid) ── 잡몹/리퍼끼리 겹치지 않게 추격 방향에 회피력을 섞는다.
 ## enemy.csv(근접·리퍼) 에서 조절. 0 = 분리 끔. (엘리트는 자체 분리 별도 유지.)
@@ -99,6 +110,8 @@ var _leap_elapsed: float = 0.0
 var _leap_phase: int = 0  # 0=PRE(삐슝 사전경고) / 1=AIR(점프~체공~내려찍기)
 var _leap_pre_t: float = 0.0
 var _active_leap_decal: Node = null
+## 슬래머 슬램 데칼(취소용 — 피격/사망 시 펜딩 슬램 제거).
+var _active_slam_decal: Node = null
 ## 스무스 넉백 상태(피격/피탄 시 밀림).
 var _kb = _KnockbackScript.new()
 
@@ -111,8 +124,13 @@ func _ready() -> void:
 	elif data.visuals == null:
 		data.visuals = DEFAULT_VISUALS
 
-	# 데이터 관리 — 행동 타입에 맞는 CSV 행 적용 (melee=101 / leaper=104).
-	_CombatDataScript.apply_to_enemy(self, "leaper" if behavior == Behavior.LEAPER else "melee")
+	# 데이터 관리 — 행동 타입에 맞는 CSV 행 적용 (melee=101 / leaper=104 / slammer=105).
+	var _kind := "melee"
+	if behavior == Behavior.LEAPER:
+		_kind = "leaper"
+	elif behavior == Behavior.SLAMMER:
+		_kind = "slammer"
+	_CombatDataScript.apply_to_enemy(self, _kind)
 
 	add_to_group("enemies")
 	# Opt-in to the melee category — FanTelegraph attacks live here.
@@ -203,6 +221,11 @@ func _physics_process(delta: float) -> void:
 				_begin_leap(to_player, dist)
 				return
 			_attack_cd = leap_recheck
+	# SLAMMER — 걸어와 슬램 사거리 안 + 쿨다운 차면 제자리 힘주기 슬램. 아니면 추격(아래).
+	elif behavior == Behavior.SLAMMER:
+		if slam_telegraph_scene != null and _attack_cd <= 0.0 and dist <= slam_range:
+			_begin_slam(to_player)
+			return
 
 	# No detection_range gate — the mob always chases the PC regardless
 	# of distance, so the player can never "outrun" the swarm by sprinting
@@ -293,6 +316,36 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 func _on_telegraph_done() -> void:
 	_attacking = false
 	_active_telegraph = null
+
+## SLAMMER 슬램 시작 — PC 의 현재 위치를 중심으로 넓은 원형 데칼(LeapTelegraph 재사용)을
+## 깔고 제자리에서 slam_windup 동안 "힘주기"(rooted). 차오름 끝 = 슬램 데미지 + 쉐이크.
+## PC 가 데칼 밖으로 회피하지 않으면 맞는다(넓은 반경 = 걸어선 빠듯, 회피 권장).
+func _begin_slam(to_player_xz: Vector3) -> void:
+	if slam_telegraph_scene == null:
+		_attack_cd = slam_cooldown
+		return
+	var target: Vector3 = global_position
+	if _player != null and is_instance_valid(_player):
+		target = (_player as Node3D).global_position
+	var decal = slam_telegraph_scene.instantiate()
+	get_tree().current_scene.add_child(decal)
+	if decal.has_method("configure"):
+		decal.call("configure", target, slam_radius, slam_damage, slam_windup)
+	if decal.has_signal("tree_exited"):
+		decal.tree_exited.connect(_on_slam_done, CONNECT_ONE_SHOT)
+	_active_slam_decal = decal
+	_attacking = true
+	# 차징(힘주기) + 슬램 + 회복 동안 다음 공격 잠금.
+	_attack_cd = slam_cooldown + slam_windup + 0.4
+	velocity = Vector3.ZERO
+	move_and_slide()
+	if _sprite_rig != null:
+		_sprite_rig.set_state(SpriteRig.State.ATTACK)
+		_sprite_rig.set_facing(to_player_xz.x)
+
+func _on_slam_done() -> void:
+	_attacking = false
+	_active_slam_decal = null
 
 ## 리프 시작 — 착지 지점에 빨간 원형 데칼을 깔고 곡선 점프를 건다.
 func _begin_leap(to_player_xz: Vector3, dist: float) -> void:
@@ -418,7 +471,7 @@ func _leap_standoff_move(to_player_xz: Vector3, dist: float) -> void:
 ## Called by SlashAttack when this enemy is inside its volume.
 ## 1 damage per slash so LV2 mobs (max_hp=2) take 2 hits, LV1 (max_hp=1) dies
 ## in one. WaveManager / spawn upgrades the EnemyData to bump max_hp.
-func take_hit() -> void:
+func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
 	# ⏱ Preemptive-slash reward (M3 후속) — a slash that lands DURING the
@@ -431,10 +484,18 @@ func take_hit() -> void:
 			_active_telegraph.call("cancel")
 		_active_telegraph = null
 		_attacking = false
-	# 슬래시(PC)는 잡몹/리퍼를 한 방에 정리한다(시그니처 유지). 비도는 Kunai 가
-	# 자체 데미지로 HealthComponent 를 직접 깎으므로 이 경로와 무관.
+	# 슬래머 힘주기 중 평타 적중 → 펜딩 슬램 캔슬(유령 데미지 방지).
+	if _active_slam_decal != null and is_instance_valid(_active_slam_decal):
+		if _active_slam_decal.has_method("cancel"):
+			_active_slam_decal.call("cancel")
+		_active_slam_decal = null
+		_attacking = false
+	# 슬래시(PC) — 잡몹/리퍼는 한 방 정리(999). 슬래머는 2HP 라 1뎀씩(=2방 컷).
 	if _health != null:
-		_health.take_damage(999)
+		if behavior == Behavior.SLAMMER:
+			_health.take_damage(amount)   # 슬래머 = 공격력만큼(레벨링 HP 와 함께 스케일)
+		else:
+			_health.take_damage(999)       # 잡몹/리퍼 = 한 방 처치(공격력 무관)
 	else:
 		_on_died()
 
@@ -453,6 +514,11 @@ func _on_died() -> void:
 			and _active_leap_decal.has_method("cancel"):
 		_active_leap_decal.call("cancel")
 	_active_leap_decal = null
+	# 슬래머 사망 — 펜딩 슬램 데칼 취소.
+	if _active_slam_decal != null and is_instance_valid(_active_slam_decal) \
+			and _active_slam_decal.has_method("cancel"):
+		_active_slam_decal.call("cancel")
+	_active_slam_decal = null
 	# Stash the death position NOW — by the time tree_exited fires (where
 	# Main drops the EXP gem) the node is detaching and global_position
 	# reads as origin.

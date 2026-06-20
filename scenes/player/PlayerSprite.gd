@@ -34,6 +34,13 @@ const SHEETS := {
 		"right": preload("res://market/Adventurer 2D Top-Down/Sprites/ATTACK 2/attack2_right.png"),
 		"up": preload("res://market/Adventurer 2D Top-Down/Sprites/ATTACK 2/attack2_up.png"),
 	},
+	# attack1 — 저스트 패리(칼 휘두르기) 1회 재생용.
+	"attack1": {
+		"down": preload("res://market/Adventurer 2D Top-Down/Sprites/ATTACK 1/attack1_down.png"),
+		"left": preload("res://market/Adventurer 2D Top-Down/Sprites/ATTACK 1/attack1_left.png"),
+		"right": preload("res://market/Adventurer 2D Top-Down/Sprites/ATTACK 1/attack1_right.png"),
+		"up": preload("res://market/Adventurer 2D Top-Down/Sprites/ATTACK 1/attack1_up.png"),
+	},
 }
 
 ## 프레임 재생 속도(초당 프레임). 데이터처럼 인스펙터에서 조절.
@@ -47,8 +54,16 @@ const SHEETS := {
 var _state: int = State.IDLE
 var _dir: String = "down"
 var _frame_t: float = 0.0
+## 1회 재생 오버라이드 애니(예: 패리 attack1). 설정되면 _oneshot_t 동안 state 보다
+## 우선해 1회 재생(마지막 프레임 정지)하고, 끝나면 자동 해제 후 state 애니로 복귀.
+var _oneshot: String = ""
+var _oneshot_t: float = 0.0
 var _base_modulate: Color = Color.WHITE
 var _blink_tween: Tween
+## 사망 연출 트윈 + 부활 복원용 원위치(이어서 하기 — revive_reset 이 트윈 kill 후 복원).
+var _death_tween: Tween
+var _home_pos: Vector3
+var _home_rot: Vector3
 ## SpriteRig API 호환(미사용) — Player.gd 가 `_sprite_rig.fallback_color = ...` 를 호출.
 var fallback_color: Color = Color.WHITE
 
@@ -71,15 +86,27 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# 1회 오버라이드(패리 attack1 등) — 타이머 끝나면 해제하고 현재 state 애니로 복귀.
+	if _oneshot != "":
+		_oneshot_t -= delta
+		if _oneshot_t <= 0.0:
+			_oneshot = ""
+			_frame_t = 0.0
+			frame = 0
+			_apply_sheet()
+	var attacking: bool = (_oneshot != "") or (_state == State.ATTACK)
 	var fps: float = idle_fps
-	match _state:
-		State.WALK: fps = run_fps
-		State.ATTACK: fps = attack_fps
+	if _oneshot != "":
+		fps = attack_fps
+	else:
+		match _state:
+			State.WALK: fps = run_fps
+			State.ATTACK: fps = attack_fps
 	_frame_t += delta * fps
 	while _frame_t >= 1.0:
 		_frame_t -= 1.0
-		if _state == State.ATTACK:
-			# 공격은 마지막 프레임에서 정지(1회 재생) — 대시 동안 일섬 연출.
+		if attacking:
+			# 공격/오버라이드는 마지막 프레임에서 정지(1회 재생).
 			if frame < FRAMES - 1:
 				frame += 1
 		else:
@@ -95,6 +122,19 @@ func set_state(s: int) -> void:
 	if _state == s:
 		return
 	_state = s
+	# 1회 오버라이드(패리)가 재생 중이면 시트/프레임을 덮지 않는다(끝난 뒤 이 state 로 복귀).
+	if _oneshot != "":
+		return
+	_frame_t = 0.0
+	frame = 0
+	_apply_sheet()
+
+## 1회 재생 오버라이드(예: 패리 attack1) — dur 초 동안 state 보다 우선해 재생.
+func play_oneshot(anim: String, dur: float) -> void:
+	if not SHEETS.has(anim):
+		return
+	_oneshot = anim
+	_oneshot_t = max(dur, 0.05)
 	_frame_t = 0.0
 	frame = 0
 	_apply_sheet()
@@ -121,6 +161,8 @@ func _set_dir(d: String) -> void:
 	_apply_sheet()
 
 func _anim_for_state() -> String:
+	if _oneshot != "":
+		return _oneshot
 	match _state:
 		State.WALK: return "run"
 		State.ATTACK: return "attack2"
@@ -159,10 +201,22 @@ func _restore_base_modulate() -> void:
 
 
 func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
+	_home_pos = position
+	_home_rot = rotation
 	set_state(State.DEATH)
-	var t := create_tween()
-	t.set_parallel(true)
-	t.tween_property(self, "modulate:a", 0.0, duration)
-	t.tween_property(self, "position:y", position.y + 0.6, duration)
-	t.tween_property(self, "rotation:z", deg_to_rad(35.0 if _dir != "left" else -35.0), duration)
-	t.chain().tween_callback(parent_to_free.queue_free)
+	_death_tween = create_tween()
+	_death_tween.set_parallel(true)
+	_death_tween.tween_property(self, "modulate:a", 0.0, duration)
+	_death_tween.tween_property(self, "position:y", position.y + 0.6, duration)
+	_death_tween.tween_property(self, "rotation:z", deg_to_rad(35.0 if _dir != "left" else -35.0), duration)
+	_death_tween.chain().tween_callback(parent_to_free.queue_free)
+
+
+## 이어서 하기(부활) — 사망 트윈을 kill 해 queue_free 를 막고 스프라이트를 원상복구.
+func revive_reset() -> void:
+	if _death_tween != null and _death_tween.is_valid():
+		_death_tween.kill()
+	modulate = _base_modulate
+	position = _home_pos
+	rotation = _home_rot
+	set_state(State.IDLE)

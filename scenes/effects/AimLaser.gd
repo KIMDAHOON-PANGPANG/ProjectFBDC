@@ -111,12 +111,16 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 
 	if _flash_t < 0.0:
-		# 차오르는 중 — 빨강 fill 이 중심(원점)에서 바깥으로 0→len 대칭 확장.
+		# 차오르는 중 — 빨강 fill 이 **몬스터 쪽 끝(local -X)에서 PC(+X)** 로 차오른다.
+		# (이전: 중심에서 좌우 대칭 → "흩어짐". 이제 시작점=몬스터, 끝=PC 로 방향성.)
 		var ratio: float = clamp(_elapsed / max(lock_duration, 0.0001), 0.0, 1.0)
-		_fill.scale = Vector3(max(len * ratio, 0.001), 1.0, 1.0)
+		var fill_len: float = max(len * ratio, 0.001)
+		_fill.position = Vector3(-len * 0.5 + fill_len * 0.5, 0.0, 0.0)
+		_fill.scale = Vector3(fill_len, 1.0, 1.0)
 		if ratio >= 1.0:
 			# 100% — 라인 전체가 흰색으로 순간 번쩍(플래시) 후 발사.
 			_flash_t = 0.0
+			_fill.position = Vector3.ZERO
 			_fill.scale = Vector3(len, 1.0, 1.0)
 			_fill_mat.albedo_color = flash_color
 			_fill_mat.emission = flash_color
