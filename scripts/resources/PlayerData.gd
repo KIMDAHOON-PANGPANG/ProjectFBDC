@@ -36,6 +36,12 @@ extends Resource
 ## Cooldown after a slash, in seconds. 0 = no cooldown.
 @export var slash_cooldown: float = 0.15
 
+## D-3 — 일섬 자원 방식 "쿨다운"(GameConfig.slash_resource_mode==1) 전용 재발사 쿨다운(초).
+## 열기(Heat) 시스템을 완전히 대체하는 고정 쿨다운으로, 이 동안 LB 일섬이 막힌다.
+## 미세 post-slash 락(slash_cooldown 0.15~0.3)과 별개의 "발사 자원" 쿨이라 1.2~1.5s 권장.
+## PlayerHud 의 열기 5스택 UI 가 이 쿨의 차오름(0→1, 1=발사가능)을 표시한다.
+@export var slash_fixed_cooldown: float = 1.3
+
 # ── 일섬 돌진/범위 (기획 튜닝) ──
 ## 돌진 속도 (m/s) — 일섬 대시가 1초에 전진하는 거리. 기획 친화 단위.
 ## 캐릭터 이동(5 m/s) 대비 거합 대시는 보통 40~80. 대시 시간 = 거리 ÷ 속도라

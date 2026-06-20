@@ -110,10 +110,10 @@ func _refresh_toggles() -> void:
 		_contact_btn.text = "몬스터 충돌 피해: " + ("ON" if _GameConfigScript.contact_damage_enabled else "OFF")
 	if _resource_btn != null:
 		var rm: int = _GameConfigScript.slash_resource_mode
-		_resource_btn.text = "[PLACEHOLDER] 일섬 자원: " + ("열기" if rm == 0 else "쿨다운")
+		_resource_btn.text = "일섬 자원: " + ("열기" if rm == 0 else "쿨다운")
 	if _aim_btn != null:
 		var am: int = _GameConfigScript.slash_aim_mode
-		_aim_btn.text = "[PLACEHOLDER] 일섬 에임: " + ("차징" if am == 0 else "즉발")
+		_aim_btn.text = "일섬 에임: " + ("차징" if am == 0 else "즉발")
 
 func _build() -> void:
 	# 어둡게 — 전체 화면 반투명 검정(ESC 눌렀음을 시각화 + 게임 클릭 차단). 리사이즈 추종.

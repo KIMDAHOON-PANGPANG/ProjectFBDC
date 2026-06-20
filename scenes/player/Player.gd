@@ -371,17 +371,46 @@ func _check_attack_start() -> void:
 			_aim_arrow.set_charge(0.0)
 
 
-## 게임 시작 2(즉발 일섬) — LB 클릭마다 차징 없이 곧바로 일섬을 발사한다.
-## 쿨다운(data.slash_cooldown)만 적용 · 게이지/차징 게이트 없음 = 옛날 거합 손맛.
+## D-3 — 일섬 자원 방식. 0=열기(Heat) / 1=고정 쿨다운. 즉발 일섬 모드에서만 의미.
+func _is_cooldown_resource() -> bool:
+	return _instant_slash and _GameConfigScript.slash_resource_mode == 1
+
+## D-3 — 일섬 에임 방식. 0=차징 / 1=즉발(LB 누르는 즉시 풀거리 발사). 즉발 일섬 모드 전용.
+func _is_instant_aim() -> bool:
+	return _instant_slash and _GameConfigScript.slash_aim_mode == 1
+
+## D-3 — 쿨다운 자원 모드에서 다음 일섬까지의 락 잔여 타이머(초). 발사 시 세팅, 매프레임 감소.
+var _slash_fixed_cd_t: float = 0.0
+
+
+## 게임 시작 2(즉발 일섬) — LB 클릭으로 일섬을 발사한다.
+## 자원: 열기(Heat) 또는 고정 쿨다운(GameConfig.slash_resource_mode).
+## 에임: 차징(hold→release) 또는 즉발(press 즉시 풀거리, GameConfig.slash_aim_mode).
 func _check_instant_slash() -> void:
-	if _overheated:
-		return  # 탈진 중엔 일섬 발사 불가(이동 감소 + 발사 봉인)
+	# ── 자원 게이트 ──
+	if _is_cooldown_resource():
+		# 고정 쿨다운 모드 — 열기 시스템 비활성. 쿨 중엔 LB 무시.
+		if _slash_fixed_cd_t > 0.0:
+			return
+	else:
+		# 열기 모드 — 탈진 중엔 발사 봉인.
+		if _overheated:
+			return
+	# post-slash 미세 락(slash_cooldown / fizzle lockout) 공통.
 	if _cooldown_t > 0.0:
 		return
 	if Input.is_action_just_pressed("fire"):
 		if _is_pointer_over_ui():
 			return
-		# 차징 시작 — 이동하며 충전(State.AIMING). LB 를 떼거나 오버차지가 끝나면
+		# ── 에임 분기 ──
+		if _is_instant_aim():
+			# 즉발 — 차징 단계(AIMING)를 건너뛰고 풀거리(instant_slash_distance)로 즉시 발사.
+			# _fire_slash 가 charge_frac=1 을 읽도록 _charge_t 를 최대로 세팅.
+			_charge_t = data.max_charge_time
+			_overcharge_t = 0.0
+			_fire_slash()
+			return
+		# 차징 — 이동하며 충전(State.AIMING). LB 를 떼거나 오버차지가 끝나면
 		# _fire_slash 로 발사된다. (UI 화살은 이동해도 PC 를 따라온다.)
 		_set_state(State.AIMING)
 		_charge_t = 0.0
@@ -537,6 +566,19 @@ func _spawn_pushback_ring(r: float) -> void:
 func _update_heat(delta: float) -> void:
 	if not _instant_slash:
 		return
+	# 고정 쿨다운 자원 모드 — 열기 시스템 완전 비활성. 재발사 락만 깎는다.
+	if _is_cooldown_resource():
+		if _slash_fixed_cd_t > 0.0:
+			_slash_fixed_cd_t -= delta
+			if _slash_fixed_cd_t <= 0.0:
+				_slash_fixed_cd_t = 0.0
+				_play_sfx("cooldown_ready")
+		# 모드 전환 잔재 정리 — 열 누적/탈진 흔적이 남지 않게.
+		if _heat != 0.0:
+			_heat = 0.0
+		if _overheated:
+			_overheated = false
+		return
 	if _overheated:
 		_overheat_t -= delta
 		if _overheat_t <= 0.0:
@@ -599,9 +641,17 @@ func is_instant_slash_mode() -> bool:
 	return _instant_slash
 
 func get_heat_frac() -> float:
+	# 고정 쿨다운 자원 모드 — 열 대신 쿨다운 차오름을 반환(0=막 발사, 1=발사 가능).
+	# PlayerHud 의 5스택이 이 값으로 쿨 진행도를 표시(코드 변경 없이 의미만 모드분기).
+	if _is_cooldown_resource():
+		var cd: float = max(data.slash_fixed_cooldown, 0.0001)
+		return clamp(1.0 - _slash_fixed_cd_t / cd, 0.0, 1.0)
 	return clamp(_heat / max(data.heat_overheat_threshold, 1.0), 0.0, 1.0)
 
 func is_overheated() -> bool:
+	# 쿨다운 모드엔 탈진 개념이 없다 — 항상 false(HUD 가 회색 탈진 표시 안 함).
+	if _is_cooldown_resource():
+		return false
 	return _overheated
 
 
@@ -723,16 +773,20 @@ func _fire_slash() -> void:
 	_spawn_slash_attack(_dash_start, _dash_end, ext, burst_active)
 	# ⏱ Perfect-charge zen reward — full charge (>= 0.9 of max) feeds
 	# the meter. Burst slashes don't double-dip (they consumed the meter).
-	if not burst_active and _zen_system != null and charge_frac >= data.perfect_charge_threshold \
-			and _zen_system.has_method("add"):
+	# 즉발 에임은 차징이 없으므로 퍼펙트 차징 보상에서 제외(공짜 Zen 방지).
+	if not burst_active and not _is_instant_aim() and _zen_system != null \
+			and charge_frac >= data.perfect_charge_threshold and _zen_system.has_method("add"):
 		_zen_system.call("add", 1)
 	# M7 — slash SFX cue. SoundManager silently no-ops if no .ogg yet.
 	if Engine.has_singleton("SoundManager") or _has_sound_manager():
 		_play_sfx("burst_slash" if burst_active else "slash")
 	slash_started.emit()
-	# 모드2(즉발 일섬) — 발사마다 열 누적(연타 보너스), 100% 시 탈진.
+	# 모드2(즉발 일섬) — 자원 방식에 따라: 고정 쿨다운(락 세팅) 또는 열기(누적+탈진).
 	if _instant_slash:
-		_add_heat()
+		if _is_cooldown_resource():
+			_slash_fixed_cd_t = max(data.slash_fixed_cooldown, 0.0)
+		else:
+			_add_heat()
 
 func _update_dash(delta: float) -> void:
 	_dash_elapsed += delta
