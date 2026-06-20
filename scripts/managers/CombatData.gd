@@ -168,12 +168,7 @@ static func _apply_boss(e, m) -> void:
 	e.block_duration = m.block_duration
 	e.parry_boost_window_ms = m.parry_boost_window_ms
 	e.parry_boost_dmg = m.parry_boost_dmg
-	e.enable_white_signal = m.enable_white_signal
 	e.white_ratio = m.white_ratio
-	e.enable_purple_signal = m.enable_purple_signal
-	e.purple_ratio = m.purple_ratio
-	e.enable_green_signal = m.enable_green_signal
-	e.green_ratio = m.green_ratio
 	if "charge_range" in e: e.charge_range = m.charge_range
 	if "charge_windup" in e: e.charge_windup = m.charge_windup
 	if "charge_speed" in e: e.charge_speed = m.charge_speed

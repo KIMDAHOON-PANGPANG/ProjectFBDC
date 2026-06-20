@@ -162,18 +162,11 @@ func _rebuild_sweep_mesh() -> void:
 func _begin_sweep() -> void:
 	if _consumed:
 		return
-	# Resolve damage at the moment the sweep visually fires. See class
-	# doc for why this is a single point-check, not an Area3D window.
+	# 35프레임(스트라이크) 시점 데미지 점검(점-판정). 흰 스윕 라인은 제거 — 스프라이트
+	# 공격 모션(34 윈드업→35 스트라이크)이 스윙을 표현하므로 흰 선이 불필요.
 	_try_damage_player_now()
-	# Then swing the sweep line for the player's eyes — purely cosmetic.
-	_sweep_line.visible = true
-	_sweep_line.rotation = Vector3(0.0, -_half_angle_rad, 0.0)
-	var t := create_tween()
-	t.tween_property(_sweep_line, "rotation:y", _half_angle_rad, sweep_time)\
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	# Wait for the sweep to visually complete, then fade and free.
 	var off_t := create_tween()
-	off_t.tween_interval(sweep_time + 0.02)
+	off_t.tween_interval(0.08)
 	off_t.tween_callback(_fade_and_free)
 
 func _try_damage_player_now() -> void:

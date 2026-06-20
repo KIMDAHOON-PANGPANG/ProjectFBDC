@@ -31,10 +31,3 @@ static func apply_box(shape: BoxShape3D, base_size: Vector3) -> void:
 	if shape == null:
 		return
 	shape.size = base_size * HITBOX_SCALE
-
-## DEPRECATED: contact (body-touch) damage was removed when every melee
-## monster moved to the shared FanTelegraph attack. No live code calls
-## this anymore — kept only so old callers / scripts that import the
-## module don't crash mid-refactor. Remove once nothing references it.
-static func contact_damage_range(pc_base_radius: float, enemy_base_radius: float, slack: float = 0.06) -> float:
-	return (pc_base_radius + enemy_base_radius) * HITBOX_SCALE + slack

@@ -55,16 +55,6 @@ extends Node3D
 
 const _NORMAL_SATURATION: float = 1.12
 
-# 일섬 게이지 바 (Main 미러). 화면 하단 중앙 0~100% 바.
-const _SLASH_GAUGE_W := 280.0
-const _SLASH_GAUGE_H := 22.0
-const _SLASH_GAUGE_FILL := Color(0.3, 0.7, 1.0, 0.9)
-const _SLASH_GAUGE_FILL_READY := Color(1.0, 0.82, 0.2, 0.95)
-
-# 좌상단 칸 단위 HP (Main 미러). 빨강=남은 칸, 어두운색=잃은 칸.
-const _HP_FULL := Color(0.85, 0.15, 0.15)
-const _HP_EMPTY := Color(0.22, 0.08, 0.08)
-
 # --- Chapter / EXP scripts (preload to dodge class_name cache misses
 # in --headless runs, same as Main.gd) ---
 const _ExpSystemScript := preload("res://scripts/managers/ExpSystem.gd")
@@ -81,16 +71,12 @@ var _camera: HD2DCamera
 var _enemies_root: Node3D
 var _exp_bar: CanvasLayer
 var _exp_system: Node
+var _player_hud: Control
+const _PlayerHudScene := preload("res://scenes/ui/PlayerHud.gd")
+const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 var _world_env: WorldEnvironment
 var _elite_effect_service: Node
 var _bullet_time_service: Node
-# 일섬 게이지 바 (Main HUD 미러).
-var _slash_gauge_bg: ColorRect
-var _slash_gauge_bar: ColorRect
-var _slash_gauge_label: Label
-# 좌상단 칸 단위 HP (Main HUD 미러).
-var _hp_box: HBoxContainer
-var _hp_cells: Array = []
 
 func _ready() -> void:
 	_warm_placeholder_cache()
@@ -117,8 +103,7 @@ func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 		return
-	_refresh_hp_cells()
-	_refresh_slash_gauge()
+	# HP/열기/회피/레벨은 PlayerHud 가 자가 갱신(PC 게터 덕타이핑).
 
 ## --- Procedural arena (mirrors Main; intentional duplication so this
 ## scene stays independent of Main's chapter coupling) ---
@@ -225,6 +210,8 @@ func _build_chapter_systems() -> void:
 	_exp_system.name = "ExpSystem"
 	add_child(_exp_system)
 	_exp_system.leveled_up.connect(_on_leveled_up)
+	if _player_hud != null:
+		_player_hud.exp_system = _exp_system  # 하단 HUD 레벨 뱃지 소스
 	if exp_bar_scene != null:
 		_exp_bar = exp_bar_scene.instantiate() as CanvasLayer
 		add_child(_exp_bar)
@@ -358,6 +345,9 @@ func _spawn_echo_circular_at_player() -> void:
 		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
 
 func _on_leveled_up(_new_level: int) -> void:
+	if _player != null and is_instance_valid(_player) and _player.has_method("grant_iframe"):
+		var dur: float = (_player.data.levelup_iframe if _player.data != null else 1.0)
+		_player.call("grant_iframe", dur)
 	if level_up_screen_scene == null:
 		return
 	if not is_inside_tree():
@@ -534,7 +524,11 @@ func _build_help_label() -> void:
 	canvas.name = "TestplayHelp"
 	add_child(canvas)
 	var label := Label.new()
-	label.text = "Testplay  |  WASD: 이동  LMB: 근접 공격  RMB(hold): 일섬(게이지 100%)  SPACE: 회피  R: 재시작"
+	# 컨트롤 안내 — 모드별 LB/RB 역할 분기(Main 미러).
+	if _GameConfigScript.instant_slash_mode:
+		label.text = "Testplay  |  WASD: 이동  LMB(hold): 일섬 차징·발사  RMB: 패리  SPACE: 회피  R: 재시작"
+	else:
+		label.text = "Testplay  |  WASD: 이동  LMB: 근접 공격  RMB(hold): 일섬(게이지 100%)  SPACE: 회피  R: 재시작"
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	label.add_theme_constant_override("outline_size", 4)
@@ -542,95 +536,9 @@ func _build_help_label() -> void:
 	# HP 칸(20,16)이 좌상단을 차지하므로 도움말은 한 줄 아래로.
 	label.position = Vector2(20, 50)
 	canvas.add_child(label)
-	_build_hp_cells(canvas)
-	_build_slash_gauge(canvas)
-
-## 좌상단 칸 단위 HP (Main._build_hud 의 _hp_box 미러). 빈 컨테이너만 만들고
-## `_refresh_hp_cells` 가 매 프레임 채운다.
-func _build_hp_cells(canvas: CanvasLayer) -> void:
-	_hp_box = HBoxContainer.new()
-	_hp_box.add_theme_constant_override("separation", 5)
-	_hp_box.position = Vector2(20, 16)
-	canvas.add_child(_hp_box)
-
-## 좌상단 칸 단위 HP 갱신 (Main._refresh_hp_cells 미러).
-func _refresh_hp_cells() -> void:
-	if _hp_box == null or _player == null or not is_instance_valid(_player):
-		return
-	if not _player.has_method("get_hp"):
-		return
-	var max_hp: int = 3
-	if _player.has_method("get_max_hp"):
-		max_hp = max(1, int(_player.call("get_max_hp")))
-	if _hp_cells.size() != max_hp:
-		for c in _hp_cells:
-			if is_instance_valid(c):
-				c.queue_free()
-		_hp_cells.clear()
-		for i in max_hp:
-			var cell := ColorRect.new()
-			cell.custom_minimum_size = Vector2(26, 26)
-			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_hp_box.add_child(cell)
-			_hp_cells.append(cell)
-	var cur_hp: int = int(_player.call("get_hp"))
-	for i in _hp_cells.size():
-		_hp_cells[i].color = _HP_FULL if i < cur_hp else _HP_EMPTY
-
-## 일섬 게이지 바 (Main._build_slash_gauge 미러). 화면 하단 중앙 0~100% 바.
-func _build_slash_gauge(canvas: CanvasLayer) -> void:
-	_slash_gauge_bg = ColorRect.new()
-	_slash_gauge_bg.color = Color(0.07, 0.07, 0.09, 0.85)
-	_slash_gauge_bg.anchor_left = 0.5
-	_slash_gauge_bg.anchor_right = 0.5
-	_slash_gauge_bg.anchor_top = 1.0
-	_slash_gauge_bg.anchor_bottom = 1.0
-	_slash_gauge_bg.offset_left = -_SLASH_GAUGE_W * 0.5
-	_slash_gauge_bg.offset_right = _SLASH_GAUGE_W * 0.5
-	_slash_gauge_bg.offset_top = -(_SLASH_GAUGE_H + 28.0)
-	_slash_gauge_bg.offset_bottom = -28.0
-	_slash_gauge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	canvas.add_child(_slash_gauge_bg)
-
-	_slash_gauge_bar = ColorRect.new()
-	_slash_gauge_bar.color = _SLASH_GAUGE_FILL
-	_slash_gauge_bar.position = Vector2(2, 2)
-	_slash_gauge_bar.size = Vector2(0, _SLASH_GAUGE_H - 4.0)
-	_slash_gauge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_slash_gauge_bg.add_child(_slash_gauge_bar)
-
-	_slash_gauge_label = Label.new()
-	_slash_gauge_label.text = "일섬 0%"
-	_slash_gauge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_slash_gauge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_slash_gauge_label.add_theme_color_override("font_color", Color(1, 1, 1))
-	_slash_gauge_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_slash_gauge_label.add_theme_constant_override("outline_size", 4)
-	_slash_gauge_label.add_theme_font_size_override("font_size", 14)
-	_slash_gauge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_slash_gauge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_slash_gauge_bg.add_child(_slash_gauge_label)
-
-## 매 프레임 일섬 게이지 바 갱신 (Main._refresh_slash_gauge 미러).
-func _refresh_slash_gauge() -> void:
-	if _slash_gauge_bar == null or _player == null or not is_instance_valid(_player):
-		return
-	if not _player.has_method("slash_gauge_frac"):
-		return
-	# 모드2(즉발 일섬)는 일섬 게이지 미사용 → 게이지바 숨김 (Main 미러).
-	if _player.has_method("is_instant_slash_mode") and bool(_player.call("is_instant_slash_mode")):
-		if _slash_gauge_bg != null:
-			_slash_gauge_bg.visible = false
-		return
-	var frac: float = clampf(_player.call("slash_gauge_frac"), 0.0, 1.0)
-	_slash_gauge_bar.size = Vector2((_SLASH_GAUGE_W - 4.0) * frac, _SLASH_GAUGE_H - 4.0)
-	var ready: bool = _player.has_method("is_slash_ready") and bool(_player.call("is_slash_ready"))
-	if ready:
-		_slash_gauge_bar.color = _SLASH_GAUGE_FILL_READY
-		_slash_gauge_label.text = "⚔ 일섬 READY (RMB)"
-	else:
-		_slash_gauge_bar.color = _SLASH_GAUGE_FILL
-		_slash_gauge_label.text = "일섬 %d%%" % int(round(frac * 100.0))
+	# 하단 중앙 PC HUD(초상화 + HP + 열기/일섬 스택 + 회피 스택 + 레벨). exp_system 은 아레나 셋업에서 주입.
+	_player_hud = _PlayerHudScene.new()
+	canvas.add_child(_player_hud)
 
 ## --- Button callbacks ---
 
@@ -690,6 +598,23 @@ func _wave_count_alive() -> int:
 		if is_instance_valid(e) and not e.is_in_group("boss"):
 			n += 1
 	return n
+
+
+## 아레나 — 웨이브 시계 점프(스토리보드 페이즈 빨리 테스트).
+func arena_wave_jump(secs: float) -> void:
+	if _wave_mgr != null and _wave_mgr.has_method("force_time"):
+		var t: float = secs
+		if _wave_mgr.has_method("elapsed"):
+			t += float(_wave_mgr.call("elapsed"))
+		_wave_mgr.call("force_time", t)
+
+## 아레나 readout 용 — 현재 웨이브 시간/목표 인원.
+func arena_wave_info() -> String:
+	if _wave_mgr == null or not _wave_running:
+		return "웨이브: 정지"
+	var t: float = (float(_wave_mgr.call("elapsed")) if _wave_mgr.has_method("elapsed") else 0.0)
+	var tg: int = (int(_wave_mgr.call("current_target")) if _wave_mgr.has_method("current_target") else 0)
+	return "웨이브: %.0fs · 목표 %d" % [t, tg]
 
 
 func _on_spawn_regular_10() -> void:

@@ -60,9 +60,6 @@ func set_charge(t: float) -> void:
 	set_length(length)
 	_material.albedo_color = color_min.lerp(color_max, t)
 
-func get_length() -> float:
-	return _current_length
-
 ## Aims along the given direction in world space (XZ plane).
 func aim_at_direction(dir: Vector3) -> void:
 	var flat := Vector3(dir.x, 0.0, dir.z)

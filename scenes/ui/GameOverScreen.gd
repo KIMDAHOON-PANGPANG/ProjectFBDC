@@ -10,7 +10,6 @@ extends CanvasLayer
 ## Identical structure to ChapterClearScreen so future ArenaServices
 ## extraction can share a base class.
 
-signal retry_pressed
 signal quit_pressed
 ## 이어서 하기 — 진행(레벨/카드/스탯) 유지하고 같은 PC 부활. Main 이 받아 revive + 재개.
 signal continue_pressed
@@ -171,7 +170,6 @@ func _format_time(t: float) -> String:
 
 
 func _on_retry_pressed() -> void:
-	retry_pressed.emit()
 	var tree := get_tree()
 	if tree == null:
 		return

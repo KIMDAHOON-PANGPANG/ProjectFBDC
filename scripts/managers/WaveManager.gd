@@ -37,8 +37,12 @@ var _boss_fired: bool = false
 
 ## 웨이브 인원 배수(ESC 비율 프리셋). 1.0=곡선 그대로. 원거리 프리셋이 0.1 로 줄인다.
 var target_mult: float = 1.0
-## target_mult 적용 시 최소 동시 인원 바닥(너무 적지 않게 — 요청: "너무 적지도 많지도").
+## target_mult 적용 시 최소 동시 인원 바닥(비율모델에선 미사용 — 호환 유지).
 var min_target: int = 0
+## 비율 기반 스폰 — 잡든 말든 시간별 비율대로 나온다(인구 유지 아님). 누적 버퍼 + 성능 안전망.
+const _RATE_PER_UNIT: float = 0.1   # 곡선값 1당 초당 스폰 비율(예: 곡선 32 → 3.2/초)
+const _HARD_CAP: int = 120          # 동시 생존 성능 안전망(고정 목표 아님 — 평상시 거의 안 닿음)
+var _spawn_accum: float = 0.0
 
 
 ## Inject the active chapter's curve. Resets all run-state so the same
@@ -49,6 +53,7 @@ func set_curve(c: WaveCurve) -> void:
 	curve = c
 	_elapsed = 0.0
 	_tick_accum = 0.0
+	_spawn_accum = 0.0
 	_elites_fired = false
 	_boss_fired = false
 
@@ -81,21 +86,27 @@ func _process(delta: float) -> void:
 		_maintain_population()
 
 
+## 비율 기반 스폰 — "이 시간이면 초당 이만큼" 으로 나온다. 안 잡아도 계속 나오고,
+## 잡으면 화면이 비는 구조(고정 목표 유지 아님). 성능 안전망(_HARD_CAP)에서만 멈춘다.
 func _maintain_population() -> void:
 	if curve == null:
 		return
 	if not request_spawn_cb.is_valid() or not count_alive_cb.is_valid():
 		return
-	var target: int = curve.target_for_elapsed(_elapsed)
-	# 웨이브 비율 프리셋(ESC 패널)이 인원 배수를 걸 수 있다 — 원거리 웨이브는 1/10.
-	if not is_equal_approx(target_mult, 1.0):
-		target = max(min_target, int(ceil(float(target) * target_mult)))
-	var lv: int = curve.lv_for_elapsed(_elapsed)
 	var alive: int = count_alive_cb.call()
-	var deficit: int = target - alive
-	if deficit <= 0:
+	if alive >= _HARD_CAP:
+		return  # 성능 안전망 — 너무 쌓이면 잠깐 멈춤(고정 목표 아님)
+	# 시간별 초당 스폰 비율 = 곡선값 × _RATE_PER_UNIT × target_mult(프리셋).
+	var rate: float = float(curve.target_for_elapsed(_elapsed)) * _RATE_PER_UNIT
+	if not is_equal_approx(target_mult, 1.0):
+		rate *= target_mult
+	_spawn_accum += rate * curve.tick_period
+	var n: int = int(_spawn_accum)
+	if n <= 0:
 		return
-	var n: int = min(deficit, curve.max_spawn_per_tick)
+	_spawn_accum -= float(n)
+	n = min(n, curve.max_spawn_per_tick)
+	var lv: int = curve.lv_for_elapsed(_elapsed)
 	for i in n:
 		request_spawn_cb.call(lv)
 
@@ -134,6 +145,15 @@ func leaper_ratio() -> float:
 	if _elapsed < curve.leaper_start_time:
 		return 0.0
 	return curve.leaper_ratio
+
+
+## 슬래머 비율 — slammer_start_time 전에는 0(전부 일반 근접). 스토리보드: ~40s 부터.
+func slammer_ratio() -> float:
+	if curve == null:
+		return 0.3
+	if not ("slammer_start_time" in curve) or _elapsed < curve.slammer_start_time:
+		return 0.0
+	return curve.slammer_ratio
 
 
 ## Test/debug helper: jump the clock forward. Resets the one-shot guards

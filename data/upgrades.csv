@@ -9,3 +9,4 @@ overheat_reduce,냉각,탈진 시간 -0.3초,0.3,1,0
 heat_delay_reduce,발열 억제,열 감소 시작 -0.4초,0.4,1,0
 attack_power,참격 강화,기본 공격 위력 +1,1,1,0
 evade_refill,보법,회피 스택 충전 속도 +12%,0.12,1,0
+exp_range,경험치 자석,경험치 획득 범위 +30%,0.3,1,0

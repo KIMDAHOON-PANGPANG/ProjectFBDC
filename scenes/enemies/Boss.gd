@@ -53,8 +53,6 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 @export var attack_damage: int = 2
 @export var fan_radius: float = 3.0
 @export var fan_angle_deg: float = 90.0
-## Shared FanTelegraph PackedScene wired in Boss.tscn. (돌진 보스 전환으로 미사용 — 추후 정리)
-@export var telegraph_scene: PackedScene
 
 @export_group("Charge (멧돼지 돌진 — 기본 패턴)")
 ## 돌진을 시작할 수 있는 최대 거리(유닛). "아주 먼 거리에서" — 크게.
@@ -77,24 +75,13 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 @export var charge_telegraph_scene: PackedScene
 
 @export_group("Critical Attack")
-## Floating YELLOW/RED icon spawned at the boss's head during a wind-up.
-@export var boss_signal_scene: PackedScene
 ## Chance an attack rolls YELLOW (parryable). User-tuned baseline 0.7.
 @export var parry_yellow_ratio: float = 0.7
 ## When true, a fraction `white_ratio` of attacks roll WHITE instead of
 ## YELLOW/RED. WHITE behaves like RED (no parry, must dodge) but signals
 ## a future "grab pattern" — currently a visual-only distinction so
-## Chapter 2's boss reads differently. PURPLE / GREEN added in M6 for
-## Boss 3 (also RED semantics, visual only — real grab/AoE/multi-hit
-## mechanics are post-M6).
-@export var enable_white_signal: bool = false
+## Chapter 2's boss reads differently.
 @export var white_ratio: float = 0.0
-## M6 — PURPLE: 광역 텔레그래프 (현재 RED 의미, 시각만 보라). Boss 3 도입.
-@export var enable_purple_signal: bool = false
-@export var purple_ratio: float = 0.0
-## M6 — GREEN: 다단히트 (현재 RED 의미, 시각만 녹색). Boss 3 도입.
-@export var enable_green_signal: bool = false
-@export var green_ratio: float = 0.0
 @export_group("Parry Reward")
 ## ⏱ Perfect-parry chain reward window. A successful parry sets the PC's
 ## `parry_boost_until_msec` to `now + parry_boost_window_ms`; the next
@@ -109,13 +96,6 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 @export var parry_window_post_sweep: float = 0.1
 ## How long the boss is rooted/locked after a successful parry.
 @export var block_duration: float = 1.0
-## Camera shake on successful parry — strong + short ease-out curve.
-@export var parry_shake_amp: float = 0.5
-@export var parry_shake_dur: float = 0.3
-## Constants for the FanTelegraph timings (must match `_begin_telegraph`'s
-## configure call). Pulled out so the parry timer math can reference them.
-const _FAN_TELEGRAPH_TIME: float = 0.5
-const _FAN_SWEEP_TIME: float = 0.2
 
 ## Boss body footprint half-size on XZ (BoxShape3D in Boss.tscn is 2.1
 ## cube, half = 1.05). The PC's iaido dash uses direct global_position

@@ -45,6 +45,10 @@ extends Resource
 @export var leaper_ratio: float = 0.0
 ## 리퍼가 등장하기 시작하는 경과 시간(초). 요청: 1분대 웨이브부터 → 60.0.
 @export var leaper_start_time: float = 0.0
+## 슬래머(내려찍기) — 근접 슬롯 중 이 비율이 슬래머. slammer_start_time 후부터 적용.
+@export var slammer_ratio: float = 0.3
+## 슬래머 등장 시작 경과 시간(초). 0=처음부터. 스토리보드: ~40s(2렙 즈음).
+@export var slammer_start_time: float = 0.0
 
 
 ## Defensive lookup — caller passes elapsed time, gets back the active

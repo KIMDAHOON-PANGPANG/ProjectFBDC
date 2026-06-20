@@ -14,6 +14,9 @@ signal hit_enemy(enemy: Node)
 ## 기본 공격력(레벨업 "참격 강화" 카드). Player 가 스폰 시 주입 — 다중타 적/보스에
 ## 이 값만큼 데미지(잡몹/리퍼는 한 방 처치 유지). 보스는 보스데미지 + (이 값 - 1).
 var attack_power: int = 1
+## ⏱ 적중 시 미세 히트스탑("탁탁 걸리는" 손맛) — 쓸고 지날 때 적마다 잠깐 멈칫. scale=느려지는 배수, dur=시간(초).
+@export var hit_hitstop_scale: float = 0.45
+@export var hit_hitstop_dur: float = 0.03
 var _length: float = 1.0
 var _width: float = 1.4
 ## 범위 Vector3 분해 — _width=x(폭) · _height=y(높이) · _len_pad=z(전방 길이 가산).
@@ -137,14 +140,25 @@ func _try_kill(node: Node) -> void:
 				target.call("take_hit", _resolve_boss_damage() + (attack_power - 1))
 			else:
 				target.call("take_hit", attack_power)
+				_slash_hitstop()  # 잡몹/엘리트 쓸고 갈 때 탁탁 걸리는 미세 히트스탑
 			hit_enemy.emit(target)
 			return
 		var hp := target.get_node_or_null("HealthComponent")
 		if hp != null and hp is HealthComponent:
 			(hp as HealthComponent).take_damage(999)
+			_slash_hitstop()
 			hit_enemy.emit(target)
 			return
 		target = target.get_parent()
+
+
+## ⏱ 적중 미세 히트스탑 — 카메라 rig 의 hitstop 을 짧게 호출. 적 연속 적중이면 갱신되며 "탁탁".
+func _slash_hitstop() -> void:
+	if hit_hitstop_dur <= 0.0:
+		return
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null and rig.has_method("hitstop"):
+		rig.call("hitstop", hit_hitstop_scale, hit_hitstop_dur)
 
 
 ## ⏱ Damage resolver for boss hits. Two boost paths can apply:

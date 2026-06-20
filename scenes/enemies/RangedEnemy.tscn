@@ -1,10 +1,11 @@
-[gd_scene load_steps=7 format=3 uid="uid://b8enmerg00001"]
+[gd_scene load_steps=8 format=3 uid="uid://b8enmerg00001"]
 
 [ext_resource type="Script" path="res://scenes/enemies/RangedEnemy.gd" id="1_ranged"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
 [ext_resource type="Script" path="res://scripts/components/SpriteRig.gd" id="3_rig"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/Arrow.tscn" id="4_arrow"]
 [ext_resource type="PackedScene" path="res://scenes/effects/AimLaser.tscn" id="5_aimlaser"]
+[ext_resource type="Texture2D" path="res://market/NPC/Sword/Sword.png" id="6_sword"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_renemy"]
 radius = 0.224
@@ -29,6 +30,13 @@ max_hp = 1
 script = ExtResource("3_rig")
 sprite_3d_path = NodePath("Sprite3D")
 fallback_color = Color(1, 0.75, 0.25, 1)
+sheet = ExtResource("6_sword")
+tint = Color(1, 0.82, 0.3, 1)
+sheet_pixel_size = 0.028
+move_anim = 0
+attack_anim = 1
+move_fps = 8.0
+attack_fps = 10.0
 
 [node name="Sprite3D" type="Sprite3D" parent="SpriteRig"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)

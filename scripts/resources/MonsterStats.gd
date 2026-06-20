@@ -27,7 +27,7 @@ extends Resource
 
 # ── 원거리(궁수) ──
 @export var keep_distance: float = 6.0
-@export var arrow_speed: float = 6.75
+@export var arrow_speed: float = 4.7   # 6.75 에서 -30% (요청)
 @export var aim_lock_duration: float = 1.3
 
 # ── 리퍼(도약 내려찍기) ──

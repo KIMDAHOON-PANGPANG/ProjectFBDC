@@ -237,6 +237,11 @@ func _ready() -> void:
 		var hpbar := get_node_or_null("HpBar3D")
 		if hpbar != null and hpbar.has_method("attach_health"):
 			hpbar.call("attach_health", _health)
+	# 머리 위 3D 바(HP/회피/열기)는 하단 PlayerHud 로 이전 — PC 자신 것은 숨긴다.
+	for _bn in ["HpBar3D", "DodgeStackBar3D", "HeatBar3D"]:
+		var _b := get_node_or_null(_bn) as Node3D
+		if _b != null:
+			_b.visible = false
 
 	_build_dust_emitter()
 
@@ -859,9 +864,15 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 
 ## 밸런싱 아레나 무적 토글(ArenaDebug 패널) — 켜면 절대 안 죽는다(관찰용).
 var god_mode: bool = false
+## 레벨업 "경험치 자석" 카드 — ExpGem 자석 반경 배수(런마다 1.0 리셋).
+var exp_magnet_mult: float = 1.0
 
 func is_invincible() -> bool:
 	return god_mode or _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0
+
+## LB 공격(일섬 대시) 중인가 — ExpGem 이 이 동안 획득/자석 안 함(요청).
+func is_slashing() -> bool:
+	return _state == State.DASHING
 
 
 ## 아레나 — 회피 스택 즉시 가득.
@@ -869,6 +880,14 @@ func refill_evade() -> void:
 	if data != null:
 		_evade_stacks = data.evade_max_stacks
 		_evade_refill_t = 0.0
+
+
+## 레벨업 등에서 호출 — duration 만큼 무적 + 깜빡임(기존 iframe 보다 길면 갱신).
+## tree.paused 중엔 _iframe_t 가 안 닳으므로, 카드 고르고 재개하면 그대로 무적이 남는다.
+func grant_iframe(duration: float) -> void:
+	_iframe_t = maxf(_iframe_t, duration)
+	if _sprite_rig != null and _sprite_rig.has_method("start_iframe_blink"):
+		_sprite_rig.call("start_iframe_blink", duration)
 
 ## --- Shift evade dash ---
 

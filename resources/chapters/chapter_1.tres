@@ -1,19 +1,15 @@
-[gd_resource type="Resource" script_class="WaveCurve" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="WaveCurve" format=3 uid="uid://poqqnykx1kki"]
 
-[ext_resource type="Script" path="res://scripts/resources/WaveCurve.gd" id="1_wc"]
+[ext_resource type="Script" uid="uid://de0cebx7ies8l" path="res://scripts/resources/WaveCurve.gd" id="1_wc"]
 
 [resource]
 script = ExtResource("1_wc")
-chapter_id = 1
-chapter_name = "Chapter 1"
-curve_times = PackedFloat32Array(0, 30, 60, 90, 120)
-curve_targets = PackedInt32Array(28, 60, 62, 84, 16)
-curve_lvs = PackedInt32Array(1, 1, 2, 2, 2)
-elite_time = 60.0
-boss_time = 120.0
-tick_period = 1.0
-max_spawn_per_tick = 7
-ranged_ratio = 0.16
-ranged_start_time = 120.0
-leaper_ratio = 0.1
-leaper_start_time = 30.0
+curve_times = PackedFloat32Array(0, 20, 40, 70, 100, 110, 150, 175)
+curve_targets = PackedInt32Array(5, 12, 22, 32, 4, 30, 38, 6)
+curve_lvs = PackedInt32Array(1, 1, 2, 2, 2, 3, 3, 3)
+elite_time = 120.0
+boss_time = 180.0
+tick_period = 0.8
+ranged_ratio = 0.22
+ranged_start_time = 20.0
+slammer_start_time = 40.0

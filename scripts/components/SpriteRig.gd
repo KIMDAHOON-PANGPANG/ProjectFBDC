@@ -1,58 +1,216 @@
 class_name SpriteRig
 extends Node3D
 
-## Sprite3D wrapper for HD-2D characters.
-## Applies a CharacterVisuals resource (sprite textures + pixel size).
-## Handles state-driven texture swaps and horizontal flipping by facing.
+## HD-2D 캐릭터용 Sprite3D 래퍼 — 2가지 모드:
+##   (A) 애니메이션 시트 모드: `sheet`(예: market/Sword/Sword.png) 지정 시 프레임 범위 기반
+##       애니메이션 재생. set_state(IDLE/WALK/ATTACK/HURT/DEATH) 가 해당 프레임 범위를 돌린다.
+##       move_anim(Walk/Run/Run2)·attack_anim(근접27-34/원거리34-40/돌진41-46)·프레임별 fps 를
+##       몬스터별로 설정(데이터 드리블). 색은 tint(틴트)로 베리에이션.
+##   (B) 레거시 모드: sheet 미지정 시 기존 CharacterVisuals 텍스처 스왑 동작(미마이그레이션 적 호환).
+## API(set_state/set_facing/flash/start_iframe_blink/play_death_then_free)는 두 모드 공통.
 
 enum State { IDLE, WALK, ATTACK, HURT, DEATH }
 
+## 리컬러 셰이더 — 어두운 시트(Sword)도 tint 색으로 베리에이션. material_override 로 적용.
+const _RECOLOR_SHADER := preload("res://shaders/monster_recolor.gdshader")
+
 @export var sprite_3d_path: NodePath
+# ── 레거시(CharacterVisuals) ──
 @export var visuals: CharacterVisuals
 @export var fallback_color: Color = Color(0.85, 0.85, 0.85)
+
+# ── 애니메이션 시트 모드 ──
+@export_group("Animated Sheet (Sword.png 류)")
+## 지정하면 시트 애니메이션 모드. 비우면 레거시 모드.
+@export var sheet: Texture2D
+@export var sheet_hframes: int = 14
+@export var sheet_vframes: int = 8
+@export var tint: Color = Color.WHITE
+@export var sheet_pixel_size: float = 0.03
+## 이동 애니: 0=Walk(일반) / 1=Run / 2=Run2 (엘리트·보스는 Run/Run2 분배).
+@export_enum("Walk", "Run", "Run2") var move_anim: int = 0
+## 공격 애니: 0=근접 27-34 / 1=원거리 34-40 / 2=돌진 41-46 / 3=없음.
+@export_enum("Melee 27-34", "Ranged 34-40", "Charge 41-46", "None") var attack_anim: int = 0
+@export var idle_fps: float = 6.0
+@export var move_fps: float = 9.0
+@export var attack_fps: float = 12.0
+@export var hit_fps: float = 12.0
+@export var death_fps: float = 10.0
+
+# ⚠ 시트 레이아웃 = 태그별 행(좌측 정렬). 그래서 Godot Sprite3D 프레임 인덱스(=row*14+col)는
+# aseprite 글로벌 인덱스와 다르다. 행: 0=Idle 1=Run 2=Run2 3=Walk 4=Attack(14) 5=AttackCombo(8)
+# 6=Hit(2) 7=Death(11). (PNG 14열×8행, 픽셀 content 분석으로 확정.)
+const _IDLE := Vector2i(0, 6)         # row0
+const _RUN := Vector2i(14, 17)        # row1
+const _RUN2 := Vector2i(28, 35)       # row2
+const _WALK := Vector2i(42, 48)       # row3
+const _ATK_MELEE := Vector2i(64, 65)  # 글로벌 34-35: 34=윈드업(데칼+고정) / 35=스트라이크(타격). attack_fps 낮춰 34 를 ~1초 유지.
+const _ATK_RANGED := Vector2i(64, 70) # row4 끝~row5 (글로벌 34-40)
+const _CHARGE := Vector2i(71, 76)     # row5 AttackCombo 中 (글로벌 41-46)
+const _HIT := Vector2i(84, 85)        # row6
+const _DEATH := Vector2i(98, 108)     # row7
+## 캐릭터가 128px 프레임의 좌측(cx≈29)에 그려져 있어 origin 에 맞추는 가로 보정(px).
+const _CHAR_OFFSET_X: float = 36.0
 
 var _sprite: Sprite3D
 var _state: int = State.IDLE
 var _facing_right: bool = true
-# Cached resting modulate so flash() can always tween back to the same base
-# regardless of whether a previous flash tween is still in flight.
 var _base_modulate: Color = Color.WHITE
-# Currently-running blink tween, so a new hit can cancel it cleanly.
 var _blink_tween: Tween
+var _animated: bool = false
+
+# 현재 재생 중인 애니 구간.
+var _from: int = 0
+var _to: int = 6
+var _fps: float = 6.0
+var _loop: bool = true
+var _anim_t: float = 0.0
+var _done: bool = false   # 원샷 완료(마지막 프레임 hold)
+## 애니 재생 배속(불릿타임 등). 적이 매 프레임 갱신.
+var time_scale_mult: float = 1.0
+
 
 func _ready() -> void:
 	if sprite_3d_path.is_empty():
 		_sprite = _find_sprite()
 	else:
-		_sprite = get_node(sprite_3d_path) as Sprite3D
+		_sprite = get_node_or_null(sprite_3d_path) as Sprite3D
 	if _sprite == null:
 		return
-	# BILLBOARD_ENABLED (full billboard) instead of FIXED_Y: with the HD-2D
-	# camera pitched ~49° down, FIXED_Y leaves sprites as world-vertical planes
-	# that get visually compressed by cos(pitch) ≈ 0.66× in height. For art
-	# drawn upright (PC) that still reads OK; for art drawn in a horizontal
-	# pose (PoisonSkeleton lunge) the compression makes it look like a flat
-	# decal on the ground — a "too top-down" feel. ENABLED keeps the sprite's
-	# plane parallel to the camera plane so the pixel art is always shown at
-	# its native aspect, restoring the quarter-view HD-2D presence.
 	_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_sprite.shaded = false
-	# Why transparent=true here: opaque + ALPHA_CUT_DISCARD is cheaper, but on
-	# d3d12 backends some imported pixel-art textures end up rendering their
-	# fully-transparent RGB as opaque white. Enabling the transparent pass
-	# guarantees alpha is honoured regardless of import-time channel handling.
+	# transparent=true: d3d12 에서 일부 픽셀아트가 투명 RGB 를 흰색 불투명으로 렌더하는 버그 회피.
 	_sprite.transparent = true
 	_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	_sprite.alpha_scissor_threshold = 0.5
 	_sprite.no_depth_test = false
 	_sprite.double_sided = false
 	_sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	_apply_visuals()
-	_state = -1  # force first refresh
-	set_state(State.IDLE)
 
+	_animated = sheet != null
+	if _animated:
+		_sprite.texture = sheet
+		_sprite.hframes = sheet_hframes
+		_sprite.vframes = sheet_vframes
+		_sprite.pixel_size = sheet_pixel_size
+		_sprite.offset = Vector2(_CHAR_OFFSET_X, 0.0)  # 좌측 캐릭터를 origin 에 정렬
+		# 리컬러 셰이더 — 어두운 몸도 tint 색으로 보이게(베리에이션). 플래시/블링크/페이드는
+		# modulate(=셰이더 COLOR)로 유지하므로 base_modulate 는 흰색.
+		var sm := ShaderMaterial.new()
+		sm.shader = _RECOLOR_SHADER
+		sm.set_shader_parameter("albedo", sheet)
+		sm.set_shader_parameter("tint", tint)
+		_sprite.material_override = sm
+		_sprite.modulate = Color.WHITE
+		_base_modulate = Color.WHITE
+		set_process(true)
+		_state = -1
+		set_state(State.IDLE)
+	else:
+		_apply_visuals()
+		set_process(false)
+		_state = -1
+		set_state(State.IDLE)
+
+
+func _process(delta: float) -> void:
+	if not _animated or _sprite == null:
+		return
+	_anim_t += delta * maxf(time_scale_mult, 0.0) * _fps
+	var span: int = _to - _from + 1
+	if span <= 0:
+		return
+	var idx: int = int(_anim_t)
+	if _loop:
+		_sprite.frame = _from + (idx % span)
+	else:
+		if idx >= span:
+			_sprite.frame = _to  # 마지막 프레임 hold
+			_done = true
+		else:
+			_sprite.frame = _from + idx
+
+
+# ── 상태 ──
+func set_state(s: int) -> void:
+	if _state == s:
+		return
+	_state = s
+	if _animated:
+		_play_state(s)
+	else:
+		_refresh_texture()
+
+
+func _play_state(s: int) -> void:
+	match s:
+		State.IDLE:
+			_set_anim(_IDLE, idle_fps, true)
+		State.WALK:
+			_set_anim(_move_range(), move_fps, true)
+		State.ATTACK:
+			_set_anim(_attack_range(), attack_fps, false)
+		State.HURT:
+			_set_anim(_HIT, hit_fps, false)
+		State.DEATH:
+			_set_anim(_DEATH, death_fps, false)
+
+
+func _set_anim(r: Vector2i, fps: float, loop: bool) -> void:
+	_from = r.x
+	_to = r.y
+	_fps = maxf(fps, 0.1)
+	_loop = loop
+	_anim_t = 0.0
+	_done = false
+	if _sprite != null:
+		_sprite.frame = _from
+
+
+func _move_range() -> Vector2i:
+	match move_anim:
+		1: return _RUN
+		2: return _RUN2
+		_: return _WALK
+
+
+func _attack_range() -> Vector2i:
+	match attack_anim:
+		1: return _ATK_RANGED
+		2: return _CHARGE
+		3: return _IDLE  # None — idle 유지
+		_: return _ATK_MELEE
+
+
+## 피격 모션 1회(48-49). 적 피격 시 호출 — 끝나면 다음 set_state 가 복귀시킴.
+func play_hit() -> void:
+	if not _animated:
+		flash(0.18)
+		return
+	_state = State.HURT
+	_set_anim(_HIT, hit_fps, false)
+
+
+# ── 방향 플립 ──
+func set_facing(dir_x: float) -> void:
+	if not _animated and visuals != null and not visuals.flip_h_on_facing:
+		return
+	if abs(dir_x) < 0.01:
+		return
+	_facing_right = dir_x > 0.0
+	if _sprite != null:
+		var art_faces_right: bool = _animated or visuals == null or visuals.default_facing_right
+		_sprite.flip_h = (not _facing_right) if art_faces_right else _facing_right
+		if _animated:
+			# 플립하면 캐릭터가 프레임 우측으로 가므로 보정 부호도 뒤집어 origin 유지.
+			_sprite.offset.x = (-_CHAR_OFFSET_X if _sprite.flip_h else _CHAR_OFFSET_X)
+
+
+# ── 레거시(CharacterVisuals) ──
 func set_visuals(v: CharacterVisuals) -> void:
 	visuals = v
+	if _animated:
+		return  # 시트 모드에선 무시(틴트만 유효).
 	_apply_visuals()
 	_refresh_texture()
 
@@ -73,25 +231,6 @@ func _find_sprite() -> Sprite3D:
 			return child
 	return null
 
-func set_state(s: int) -> void:
-	if _state == s:
-		return
-	_state = s
-	_refresh_texture()
-
-func set_facing(dir_x: float) -> void:
-	if visuals != null and not visuals.flip_h_on_facing:
-		return
-	if abs(dir_x) < 0.01:
-		return
-	_facing_right = dir_x > 0.0
-	if _sprite != null:
-		var art_faces_right: bool = visuals == null or visuals.default_facing_right
-		# When the source PNG already faces right, "facing right" = no flip.
-		# When the source PNG faces left, invert so the visible direction
-		# matches movement.
-		_sprite.flip_h = (not _facing_right) if art_faces_right else _facing_right
-
 func _refresh_texture() -> void:
 	if _sprite == null:
 		return
@@ -107,11 +246,8 @@ func _refresh_texture() -> void:
 		tex = PlaceholderSprite.make(fallback_color)
 	_sprite.texture = tex
 
-## Brief over-bright flash on the sprite to telegraph a hit. Caller decides
-## the duration — typical hit feedback is ~0.16s total.
-## Implementation: tween modulate up to a super-white, then back to the
-## cached `_base_modulate`. Always restoring to the cached resting tint
-## means overlapping flashes don't drift the sprite brighter and brighter.
+
+# ── 피격/무적 연출(두 모드 공통, modulate 기반) ──
 func flash(duration: float = 0.16) -> void:
 	if _sprite == null:
 		return
@@ -120,27 +256,12 @@ func flash(duration: float = 0.16) -> void:
 	t.tween_property(_sprite, "modulate", bright, duration * 0.2)
 	t.tween_property(_sprite, "modulate", _base_modulate, duration * 0.8)
 
-## Strobe the sprite for the duration to visualise an active i-frame.
-## Alternates between a BRIGHT over-bright modulate (opaque) and an
-## INVISIBLE state (modulate alpha = 0, which is below the sprite's
-## ALPHA_CUT_DISCARD threshold so the whole sprite drops out).
-##
-## Using alpha-toggle on top of brightness gives a strong, unmistakeable
-## "I'm invincible" read — this replaces the over-bright-only flash, which
-## was nearly invisible because Sprite3D modulate channels >1.0 get
-## clamped at presentation time and the PC's resting tint is already
-## close to white.
-##
-## Cancels any in-flight blink so back-to-back hits don't compound.
 func start_iframe_blink(duration: float = 1.0) -> void:
 	if _sprite == null:
 		return
 	if _blink_tween != null and _blink_tween.is_valid():
 		_blink_tween.kill()
-	# Bright "on" phase — over-bright + fully opaque. Reads as a flash.
 	var bright: Color = Color(2.5, 2.5, 2.5, 1.0)
-	# Invisible "off" phase — alpha 0 falls below the sprite's scissor
-	# threshold (0.5) and the whole sprite gets discarded for that frame.
 	var invisible: Color = Color(_base_modulate.r, _base_modulate.g, _base_modulate.b, 0.0)
 	var half_cycle: float = 0.08
 	var cycles: int = max(int(duration / (half_cycle * 2.0)), 1)
@@ -148,7 +269,6 @@ func start_iframe_blink(duration: float = 1.0) -> void:
 	for i in cycles:
 		_blink_tween.tween_property(_sprite, "modulate", bright, half_cycle)
 		_blink_tween.tween_property(_sprite, "modulate", invisible, half_cycle)
-	# Hard restore at the end — guarantees the PC is visible after.
 	_blink_tween.tween_callback(_restore_base_modulate)
 
 func _restore_base_modulate() -> void:

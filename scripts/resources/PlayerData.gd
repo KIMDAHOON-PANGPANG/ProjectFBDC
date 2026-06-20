@@ -4,8 +4,8 @@ extends Resource
 ## Player tunables - swap a resource for fast iteration.
 
 @export var move_speed: float = 5.0
-## 4안 — 칸 단위 HP. 초기 3칸. 레벨업 "강건"으로 +1.
-@export var max_hp: int = 3
+## 자연수 HP — 근접 일반 몹 공격력(1)의 10배. 피격마다 공격력만큼 감소. 레벨업 "강건"으로 +1.
+@export var max_hp: int = 10
 
 ## --- Iaijutsu Slash tunables ---
 ## Time (sec) the dash takes from start to end.
@@ -77,35 +77,6 @@ extends Resource
 ## 스택을 전부 소진하면 가득(=max) 차기까지 걸리는 시간(초). (CSV: evade_refill_time)
 @export var evade_refill_time: float = 5.0
 
-# ── 4안 — 비도(Kunai) 기본 공격 ──
-@export_group("Kunai (기본 공격)")
-## Ammo per magazine. Empties → auto-reload.
-@export var max_ammo: int = 5
-## Reload duration (sec) once the magazine empties.
-@export var reload_time: float = 1.5
-## Min interval between shots (sec).
-@export var fire_cooldown: float = 0.25
-## 수동 조준 비도 데미지 — 초반 밸런스 기준 잡몹(HP 2) 한 방. (CSV: kunai_damage)
-@export var kunai_damage: int = 2
-## 자동락온(SPACE ON) 비도 데미지 — 더 낮아 한 방에 안 죽음. (CSV: kunai_autoaim_damage)
-@export var kunai_autoaim_damage: int = 1
-## 자동락온 시 투사체 속도 배수(더 느림). (CSV: kunai_autoaim_speed_mult)
-@export var kunai_autoaim_speed_mult: float = 0.6
-## Projectile speed (units/sec). (CSV: kunai_speed)
-@export var kunai_speed: float = 6.5
-## 비도 피탄 시 적이 밀려나는 속도(유닛/초, 스무스 감쇠). (CSV: kunai_knockback)
-@export var kunai_knockback: float = 7.0
-## Kunai despawn time (sec).
-@export var kunai_lifetime: float = 2.0
-## Auto-aim lock-on radius (units). SPACE toggles auto-aim; the nearest
-## enemy inside this circle is targeted (ties broken randomly).
-@export var autoaim_radius: float = 9.0
-## 이동 중 발사 시 탄도 분산 각도(±도). 멈춰서 쏘면 분산 없음. (CSV: kunai_move_spread_deg)
-@export var kunai_move_spread_deg: float = 8.0
-## LB 사격/장전 중 이동속도 배수(0.5 = 50% 감속). 기본 이동 시엔 1.0. (CSV: kunai_fire_move_mult)
-## ⚠ 비도(원거리) 제거로 현재 미사용 — 추후 정리 대상.
-@export var kunai_fire_move_mult: float = 0.5
-
 # ── 근접 기본 공격 (Death Must Die 식 부채꼴 스윙) — 비도(원거리) 대체 ──
 @export_group("Melee (기본 공격)")
 ## 스윙 사거리(유닛). (CSV: melee_range)
@@ -139,6 +110,8 @@ extends Resource
 @export_group("Combat Tuning (이관)")
 ## 피격 후 무적 시간(초). 요청: 1초. 이 동안 플래시 머티리얼 깜빡임으로 무적 표시.
 @export var hit_iframe: float = 1.0
+## 레벨업 시 부여되는 무적 시간(초). 일시정지 중엔 안 닳아 카드 고르고 재개하면 이만큼 무적.
+@export var levelup_iframe: float = 1.0
 ## 일섬(대시) 직후 짧은 회복 무적(초) — 착지 지점에서 적 충돌/탄에 즉시 피격되는
 ## 불쾌감을 막는다. is_invincible 에 포함(접촉피해/피탄 공통). 0 = 끔.
 @export var slash_post_grace: float = 0.4

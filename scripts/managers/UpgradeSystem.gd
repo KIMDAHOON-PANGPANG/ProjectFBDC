@@ -158,5 +158,9 @@ static func apply(card_id: String, player: Node, _exp_system: Node) -> void:
 			# 회피 충전 시간 ×(1-value) — 0.4 바닥(보스전에서 너무 빨리 회피 못 쓰게).
 			if "evade_refill_mult" in player:
 				player.evade_refill_mult = maxf(0.4, player.evade_refill_mult * (1.0 - v))
+		"exp_range":
+			# 경험치 자석 반경 +value(픽당) — ExpGem 이 player.exp_magnet_mult 로 읽음.
+			if "exp_magnet_mult" in player:
+				player.exp_magnet_mult += v
 		_:
 			push_warning("UpgradeSystem: unknown card id '%s'" % card_id)

@@ -1,19 +1,5 @@
 [remap]
 
-importer="csv_translation"
-type="Translation"
+importer="keep"
+type=""
 uid="uid://gusgodp3n34m"
-
-[deps]
-
-files=["res://data/upgrades.name.translation", "res://data/upgrades.desc.translation", "res://data/upgrades.value.translation", "res://data/upgrades.initial.translation", "res://data/upgrades.unlock.translation"]
-
-source_file="res://data/upgrades.csv"
-dest_files=["res://data/upgrades.name.translation", "res://data/upgrades.desc.translation", "res://data/upgrades.value.translation", "res://data/upgrades.initial.translation", "res://data/upgrades.unlock.translation"]
-
-[params]
-
-compress=1
-delimiter=0
-unescape_keys=false
-unescape_translations=true

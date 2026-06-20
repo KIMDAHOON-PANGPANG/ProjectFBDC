@@ -2,8 +2,6 @@
 
 [ext_resource type="Script" path="res://scenes/enemies/Boss.gd" id="1_boss"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
-[ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
-[ext_resource type="PackedScene" path="res://scenes/effects/BossSignal.tscn" id="4_bsignal"]
 [ext_resource type="Texture2D" path="res://resources/enemies/BaseSkeleton.png" id="5_skel"]
 [ext_resource type="PackedScene" path="res://scenes/effects/ChargeTelegraph.tscn" id="6_chg"]
 
@@ -20,10 +18,7 @@ max_hp = 22
 attack_cooldown = 1.4
 fan_radius = 3.3
 parry_yellow_ratio = 0.6
-enable_white_signal = true
 white_ratio = 0.2
-telegraph_scene = ExtResource("3_fantel")
-boss_signal_scene = ExtResource("4_bsignal")
 charge_telegraph_scene = ExtResource("6_chg")
 boss_tint = Color(0.85, 0.6, 1, 1)
 

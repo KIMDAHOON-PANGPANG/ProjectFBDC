@@ -2,8 +2,6 @@
 
 [ext_resource type="Script" path="res://scenes/enemies/Boss.gd" id="1_boss"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
-[ext_resource type="PackedScene" path="res://scenes/effects/FanTelegraph.tscn" id="3_fantel"]
-[ext_resource type="PackedScene" path="res://scenes/effects/BossSignal.tscn" id="4_bsignal"]
 [ext_resource type="Texture2D" path="res://resources/enemies/BaseSkeleton.png" id="5_skel"]
 [ext_resource type="PackedScene" path="res://scenes/effects/ChargeTelegraph.tscn" id="6_chg"]
 
@@ -17,8 +15,6 @@ boss_id = 1
 number_label_path = NodePath("HPLabel")
 mesh_path = NodePath("Visual")
 max_hp = 15
-telegraph_scene = ExtResource("3_fantel")
-boss_signal_scene = ExtResource("4_bsignal")
 charge_telegraph_scene = ExtResource("6_chg")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

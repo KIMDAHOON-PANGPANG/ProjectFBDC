@@ -14,7 +14,7 @@ extends Node3D
 # 자석 반경 축소(사용자 밸런스) — 사실상 붙어야 먹힘. 슬래시 대시로 젬 위를
 # 지나가며 줍는 플레이를 유도.
 # 자석 권역 — PC 가 다가오면 졸졸 따라붙어 빨려든다(이지인 가속 커브).
-@export var magnet_radius: float = 3.5
+@export var magnet_radius: float = 1.75   # -50% (사용자 너프 — 일반 이동으로 가까이 가서 줍게)
 @export var pickup_radius: float = 0.6
 @export var magnet_speed: float = 18.0
 ## 자석 가속 램프(초) — magnet_min_speed→magnet_speed 로 이 시간에 걸쳐 이지인.
@@ -75,13 +75,21 @@ func _process(delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
 		return
+	# LB 공격(슬래시 대시) 중엔 자석/획득 안 함 — 일반 이동으로만 줍게(요청).
+	if _player.has_method("is_slashing") and bool(_player.call("is_slashing")):
+		_home_t = 0.0
+		return
 	var to_pc: Vector3 = _player.global_position - global_position
 	to_pc.y = 0.0
 	var dist: float = to_pc.length()
 	if dist <= pickup_radius:
 		_collect()
 		return
-	if dist <= magnet_radius:
+	# 레벨업 "경험치 자석" 카드 — PC.exp_magnet_mult 로 자석 반경 확대.
+	var eff_magnet: float = magnet_radius
+	if "exp_magnet_mult" in _player:
+		eff_magnet *= maxf(0.1, float(_player.exp_magnet_mult))
+	if dist <= eff_magnet:
 		# 자석 권역 진입 — 호밍 시간 누적. 속도는 이지인(졸졸→빨라짐) 커브로 램프하고
 		# PC 를 매 프레임 재추적하므로, 움직이는 PC 뒤를 졸졸 따라붙어 빨려든다.
 		_home_t += delta

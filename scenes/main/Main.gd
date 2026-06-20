@@ -92,6 +92,7 @@ const _UpgradeSystemScript := preload("res://scripts/managers/UpgradeSystem.gd")
 const _WaveManagerScript := preload("res://scripts/managers/WaveManager.gd")
 const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 const _PauseOverlayScene := preload("res://scenes/ui/PauseOverlay.tscn")
+const _PlayerHudScene := preload("res://scenes/ui/PlayerHud.gd")
 const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd")
 const _SaveSystemScript := preload("res://scripts/managers/SaveSystem.gd")
 const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
@@ -113,19 +114,8 @@ var _wave_mgr: Node
 ## reads its `zen` / `max_zen` properties.
 var _zen_system: Node
 var _zen_label: Label
-# 4안 HUD — 좌상단 HP 칸 / 하단 일섬 게이지 / 탄약·리로드 텍스트.
-var _hp_box: HBoxContainer
-var _hp_cells: Array = []
-var _slash_gauge_bg: ColorRect
-var _slash_gauge_bar: ColorRect
-var _slash_gauge_label: Label
-const _HP_FULL := Color(0.85, 0.15, 0.15)
-const _HP_EMPTY := Color(0.22, 0.08, 0.08)
-const _SLASH_GAUGE_W := 280.0
-const _SLASH_GAUGE_H := 22.0
-## 일섬 게이지 채움색 — 충전 중(시안) / READY(골드).
-const _SLASH_GAUGE_FILL := Color(0.3, 0.7, 1.0, 0.9)
-const _SLASH_GAUGE_FILL_READY := Color(1.0, 0.82, 0.2, 0.95)
+# 하단 중앙 PC HUD (초상화 + HP 바 + 스택 + 레벨 뱃지). PlayerHud 컴포넌트.
+var _player_hud: Control
 var _chapter_cleared: bool = false
 ## Wall-clock ticks at the moment WaveManager started — used to compute
 ## the run's elapsed time for the result screen + SaveSystem record.
@@ -145,6 +135,14 @@ func _ready() -> void:
 	_build_lighting()
 	_build_hud()
 	_build_chapter_systems()
+	_play_log("세션 시작 — 챕터 %d" % _current_chapter)
+
+
+## 플레이 로그 한 줄 — PlayLogger 자동로드가 있으면 기록(없으면 무시).
+func _play_log(text: String) -> void:
+	var pl = get_node_or_null("/root/PlayLogger")
+	if pl != null and pl.has_method("event"):
+		pl.call("event", text)
 
 
 ## Pre-build the placeholder textures used by every entity so the first spawn
@@ -638,6 +636,8 @@ func _build_chapter_systems() -> void:
 	_exp_system.name = "ExpSystem"
 	add_child(_exp_system)
 	_exp_system.leveled_up.connect(_on_leveled_up)
+	if _player_hud != null:
+		_player_hud.exp_system = _exp_system  # 하단 HUD 레벨 뱃지 소스
 
 	# Top-of-screen EXP bar + timer.
 	if exp_bar_scene != null:
@@ -794,7 +794,11 @@ func _spawn_sorcerer() -> void:
 
 ## 근접 스폰 — 일부(약 30%)는 슬래머(내려찍기)로 회피 압박을 섞는다.
 func _spawn_melee_or_slammer(lv: int) -> void:
-	if slammer_enemy_scene != null and randf() < _SLAMMER_RATIO:
+	# 슬래머 비율 — 웨이브 곡선의 시간 게이트(slammer_start_time) 적용. 스토리보드: ~40s 부터.
+	var sr: float = _SLAMMER_RATIO
+	if _wave_mgr != null and _wave_mgr.has_method("slammer_ratio"):
+		sr = float(_wave_mgr.call("slammer_ratio"))
+	if slammer_enemy_scene != null and randf() < sr:
 		_spawn_one(slammer_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 		return
 	if lv >= 2:
@@ -840,8 +844,8 @@ func _apply_wave_preset() -> void:
 	_wave_preset = _GameConfigScript.wave_preset
 	if _wave_mgr != null:
 		if _wave_preset == 2:
-			_wave_mgr.target_mult = 0.2    # 원거리 웨이브 — 곡선의 1/5 (이전 1/10 대비 약 2배)
-			_wave_mgr.min_target = 15       # 바닥 15 (근접 ~5 포위 + 원거리 ~10 패링 압박)
+			_wave_mgr.target_mult = 0.5    # 원거리 웨이브 — 곡선 형태대로 램프(few→many→rest)
+			_wave_mgr.min_target = 5        # 바닥 5 (초반 가볍게 시작, 스토리보드)
 		else:
 			_wave_mgr.target_mult = 1.0
 			_wave_mgr.min_target = 0
@@ -926,6 +930,7 @@ func _on_boss_defeated() -> void:
 	if _chapter_cleared:
 		return
 	_chapter_cleared = true
+	_play_log("챕터 %d 클리어 (보스 처치)" % _current_chapter)
 	if chapter_clear_screen_scene == null:
 		return
 	var tree := get_tree()
@@ -1091,6 +1096,7 @@ func _on_player_died() -> void:
 	stats["souls"] = souls_earned
 	# Basic gold currency — auto-awarded from kills + survival time (death too).
 	stats["gold"] = _MetaScript.record_gold_reward(_kill_count, elapsed_sec)
+	_play_log("사망 — 시간 %.0fs · 처치 %d · Lv %d" % [elapsed_sec, _kill_count, pc_level])
 	tree.paused = true
 	if game_over_screen_scene == null:
 		# Fallback for runs where the export wasn't wired — log so the
@@ -1127,6 +1133,10 @@ func _elapsed_seconds() -> float:
 ## ExpSystem fired leveled_up → pause world, show 3 upgrade cards, wait for
 ## a pick, apply it, then resume.
 func _on_leveled_up(_new_level: int) -> void:
+	_play_log("레벨업 → Lv %d" % _new_level)
+	if _player != null and is_instance_valid(_player) and _player.has_method("grant_iframe"):
+		var dur: float = (_player.data.levelup_iframe if _player.data != null else 1.0)
+		_player.call("grant_iframe", dur)
 	if level_up_screen_scene == null:
 		return
 	if not is_inside_tree():
@@ -1176,12 +1186,10 @@ func _build_hud() -> void:
 	vbox.add_theme_constant_override("separation", 4)
 	canvas.add_child(vbox)
 
-	# 4안 — 좌상단 칸 단위 HP (빨간 사각형 더미 리소스). 빈 컨테이너만 만들고,
-	# 칸 수/색은 `_refresh_hp_cells` 가 매 프레임 Player.get_hp()/get_max_hp()
-	# 로 갱신·재구성한다. 머리 위 HpBar3D 와 병행 표시(역할이 다름).
-	_hp_box = HBoxContainer.new()
-	_hp_box.add_theme_constant_override("separation", 5)
-	vbox.add_child(_hp_box)
+	# 하단 중앙 PC HUD(초상화 + HP 바 + 열기/일섬 스택 + 회피 스택 + 레벨 뱃지).
+	# PlayerHud 가 PC 게터를 매 프레임 자가 갱신 — exp_system 은 _build_chapter_systems 에서 주입.
+	_player_hud = _PlayerHudScene.new()
+	canvas.add_child(_player_hud)
 
 	_kill_label = Label.new()
 	_kill_label.text = "Kills: 0"
@@ -1192,7 +1200,11 @@ func _build_hud() -> void:
 	vbox.add_child(_kill_label)
 
 	_info_label = Label.new()
-	_info_label.text = "WASD: 이동   LMB: 근접 공격   RMB(hold): 일섬(게이지 100%)   SPACE: 회피   R: 재시작"
+	# 컨트롤 안내 — 모드별로 LB/RB 역할이 달라 GameConfig.instant_slash_mode 로 분기.
+	if _GameConfigScript.instant_slash_mode:
+		_info_label.text = "WASD: 이동   LMB(hold): 일섬 차징·발사   RMB: 패리   SPACE: 회피   R: 재시작"
+	else:
+		_info_label.text = "WASD: 이동   LMB: 근접 공격   RMB(hold): 일섬(게이지 100%)   SPACE: 회피   R: 재시작"
 	_info_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_info_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_info_label.add_theme_constant_override("outline_size", 4)
@@ -1222,99 +1234,15 @@ func _build_hud() -> void:
 	_zen_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(_zen_label)
 
-	_build_slash_gauge(canvas)
 	# ESC 일시정지 메뉴 + 툴 에디터(PauseOverlay) — process_mode ALWAYS 라 정지 중에도 동작.
 	add_child(_PauseOverlayScene.instantiate())
-
-## 일섬 게이지 바 — 화면 하단 중앙. 0~100% 로 차오르고, 100% 도달 시 골드로
-## 바뀌며 "READY" 표기 (우클릭으로 일섬 발동). `_update_hud` 가 매 프레임
-## `Player.slash_gauge_frac()` / `is_slash_ready()` 를 읽어 갱신한다.
-## Testplay 에도 동일 코드가 미러됨 (동기화 규칙).
-func _build_slash_gauge(canvas: CanvasLayer) -> void:
-	_slash_gauge_bg = ColorRect.new()
-	_slash_gauge_bg.color = Color(0.07, 0.07, 0.09, 0.85)
-	# 하단 중앙 앵커 — 창 크기가 바뀌어도 중앙 하단에 고정.
-	_slash_gauge_bg.anchor_left = 0.5
-	_slash_gauge_bg.anchor_right = 0.5
-	_slash_gauge_bg.anchor_top = 1.0
-	_slash_gauge_bg.anchor_bottom = 1.0
-	_slash_gauge_bg.offset_left = -_SLASH_GAUGE_W * 0.5
-	_slash_gauge_bg.offset_right = _SLASH_GAUGE_W * 0.5
-	_slash_gauge_bg.offset_top = -(_SLASH_GAUGE_H + 28.0)
-	_slash_gauge_bg.offset_bottom = -28.0
-	_slash_gauge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	canvas.add_child(_slash_gauge_bg)
-
-	_slash_gauge_bar = ColorRect.new()
-	_slash_gauge_bar.color = _SLASH_GAUGE_FILL
-	_slash_gauge_bar.position = Vector2(2, 2)
-	_slash_gauge_bar.size = Vector2(0, _SLASH_GAUGE_H - 4.0)
-	_slash_gauge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_slash_gauge_bg.add_child(_slash_gauge_bar)
-
-	_slash_gauge_label = Label.new()
-	_slash_gauge_label.text = "일섬 0%"
-	_slash_gauge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_slash_gauge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_slash_gauge_label.add_theme_color_override("font_color", Color(1, 1, 1))
-	_slash_gauge_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_slash_gauge_label.add_theme_constant_override("outline_size", 4)
-	_slash_gauge_label.add_theme_font_size_override("font_size", 14)
-	_slash_gauge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_slash_gauge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_slash_gauge_bg.add_child(_slash_gauge_label)
 
 func _update_hud() -> void:
 	if _player == null or not is_instance_valid(_player):
 		# PC freed — no live HP to read; the floating bar disappeared with it.
 		return
 	_kill_label.text = "Kills: %d" % _kill_count
-	_refresh_hp_cells()
-	_refresh_slash_gauge()
-
-## 좌상단 칸 단위 HP 갱신. 칸 수가 바뀌면(메타 강건 등) 재구성하고, 현재 HP
-## 만큼 빨강(_HP_FULL), 나머지는 어두운색(_HP_EMPTY)으로 칠한다. Testplay 에도
-## 동일 코드가 미러됨 (동기화 규칙).
-func _refresh_hp_cells() -> void:
-	if _hp_box == null or not _player.has_method("get_hp"):
-		return
-	var max_hp: int = 3
-	if _player.has_method("get_max_hp"):
-		max_hp = max(1, int(_player.call("get_max_hp")))
-	# 칸 수 불일치 시 재구성 (스폰 직후 / 메타 HP 보너스 적용 후 자가 보정).
-	if _hp_cells.size() != max_hp:
-		for c in _hp_cells:
-			if is_instance_valid(c):
-				c.queue_free()
-		_hp_cells.clear()
-		for i in max_hp:
-			var cell := ColorRect.new()
-			cell.custom_minimum_size = Vector2(26, 26)
-			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_hp_box.add_child(cell)
-			_hp_cells.append(cell)
-	var cur_hp: int = int(_player.call("get_hp"))
-	for i in _hp_cells.size():
-		_hp_cells[i].color = _HP_FULL if i < cur_hp else _HP_EMPTY
-
-## 매 프레임 일섬 게이지 바 갱신. Player 의 getter 를 덕타이핑으로 읽는다.
-func _refresh_slash_gauge() -> void:
-	if _slash_gauge_bar == null or not _player.has_method("slash_gauge_frac"):
-		return
-	# 모드2(즉발 일섬)는 일섬 게이지 미사용 → 게이지바 숨김.
-	if _player.has_method("is_instant_slash_mode") and bool(_player.call("is_instant_slash_mode")):
-		if _slash_gauge_bg != null:
-			_slash_gauge_bg.visible = false
-		return
-	var frac: float = clampf(_player.call("slash_gauge_frac"), 0.0, 1.0)
-	_slash_gauge_bar.size = Vector2((_SLASH_GAUGE_W - 4.0) * frac, _SLASH_GAUGE_H - 4.0)
-	var ready: bool = _player.has_method("is_slash_ready") and bool(_player.call("is_slash_ready"))
-	if ready:
-		_slash_gauge_bar.color = _SLASH_GAUGE_FILL_READY
-		_slash_gauge_label.text = "⚔ 일섬 READY (RMB)"
-	else:
-		_slash_gauge_bar.color = _SLASH_GAUGE_FILL
-		_slash_gauge_label.text = "일섬 %d%%" % int(round(frac * 100.0))
+	# HP/열기/회피/레벨은 PlayerHud 가 자가 갱신(PC 게터 덕타이핑).
 
 
 ## ⏱ Zen meter HUD refresh. Connected to ZenSystem.zen_changed at

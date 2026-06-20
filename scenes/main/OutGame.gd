@@ -9,6 +9,8 @@ const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
 const _SaveScript := preload("res://scripts/managers/SaveSystem.gd")
 ## 시작 버튼이 고른 컨트롤 모드를 인게임으로 넘기는 전역 플래그.
 const _GameConfig := preload("res://scripts/managers/GameConfig.gd")
+const _BuildConfigScript := preload("res://scripts/resources/BuildConfig.gd")
+const _BUILD_CONFIG := "res://resources/build_config.tres"
 const _MAIN_PATH := "res://scenes/main/Main.tscn"
 const _META_MENU_PATH := "res://scenes/ui/MetaMenu.tscn"
 const _CARD_UNLOCK_PATH := "res://scenes/ui/CardUnlock.tscn"
@@ -83,11 +85,17 @@ func _build() -> void:
 	spacer2.custom_minimum_size = Vector2(0, 18)
 	center.add_child(spacer2)
 
-	center.add_child(_make_button("게임 시작", _on_start2_pressed))
-	center.add_child(_make_button("밸런싱 아레나 (F1 패널)", _on_arena_pressed))
-	center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
-	center.add_child(_make_button("카드 해금", _on_card_unlock_pressed))
-	center.add_child(_make_button("종료", _on_quit_pressed))
+	if _is_release_build():
+		# 빌드 EXE — 게임 시작 단일 진입(빌드 매니저가 구운 모드/토글 적용). 사망 화면 "이어서 하기"는 유지.
+		center.add_child(_make_button("게임 시작", _on_release_start))
+		center.add_child(_make_button("종료", _on_quit_pressed))
+	else:
+		# 에디터/개발 — 전체 메뉴.
+		center.add_child(_make_button("게임 시작", _on_start2_pressed))
+		center.add_child(_make_button("밸런싱 아레나 (F1 패널)", _on_arena_pressed))
+		center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
+		center.add_child(_make_button("카드 해금", _on_card_unlock_pressed))
+		center.add_child(_make_button("종료", _on_quit_pressed))
 
 	_refresh_labels()
 
@@ -143,20 +151,45 @@ func _on_start2_pressed() -> void:
 	_GameConfig.wave_preset = 0
 	_GameConfig.contact_damage_enabled = false
 	_GameConfig.charge_zoom_enabled = true   # 일섬 모드 — 카메라 줌 기본 ON(밀리만 OFF)
-	get_tree().change_scene_to_file(_MAIN_PATH)
+	_goto(_MAIN_PATH)
+
+
+## 빌드 EXE 여부 — 에디터(F5/F6)면 false(개발 메뉴), 익스포트된 빌드면 true(게임시작 단일).
+func _is_release_build() -> bool:
+	return not OS.has_feature("editor")
+
+
+## 빌드 EXE 진입 — build_config.tres 의 모드/토글을 적용하고 게임 시작.
+func _on_release_start() -> void:
+	var cfg = (load(_BUILD_CONFIG) if ResourceLoader.exists(_BUILD_CONFIG) else _BuildConfigScript.new())
+	var mode: int = (int(cfg.game_mode) if cfg != null and "game_mode" in cfg else 1)
+	_GameConfig.instant_slash_mode = (mode != 0)         # 0=밀리 / 1·2=일섬
+	_GameConfig.wave_preset = mode                        # 0/1/2 직접 매핑
+	_GameConfig.contact_damage_enabled = (bool(cfg.contact_damage) if cfg != null and "contact_damage" in cfg else false)
+	_GameConfig.charge_zoom_enabled = (bool(cfg.charge_zoom) if cfg != null and "charge_zoom" in cfg else true)
+	_goto(_MAIN_PATH)
 
 
 ## 밸런싱 전용 아레나(Testplay) 입장 — 우측 스폰 버튼 + F1 디버그 패널(무적/배속/스탯주입/TTK).
 func _on_arena_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/main/Testplay.tscn")
+	_goto("res://scenes/main/Testplay.tscn")
 
 
 func _on_meta_pressed() -> void:
-	get_tree().change_scene_to_file(_META_MENU_PATH)
+	_goto(_META_MENU_PATH)
 
 
 func _on_card_unlock_pressed() -> void:
-	get_tree().change_scene_to_file(_CARD_UNLOCK_PATH)
+	_goto(_CARD_UNLOCK_PATH)
+
+
+## 씬 전환 — SceneTransition 자동로드가 있으면 셰이더 연출, 없으면 즉시 전환(폴백).
+func _goto(path: String) -> void:
+	var st = get_node_or_null("/root/SceneTransition")
+	if st != null and st.has_method("change_scene"):
+		st.call("change_scene", path)
+	else:
+		get_tree().change_scene_to_file(path)
 
 
 func _on_quit_pressed() -> void:

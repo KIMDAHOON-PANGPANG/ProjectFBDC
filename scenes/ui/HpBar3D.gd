@@ -106,12 +106,6 @@ func _face_camera() -> void:
 	# the caller, so we replace only the basis.
 	global_basis = cam.global_basis.orthonormalized()
 
-## Optional override — useful if the bar should follow some node other than
-## its parent (e.g. an offset socket on a complex rig).
-func set_follow_target(node: Node3D) -> void:
-	_follow_target = node
-	_sync_to_target()
-
 func _build() -> void:
 	# Border (drawn behind, slightly larger). One-time geometry.
 	_border = MeshInstance3D.new()

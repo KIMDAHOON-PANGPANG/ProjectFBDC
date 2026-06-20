@@ -22,6 +22,8 @@ extends CharacterBody3D
 @export var teleport_cooldown: float = 20.0
 @export var teleport_range: float = 4.0
 @export var teleport_dist: float = 14.0
+## 유령 활주 속도(유닛/초) — 점멸 대신 반투명 유령으로 이 속도로 미끄러져 이동.
+@export var phase_speed: float = 16.0
 ## 카이팅 선호 거리 폭(너무 가까우면 물러나고 멀면 접근, 시야 유지).
 @export var keep_band: float = 1.2
 @export var armor_max: int = 0
@@ -45,6 +47,8 @@ var _sprite: Sprite3D
 var _dead: bool = false
 var _cast_cd: float = 1.5      # 첫 시전까지 약간 텀
 var _teleport_cd: float = 0.0
+var _phasing: bool = false
+var _phase_target: Vector3 = Vector3.ZERO
 var _kb = _KnockbackScript.new()
 
 
@@ -97,6 +101,10 @@ func _physics_process(delta: float) -> void:
 		_cast_cd -= delta
 	if _teleport_cd > 0.0:
 		_teleport_cd -= delta
+	# 유령 활주 중 — 반투명으로 목표까지 미끄러져 이동. 그 외 AI/넉백/스태거 정지.
+	if _phasing:
+		_update_phase(delta)
+		return
 	_kb.integrate(self, delta)
 	if _health != null:
 		_health.tick_stagger(delta)
@@ -114,9 +122,9 @@ func _physics_process(delta: float) -> void:
 	to_player.y = 0.0
 	var dist := to_player.length()
 
-	# PC 가 너무 가까이 쫓아오면 → 화면 반대편 끝으로 텔레포트(쿨 차면).
+	# PC 가 너무 가까이 쫓아오면 → 반투명 유령으로 화면 반대편 끝까지 활주(쿨 차면).
 	if dist <= teleport_range and _teleport_cd <= 0.0:
-		_do_teleport()
+		_begin_phase()
 		return
 
 	# 시야 안 + 시전 쿨 차면 → PC 주변 360° 장판 흩뿌리기.
@@ -163,8 +171,9 @@ func _do_cast() -> void:
 		t.tween_property(_sprite, "modulate", orig, 0.16)
 
 
-## 화면 반대편 끝(유저 반대 방향)으로 점멸 — teleport_dist 만큼 PC 에서 멀어진 지점.
-func _do_teleport() -> void:
+## 점멸 대신 — 반투명 유령이 되어 화면 반대편 끝까지 phase_speed 로 스르르 미끄러진다.
+## (사라지지 않고 활주 경로가 보여 PC 가 어디로 가는지 추적 가능.)
+func _begin_phase() -> void:
 	var flee_dir := Vector3(1, 0, 0)
 	var base: Vector3 = global_position
 	if _player != null and is_instance_valid(_player):
@@ -174,15 +183,39 @@ func _do_teleport() -> void:
 			flee_dir = away.normalized()
 		base = (_player as Node3D).global_position
 	var dest := base + flee_dir * teleport_dist
-	global_position = Vector3(dest.x, global_position.y, dest.z)
-	velocity = Vector3.ZERO
+	_phase_target = Vector3(dest.x, global_position.y, dest.z)
+	_phasing = true
 	_teleport_cd = teleport_cooldown
-	# 점멸 연출 — 사라졌다 나타나는 알파 펄스.
+	# 유령 — 충돌 끄기(PC/적이 통과). 종료 시 Enemy 레이어로 복원.
+	collision_layer = 0
+	velocity = Vector3.ZERO
+	# 반투명으로 스르르 페이드(유령화).
 	if _sprite != null:
-		var orig: Color = _sprite.modulate
-		_sprite.modulate = Color(orig.r, orig.g, orig.b, 0.15)
 		var t := create_tween()
-		t.tween_property(_sprite, "modulate:a", orig.a, 0.25)
+		t.tween_property(_sprite, "modulate:a", 0.32, 0.22)
+
+
+## 유령 활주 한 프레임 — 목표까지 직접 이동(충돌 무시), 도착하면 종료.
+func _update_phase(delta: float) -> void:
+	var to_target := _phase_target - global_position
+	to_target.y = 0.0
+	var d := to_target.length()
+	if d <= 0.25:
+		_end_phase()
+		return
+	var step: float = phase_speed * delta   # delta 는 이미 time_scale_mult 반영됨.
+	var mv := to_target.normalized() * minf(step, d)
+	global_position += Vector3(mv.x, 0.0, mv.z)
+	velocity = Vector3.ZERO
+
+
+## 활주 종료 — 충돌 복원 + 다시 또렷하게(불투명).
+func _end_phase() -> void:
+	_phasing = false
+	collision_layer = 1 << 2  # Enemy — 활주 끝나면 다시 피격/충돌 가능.
+	if _sprite != null:
+		var t := create_tween()
+		t.tween_property(_sprite, "modulate:a", _TINT.a, 0.22)
 
 
 func apply_knockback(dir: Vector3, speed: float) -> void:

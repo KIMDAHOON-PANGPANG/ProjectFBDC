@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="BuildConfig" format=3 uid="uid://clllykuwlsqx8"]
+
+[ext_resource type="Script" uid="uid://bsrunh8nit0y1" path="res://scripts/resources/BuildConfig.gd" id="1_lem0h"]
+
+[resource]
+script = ExtResource("1_lem0h")
+game_mode = 2

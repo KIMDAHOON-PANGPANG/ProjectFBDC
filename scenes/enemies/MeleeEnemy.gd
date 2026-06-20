@@ -300,7 +300,7 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 	get_tree().current_scene.add_child(fan)
 	if fan.has_method("configure"):
 		fan.call("configure", global_position, to_player_xz,
-			fan_radius, fan_angle_deg, attack_damage, 0.5, 0.15)
+			fan_radius, fan_angle_deg, attack_damage, 1.0, 0.1)  # 윈드업 1초(스프라이트 34프레임 고정과 동기) → 35프레임에 타격
 	if fan.has_signal("tree_exited"):
 		fan.tree_exited.connect(_on_telegraph_done, CONNECT_ONE_SHOT)
 	_active_telegraph = fan
@@ -310,6 +310,8 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 	velocity = Vector3.ZERO
 	move_and_slide()
 	if _sprite_rig != null:
+		# 일관성 — 일반 애니메이션 재생. attack_fps 1.0 + _ATK_MELEE(64,65) 로 34프레임이
+		# ~1초 재생되다가 35프레임으로 전환(telegraph_time 1초와 동기 → 그 시점 타격).
 		_sprite_rig.set_state(SpriteRig.State.ATTACK)
 		_sprite_rig.set_facing(to_player_xz.x)
 

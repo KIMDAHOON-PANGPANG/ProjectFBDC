@@ -117,6 +117,8 @@ func _refresh_readout() -> void:
 	_readout.text = "생존 %d | 레벨 %d | 공격력 %d | 배속 %.2fx | 무적 %s\n최근 TTK %.2fs (%s) · 처치 %d · 평균 %.2fs" % [
 		_alive_count(), lv, ap, Engine.time_scale, ("ON" if god else "OFF"),
 		maxf(_last_ttk, 0.0), _last_ttk_name, _kills, avg]
+	if _host != null and is_instance_valid(_host) and _host.has_method("arena_wave_info"):
+		_readout.text += "\n" + String(_host.call("arena_wave_info"))
 
 
 ## PC 현재 적용 스탯(읽기 전용) — 카드/튜닝 반영된 최종 실효값.
@@ -212,6 +214,10 @@ func _toggle_wave() -> void:
 		_wave_btn.text = "■ 웨이브 정지" if running else "▶ 웨이브 시작"
 		_wave_btn.modulate = Color(1.0, 0.6, 0.6) if running else Color(0.6, 1.0, 0.6)
 
+func _wave_jump(secs: float) -> void:
+	if _host != null and is_instance_valid(_host) and _host.has_method("arena_wave_jump"):
+		_host.call("arena_wave_jump", secs)
+
 
 # ── 스탯 직접 주입 (검은 카드 화면 없이 즉시) ──
 func _level_up_direct() -> void:
@@ -288,6 +294,7 @@ func _build() -> void:
 	_wave_btn = _btn("▶ 웨이브 시작", _toggle_wave)
 	_wave_btn.modulate = Color(0.6, 1.0, 0.6)
 	t_spawn.add_child(_wave_btn)
+	t_spawn.add_child(_btn("웨이브 +30초 점프", func(): _wave_jump(30.0)))
 	t_spawn.add_child(HSeparator.new())
 	t_spawn.add_child(_spin_row("수량", 1, 50, 3))
 	t_spawn.add_child(HSeparator.new())

@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 [autoload]
 
 SoundManager="*res://scripts/managers/SoundManager.gd"
+PlayLogger="*res://scripts/managers/PlayLogger.gd"
+SceneTransition="*res://scripts/managers/SceneTransition.gd"
 
 [display]
 
@@ -29,7 +31,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/balance_tool/plugin.cfg")
+enabled=PackedStringArray("res://addons/balance_tool/plugin.cfg", "res://addons/build_manager/plugin.cfg")
 
 [input]
 
