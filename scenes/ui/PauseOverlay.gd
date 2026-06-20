@@ -95,13 +95,11 @@ func _on_toggle(key: String) -> void:
 
 func _on_set_resource() -> void:
 	_GameConfigScript.slash_resource_mode = 1 - _GameConfigScript.slash_resource_mode
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	_refresh_toggles()
 
 func _on_set_aim() -> void:
 	_GameConfigScript.slash_aim_mode = 1 - _GameConfigScript.slash_aim_mode
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	_refresh_toggles()
 
 func _refresh_toggles() -> void:
 	if _zoom_btn != null:
