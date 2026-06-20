@@ -327,8 +327,8 @@ func _handle_move(delta: float) -> void:
 	if _zone_slow_t > 0.0:
 		speed_mult *= _zone_slow_mult
 	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
-	velocity.x = dir.x * data.move_speed * speed_mult
-	velocity.z = dir.z * data.move_speed * speed_mult
+	velocity.x = dir.x * data.move_speed * move_speed_mult * speed_mult
+	velocity.z = dir.z * data.move_speed * move_speed_mult * speed_mult
 	# 가드백 — 패리 직후 에임 반대로 밀린다. 남은 시간 비례 감쇠(부드럽게 멈춤).
 	if _guardback_t > 0.0:
 		_guardback_t -= delta
@@ -866,6 +866,8 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 var god_mode: bool = false
 ## 레벨업 "경험치 자석" 카드 — ExpGem 자석 반경 배수(런마다 1.0 리셋).
 var exp_magnet_mult: float = 1.0
+## 레벨업 "질풍" 카드 — 이동속도 배수(런타임, 런마다 1.0 리셋 — 공유 PlayerData 변형 방지).
+var move_speed_mult: float = 1.0
 
 func is_invincible() -> bool:
 	return god_mode or _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0

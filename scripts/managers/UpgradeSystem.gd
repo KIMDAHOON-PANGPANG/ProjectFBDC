@@ -128,8 +128,9 @@ static func apply(card_id: String, player: Node, _exp_system: Node) -> void:
 	var v := value_for(card_id)
 	match card_id:
 		"move_speed":
-			if player.data:
-				player.data.move_speed *= (1.0 + v)
+			# 런타임 배수 — 공유 PlayerData.tres 직접 변형 금지(런마다 이속 누적 버그 방지).
+			if "move_speed_mult" in player:
+				player.move_speed_mult *= (1.0 + v)
 		"max_hp":
 			var hp: Node = player.get_node_or_null("HealthComponent")
 			if hp != null:
