@@ -30,6 +30,7 @@ var _hp_fill: ColorRect
 var _hp_label: Label
 var _heat_pips: Array = []
 var _dodge_pips: Array = []
+var _dodge_fills: Array = []
 var _level_label: Label
 
 
@@ -162,6 +163,14 @@ func _build() -> void:
 		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(pip)
 		_dodge_pips.append(pip)
+		# 충전 게이지 — 칸 안에서 아래→위로 차오름(꽉=가득 / 충전중=부분 / 빈칸=0).
+		var fill := ColorRect.new()
+		fill.color = _DODGE_ON
+		fill.position = Vector2(dodge_x + i * 30.0, 62)  # 바닥(46+16)에서 위로 자람
+		fill.size = Vector2(26, 0)
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(fill)
+		_dodge_fills.append(fill)
 
 
 func _process(_delta: float) -> void:
@@ -191,12 +200,21 @@ func _process(_delta: float) -> void:
 			_heat_pips[i].color = _HEAT_LOW.lerp(_HEAT_HIGH, float(i) / float(max(_HEAT_STACKS - 1, 1)))
 		else:
 			_heat_pips[i].color = _HEAT_OFF
-	# 회피 스택
+	# 회피 스택 — 꽉 찬 칸=가득 / 충전 중 칸=evade_refill_frac 만큼 아래→위로 차오름 / 빈칸=0.
 	var ev := 0
 	if _player.has_method("get_evade_stacks"):
 		ev = int(_player.call("get_evade_stacks"))
-	for i in _dodge_pips.size():
-		_dodge_pips[i].color = _DODGE_ON if i < ev else _DODGE_OFF
+	var refill := 0.0
+	if _player.has_method("evade_refill_frac"):
+		refill = clampf(float(_player.call("evade_refill_frac")), 0.0, 1.0)
+	for i in _dodge_fills.size():
+		var h := 0.0
+		if i < ev:
+			h = 16.0
+		elif i == ev:
+			h = refill * 16.0
+		_dodge_fills[i].size.y = h
+		_dodge_fills[i].position.y = 46.0 + (16.0 - h)
 	# 레벨 뱃지
 	if _level_label != null and exp_system != null and is_instance_valid(exp_system) and "level" in exp_system:
 		_level_label.text = str(exp_system.level)

@@ -152,6 +152,7 @@ data/               — upgrades.csv(레벨업 효과 — UpgradeSystem 로더, 
 - 한 `.gd` 파일이 **600줄**을 넘으면 `refactor-pass` 스킬 권유 신호 (휴리스틱).
 - ⚠ **레벨업/카드 효과는 Player 의 런타임 보너스 변수**(런마다 1.0/0 으로 리셋, 예: `move_speed_mult`/`exp_magnet_mult`/`slash_size_mult`)로 구현하고 **공유 `PlayerData.tres`(또는 어떤 `.tres`)도 직접 변형 금지**. Godot 가 리소스를 캐시하므로 `player.data.X *= …` 같은 변형은 **런 간 값이 영구 누적**된다(질풍 카드 이속 누적 버그 사례). HP 처럼 인스턴스(`HealthComponent.max_hp`)에 적용하는 건 OK.
 - **Resource `@export` 제거 시 동반 정리**: 그 export 를 `.tscn`/`.tres` 가 set 하고 있으면 거기서도 그 줄을 제거(안 하면 고아 속성 → 로드 경고)하고, 값을 bridge 하는 코드(`CombatData._apply_*` 등 `obj.export = …`)도 함께 제거. 안 하면 런타임에 없는 프로퍼티 set → 에러. 죽은 코드 판정 grep 은 **문자열 `"name"`(call/has_method/connect/get) + `.tscn` 프로퍼티**까지 확인.
+- **기능 개발/데이터 변경 시 밸런스 툴(`addons/balance_tool`) 점검·갱신**: PC=`balance_dock.gd` `PC_FIELDS`, 몬스터=`MON_FIELDS` 에 `[필드명, 한글라벨, 한글툴팁, 타입]` 줄 추가/수정. 새 `@export` 는 노출하고, 의미 바뀐 레거시 라벨/툴팁은 갱신(예: HP "칸"→자연수). PC 탭은 `"@"` 섹션 마커 행으로 그룹 구분(이동/일섬/열관리/회피/근접/패리/피격·자원/카메라).
 
 ## 작업 환경 / 워크플로우
 
