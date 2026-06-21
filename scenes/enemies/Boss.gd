@@ -301,6 +301,10 @@ func _state_windup(delta: float) -> void:
 		_charge_dir = to.normalized()
 	if _charge_decal != null and is_instance_valid(_charge_decal) and _charge_decal.has_method("set_lane"):
 		_charge_decal.call("set_lane", global_position, _charge_dir, charge_width, charge_distance)
+		# 전조 진행도(0=시작 → 1=발사 순간)를 데칼에 전달 — 중심→끝으로 fill 차오름.
+		if _charge_decal.has_method("set_fill") and charge_windup > 0.0001:
+			var frac: float = 1.0 - (_windup_t / charge_windup)
+			_charge_decal.call("set_fill", frac)
 	if _windup_t <= 0.0:
 		# 고정 — 데칼 색 진하게, 카메라 짧게 흔들(돌진 직전 긴장).
 		if _charge_decal != null and is_instance_valid(_charge_decal) and _charge_decal.has_method("lock"):

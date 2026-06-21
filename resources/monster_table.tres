@@ -92,6 +92,7 @@ fan_radius = 3.0
 fan_angle_deg = 90.0
 armor_max = 6
 stagger_duration = 0.6
+charge_speed = 10.8
 parry_yellow_ratio = 0.7
 
 [sub_resource type="Resource" id="Resource_dedpa"]
@@ -113,7 +114,7 @@ armor_max = 7
 stagger_duration = 0.6
 charge_range = 24.0
 charge_windup = 0.9
-charge_speed = 20.0
+charge_speed = 12.0
 charge_distance = 18.0
 charge_recover = 0.8
 charge_cooldown = 1.4
@@ -141,7 +142,7 @@ armor_max = 8
 stagger_duration = 0.6
 charge_range = 26.0
 charge_windup = 0.8
-charge_speed = 22.0
+charge_speed = 13.2
 charge_distance = 20.0
 charge_damage = 3
 charge_recover = 0.7
