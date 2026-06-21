@@ -8,6 +8,8 @@ extends VBoxContainer
 
 const PLAYER_DATA := "res://resources/player/player_data.tres"
 const MONSTER_TABLE := "res://resources/monster_table.tres"
+const _ExpSystemScript := preload("res://scripts/managers/ExpSystem.gd")
+const UPGRADES_CSV := "res://data/upgrades.csv"
 
 # [필드명, 한글 라벨, 한글 툴팁, 타입("f"=실수 / "i"=정수)]
 # 섹션 구분 — ["@", "헤더 텍스트"] 행은 _build_pc_tab 루프가 HSeparator + 헤더 라벨로 렌더.
@@ -154,6 +156,9 @@ func _ready() -> void:
 	var wave := _build_wave_tab()
 	wave.name = "웨이브 랩"
 	tabs.add_child(wave)
+	var lvl := _build_levelup_tab()
+	lvl.name = "레벨업 랩"
+	tabs.add_child(lvl)
 
 
 func _build_pc_tab() -> Control:
@@ -336,6 +341,18 @@ var _wave_chart: Control = null
 var _wave_metrics: Label = null
 var _wave_warnings: Label = null
 var _wave_clear_rate: float = 2.0
+
+# ── 탭4 레벨업 랩 멤버 변수 ──
+const _LVL_MAX_LEVEL := 30
+var _exp_first: float = 12.0
+var _exp_step: float = 7.0
+var _exp_accel: float = 1.3
+var _exp_xp_per_min: float = 60.0
+var _lvl_chart: Control = null
+var _lvl_metrics: Label = null
+var _lvl_warnings: Label = null
+var _lvl_targets_box: VBoxContainer = null
+var _lvl_targets: Array = [[60.0, 5], [180.0, 10], [360.0, 20]]
 
 
 func _build_wave_tab() -> Control:
@@ -841,3 +858,396 @@ func _update_wave_metrics() -> void:
 		warns.append("⚠ 투영 동시생존이 HARD_CAP(%d) 도달 — 과밀 / 처치율 부족" % _SIM_HARD_CAP)
 
 	_wave_warnings.text = "\n".join(PackedStringArray(warns)) if warns.size() > 0 else "✔ 경고 없음"
+
+
+# ── 탭4 레벨업 랩 ──────────────────────────────────────────────────────────────
+# EXP 곡선/카드 풀 시각화·시뮬. ExpSystem.gd 기본값을 읽기전용 참조,
+# 슬라이더는 시뮬 전용(.gd 저장 안 함). 투영 레벨 공식 = ExpSystem._compute_threshold 복제.
+# ──────────────────────────────────────────────────────────────────────────────
+
+func _load_exp_defaults() -> void:
+	var es = _ExpSystemScript.new()
+	_exp_first = float(es.first_threshold)
+	_exp_step = float(es.threshold_step)
+	_exp_accel = float(es.threshold_accel)
+	es.free()
+
+
+func _exp_threshold(lv: int) -> int:
+	var n: int = max(lv - 1, 0)
+	return int(_exp_first) + int(_exp_step) * n + int(round(_exp_accel * float(n) * float(n)))
+
+
+func _exp_cumulative(lv: int) -> int:
+	var total := 0
+	for l in range(1, lv):
+		total += _exp_threshold(l)
+	return total
+
+
+func _build_levelup_tab() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(vb)
+
+	_load_exp_defaults()
+
+	vb.add_child(_note("레벨업 랩 — EXP 곡선/카드 풀 시각화·시뮬. 곡선 값은 ExpSystem.gd 기본값(읽기전용). 영구 편집은 .tres 추출 권장. 슬라이더는 시뮬 전용(.gd 저장 안 함)."))
+
+	# EXP 곡선 파라미터 섹션.
+	vb.add_child(_section("─ EXP 곡선 파라미터 (ExpSystem.gd · 시뮬 전용 오버라이드) ─"))
+	var param_specs := [
+		["최초 임계", "Lv1→2 에 필요한 첫 EXP", 0.0, 9999.0, 1.0, false, "first"],
+		["선형 증가량", "레벨당 임계 선형 증가량", 0.0, 9999.0, 1.0, false, "step"],
+		["2차 가속", "(lv-1)^2 에 곱하는 2차 가속 계수", 0.0, 9999.0, 0.1, true, "accel"],
+	]
+	var param_inits := [_exp_first, _exp_step, _exp_accel]
+	for pi in param_specs.size():
+		var ps = param_specs[pi]
+		var hb := HBoxContainer.new()
+		hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var lbl := Label.new()
+		lbl.text = ps[0]
+		lbl.tooltip_text = ps[1]
+		lbl.custom_minimum_size = Vector2(160, 0)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+		hb.add_child(lbl)
+		var sb := SpinBox.new()
+		sb.tooltip_text = ps[1]
+		sb.custom_minimum_size = Vector2(120, 0)
+		sb.min_value = ps[2]
+		sb.max_value = ps[3]
+		sb.step = ps[4]
+		sb.value = param_inits[pi]
+		var key: String = ps[6]
+		sb.value_changed.connect(func(v):
+			if key == "first":
+				_exp_first = v
+			elif key == "step":
+				_exp_step = v
+			elif key == "accel":
+				_exp_accel = v
+			_refresh_lvl_sim())
+		hb.add_child(sb)
+		vb.add_child(hb)
+
+	# 시뮬레이션 섹션.
+	vb.add_child(_section("─ 시뮬레이션 ─"))
+	var xhb := HBoxContainer.new()
+	xhb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var xlbl := Label.new()
+	xlbl.text = "가정 XP/분"
+	xlbl.tooltip_text = "처치+젬으로 분당 들어온다고 가정하는 EXP. 투영 레벨 곡선만 바뀜(.tres 저장 안 함)."
+	xlbl.custom_minimum_size = Vector2(160, 0)
+	xlbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	xlbl.mouse_filter = Control.MOUSE_FILTER_STOP
+	xhb.add_child(xlbl)
+	var xsb := SpinBox.new()
+	xsb.tooltip_text = "처치+젬으로 분당 들어온다고 가정하는 EXP. 투영 레벨 곡선만 바뀜(.tres 저장 안 함)."
+	xsb.custom_minimum_size = Vector2(120, 0)
+	xsb.min_value = 0.0
+	xsb.max_value = 5000.0
+	xsb.step = 10.0
+	xsb.value = _exp_xp_per_min
+	xsb.value_changed.connect(func(v):
+		_exp_xp_per_min = v
+		_refresh_lvl_sim())
+	xhb.add_child(xsb)
+	vb.add_child(xhb)
+
+	# 차트.
+	_lvl_chart = Control.new()
+	_lvl_chart.custom_minimum_size = Vector2(320, 220)
+	_lvl_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_lvl_chart.draw.connect(_draw_lvl_chart)
+	vb.add_child(_lvl_chart)
+
+	_lvl_metrics = Label.new()
+	_lvl_metrics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(_lvl_metrics)
+	_lvl_warnings = Label.new()
+	_lvl_warnings.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_lvl_warnings.add_theme_color_override("font_color", Color(1.0, 0.7, 0.3))
+	vb.add_child(_lvl_warnings)
+
+	# 빌드 타겟 섹션.
+	vb.add_child(_section("─ 빌드 타겟 (시간 → 목표 레벨) ─"))
+	_lvl_targets_box = VBoxContainer.new()
+	_lvl_targets_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_child(_lvl_targets_box)
+	var add_btn := Button.new()
+	add_btn.text = "＋ 타겟 추가"
+	add_btn.tooltip_text = "타겟 행 추가(시간=마지막+60, 레벨=마지막+5)"
+	add_btn.pressed.connect(_on_lvl_add_target)
+	vb.add_child(add_btn)
+	_rebuild_lvl_targets()
+
+	# 카드 풀 섹션.
+	vb.add_child(_section("─ 카드 풀 (upgrades.csv · 읽기전용) ─"))
+	var cards := _load_cards()
+	if cards.size() == 0:
+		vb.add_child(_note("⚠ upgrades.csv 카드 0장"))
+	else:
+		for card in cards:
+			var clbl := Label.new()
+			var suffix := "[초기]" if card.get("initial", false) else "[언락 %d]" % card.get("unlock_cost", 0)
+			clbl.text = "· %s (%s) val=%s %s" % [card.get("name", "?"), card.get("id", "?"), String.num(card.get("value", 0.0), 4).rstrip("0").rstrip("."), suffix]
+			clbl.tooltip_text = card.get("desc", "")
+			clbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			vb.add_child(clbl)
+
+	_refresh_lvl_sim()
+	return scroll
+
+
+func _refresh_lvl_sim() -> void:
+	if _lvl_chart != null:
+		_lvl_chart.queue_redraw()
+	_update_lvl_metrics()
+
+
+func _load_cards() -> Array:
+	var out: Array = []
+	if not FileAccess.file_exists(UPGRADES_CSV):
+		return out
+	var f := FileAccess.open(UPGRADES_CSV, FileAccess.READ)
+	if f == null:
+		return out
+	var rows: Array = []
+	while not f.eof_reached():
+		var line: PackedStringArray = f.get_csv_line()
+		if line.size() > 0:
+			rows.append(line)
+	f.close()
+	if rows.size() < 1:
+		return out
+	var headers: PackedStringArray = rows[0]
+	for r in range(1, rows.size()):
+		var row: PackedStringArray = rows[r]
+		if row.size() == 0:
+			continue
+		var first := row[0].lstrip("﻿").strip_edges()
+		if first == "" or first == "id" or first == "식별자(영문키)":
+			continue
+		var d: Dictionary = {}
+		for i in range(min(headers.size(), row.size())):
+			d[headers[i].lstrip("﻿").strip_edges()] = row[i].strip_edges()
+		var card := {
+			"id": String(d.get("id", "")),
+			"name": String(d.get("name", "?")),
+			"desc": String(d.get("desc", "")),
+			"value": String(d.get("value", "0")).to_float(),
+			"initial": String(d.get("initial", "1")) == "1",
+			"unlock_cost": int(String(d.get("unlock_cost", "0")).to_int()) if String(d.get("unlock_cost", "0")).is_valid_int() else 0,
+		}
+		if card["id"] == "":
+			continue
+		out.append(card)
+	return out
+
+
+func _rebuild_lvl_targets() -> void:
+	if _lvl_targets_box == null:
+		return
+	for c in _lvl_targets_box.get_children():
+		c.queue_free()
+	var head := HBoxContainer.new()
+	for txt in ["시간(s)", "목표 레벨", ""]:
+		var l := Label.new()
+		l.text = txt
+		l.custom_minimum_size = Vector2(100, 0)
+		l.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
+		head.add_child(l)
+	_lvl_targets_box.add_child(head)
+	for i in _lvl_targets.size():
+		_lvl_targets_box.add_child(_lvl_target_row(i))
+
+
+func _lvl_target_row(i: int) -> Control:
+	var hb := HBoxContainer.new()
+	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var tsb := SpinBox.new()
+	tsb.min_value = 0.0
+	tsb.max_value = 99999.0
+	tsb.step = 1.0
+	tsb.custom_minimum_size = Vector2(100, 0)
+	tsb.value = float(_lvl_targets[i][0])
+	tsb.value_changed.connect(func(v):
+		_lvl_targets[i][0] = v
+		_refresh_lvl_sim())
+	hb.add_child(tsb)
+	var lsb := SpinBox.new()
+	lsb.min_value = 1.0
+	lsb.max_value = float(_LVL_MAX_LEVEL)
+	lsb.step = 1.0
+	lsb.rounded = true
+	lsb.custom_minimum_size = Vector2(100, 0)
+	lsb.value = float(_lvl_targets[i][1])
+	lsb.value_changed.connect(func(v):
+		_lvl_targets[i][1] = int(round(v))
+		_refresh_lvl_sim())
+	hb.add_child(lsb)
+	var del := Button.new()
+	del.text = "✕"
+	del.tooltip_text = "이 타겟 삭제"
+	del.pressed.connect(func(): _on_lvl_delete_target(i))
+	hb.add_child(del)
+	return hb
+
+
+func _on_lvl_add_target() -> void:
+	var last_t: float = 60.0
+	var last_lv: int = 5
+	if _lvl_targets.size() > 0:
+		last_t = float(_lvl_targets[_lvl_targets.size() - 1][0])
+		last_lv = int(_lvl_targets[_lvl_targets.size() - 1][1])
+	var new_t := last_t + 60.0
+	var new_lv := mini(last_lv + 5, _LVL_MAX_LEVEL)
+	_lvl_targets.append([new_t, new_lv])
+	_rebuild_lvl_targets()
+	_refresh_lvl_sim()
+
+
+func _on_lvl_delete_target(i: int) -> void:
+	if i < 0 or i >= _lvl_targets.size():
+		return
+	_lvl_targets.remove_at(i)
+	_rebuild_lvl_targets()
+	_refresh_lvl_sim()
+
+
+func _projected_level_at(t_target: float) -> int:
+	var xp_per_sec := _exp_xp_per_min / 60.0
+	if xp_per_sec <= 0.0:
+		return 1
+	var t := 0.0
+	var exp_pool := 0.0
+	var level := 1
+	var dt := 0.5
+	while t <= t_target:
+		exp_pool += xp_per_sec * dt
+		while level < _LVL_MAX_LEVEL and exp_pool >= float(_exp_threshold(level)):
+			exp_pool -= float(_exp_threshold(level))
+			level += 1
+		t += dt
+	return level
+
+
+func _draw_lvl_chart() -> void:
+	var ctrl := _lvl_chart
+	if ctrl == null:
+		return
+	var sz := ctrl.size
+	var pad_l := 36.0
+	var pad_b := 18.0
+	var pad_t := 8.0
+	var pad_r := 8.0
+	var w := sz.x - pad_l - pad_r
+	var h := sz.y - pad_t - pad_b
+	if w <= 10.0 or h <= 10.0:
+		return
+
+	var xp_per_sec: float = _exp_xp_per_min / 60.0
+	# 챕터 최대시간 = LVL_MAX_LEVEL 도달 시간 또는 타겟 최대시간 중 큰 값.
+	var cum_max: float = float(_exp_cumulative(_LVL_MAX_LEVEL))
+	var time_to_max: float = cum_max / maxf(xp_per_sec, 0.0001)
+	var dur: float = time_to_max
+	for tgt in _lvl_targets:
+		dur = maxf(dur, float(tgt[0]))
+	dur = maxf(dur, 60.0)
+
+	var font := ctrl.get_theme_default_font()
+	var fsz := 10
+
+	ctrl.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.08, 0.09, 0.12))
+
+	# 격자 + 분 라벨.
+	var grid_col := Color(0.2, 0.22, 0.28)
+	var minute := 0
+	while float(minute * 60) <= dur:
+		var gx: float = pad_l + (float(minute * 60) / dur) * w
+		ctrl.draw_line(Vector2(gx, pad_t), Vector2(gx, pad_t + h), grid_col, 1.0)
+		if font != null:
+			ctrl.draw_string(font, Vector2(gx + 2, sz.y - 4), "%dm" % minute, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(0.5, 0.55, 0.65))
+		minute += 1
+	for gi in range(1, 4):
+		var gy := pad_t + h * (float(gi) / 4.0)
+		ctrl.draw_line(Vector2(pad_l, gy), Vector2(pad_l + w, gy), grid_col, 1.0)
+	ctrl.draw_line(Vector2(pad_l, pad_t), Vector2(pad_l, pad_t + h), Color(0.4, 0.4, 0.5), 1.0)
+	ctrl.draw_line(Vector2(pad_l, pad_t + h), Vector2(pad_l + w, pad_t + h), Color(0.4, 0.4, 0.5), 1.0)
+
+	# 빌드 타겟 마커.
+	for tgt in _lvl_targets:
+		_draw_marker(ctrl, float(tgt[0]), dur, pad_l, pad_t, w, h, Color(1.0, 0.6, 0.1), false, "T")
+
+	# 시리즈A — 누적EXP 요구량(초록): 레벨 lv 의 도달시간 × 누적EXP 스케일로 표시.
+	var cum_peak := float(max(_exp_cumulative(_LVL_MAX_LEVEL), 1))
+	var series_a := PackedVector2Array()
+	for lv in range(1, _LVL_MAX_LEVEL + 1):
+		var t_reach: float = float(_exp_cumulative(lv)) / maxf(xp_per_sec, 0.0001)
+		var cum_val := float(_exp_cumulative(lv))
+		series_a.append(Vector2(t_reach, cum_val))
+
+	# 시리즈B — 투영 레벨(파랑): 시간 t 적분.
+	var series_b := PackedVector2Array()
+	var t := 0.0
+	var exp_pool := 0.0
+	var level := 1
+	var dt := 0.5
+	while t <= dur:
+		exp_pool += xp_per_sec * dt
+		while level < _LVL_MAX_LEVEL and exp_pool >= float(_exp_threshold(level)):
+			exp_pool -= float(_exp_threshold(level))
+			level += 1
+		series_b.append(Vector2(t, float(level)))
+		t += dt
+
+	# 시리즈 그리기 — B 먼저(파랑, 레벨스케일), A 나중(초록, 누적EXP 스케일).
+	_draw_series(ctrl, series_b, dur, float(_LVL_MAX_LEVEL), pad_l, pad_t, w, h, Color(0.35, 0.6, 1.0), 1.5)
+	_draw_series(ctrl, series_a, dur, cum_peak, pad_l, pad_t, w, h, Color(0.4, 1.0, 0.5), 2.0)
+
+	# Y축 라벨.
+	if font != null:
+		ctrl.draw_string(font, Vector2(2, pad_t + 8), "Lv%d" % _LVL_MAX_LEVEL, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(0.35, 0.6, 1.0))
+		ctrl.draw_string(font, Vector2(2, pad_t + 20), "xp%d" % int(cum_peak), HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(0.4, 1.0, 0.5))
+
+
+func _lvl_fmt_time(xp_needed: int, xps: float) -> String:
+	if xps <= 0.0:
+		return "∞"
+	return "%.0fs" % (float(xp_needed) / xps)
+
+
+func _update_lvl_metrics() -> void:
+	if _lvl_metrics == null or _lvl_warnings == null:
+		return
+	var xp_per_sec := _exp_xp_per_min / 60.0
+	var t5 := _lvl_fmt_time(_exp_cumulative(5), xp_per_sec)
+	var t10 := _lvl_fmt_time(_exp_cumulative(10), xp_per_sec)
+	var t20 := _lvl_fmt_time(_exp_cumulative(20), xp_per_sec)
+	_lvl_metrics.text = "Lv5 %s · Lv10 %s · Lv20 %s · 총 레벨업 %d회(카드 픽)" % [t5, t10, t20, _LVL_MAX_LEVEL - 1]
+
+	var warns: Array = []
+	# 1) 곡선 비단조.
+	for lv in range(2, _LVL_MAX_LEVEL + 1):
+		if _exp_threshold(lv) < _exp_threshold(lv - 1):
+			warns.append("⚠ EXP 임계가 비단조(레벨 %d 에서 감소)" % lv)
+			break
+	# 2) 너무 가파름(인접비 ×1.8 이상).
+	for lv in range(2, _LVL_MAX_LEVEL + 1):
+		var prev := _exp_threshold(lv - 1)
+		if prev > 0 and float(_exp_threshold(lv)) / float(prev) >= 1.8:
+			warns.append("⚠ EXP 곡선 급증(레벨 %d, ×1.8↑)" % lv)
+			break
+	# 3) 타겟 미달/초과.
+	for tgt in _lvl_targets:
+		var tt := float(tgt[0])
+		var target_lv := int(tgt[1])
+		var proj := _projected_level_at(tt)
+		if abs(proj - target_lv) > 2:
+			warns.append("⚠ %ds 타겟 Lv%d 미달/초과(투영 Lv%d)" % [int(tt), target_lv, proj])
+	_lvl_warnings.text = "\n".join(PackedStringArray(warns)) if warns.size() > 0 else "✔ 경고 없음"
