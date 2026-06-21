@@ -601,6 +601,11 @@ func toggle_wave() -> bool:
 	return _wave_running
 
 func _wave_spawn(_lv: int) -> void:
+	var rc = (_wave_mgr.curve if (_wave_mgr != null and "curve" in _wave_mgr) else null)
+	# 스폰 로스터(배열)가 채워져 있으면 Main 과 동일 경로 — 비어있으면 레거시 폴백.
+	if rc != null and rc.has_method("has_roster") and bool(rc.call("has_roster")):
+		_wave_spawn_roster(rc)
+		return
 	var r: float = 0.0
 	if _wave_mgr != null and _wave_mgr.has_method("ranged_ratio"):
 		r = float(_wave_mgr.call("ranged_ratio"))
@@ -608,6 +613,48 @@ func _wave_spawn(_lv: int) -> void:
 		_spawn_mob(load("res://scenes/enemies/RangedEnemy.tscn"))
 	else:
 		_spawn_mob(melee_enemy_scene)
+
+
+## 로스터(배열) 기반 종류 선택 — Main._request_spawn_roster 미러.
+## Testplay 환경(lv2/슬래머비율 미적용)이라 key→scene 만 고르고 _spawn_mob.
+func _wave_spawn_roster(rc) -> void:
+	var t: float = (float(_wave_mgr.call("elapsed")) if _wave_mgr.has_method("elapsed") else 0.0)
+	# 주술사 — 활성 엔트리 + 싱글톤(동시 1마리) 굴림.
+	if rc.has_method("sorcerer_entry_active_at") and bool(rc.call("sorcerer_entry_active_at", t)):
+		if sorcerer_enemy_scene != null and _wave_alive_sorcerer_count() < 1 and randf() < 0.05:
+			_spawn_mob(sorcerer_enemy_scene)
+			return
+	var key: String = ""
+	if rc.has_method("roster_pick_key"):
+		key = str(rc.call("roster_pick_key", t, randf()))
+	match key:
+		"ranged":
+			_spawn_mob(load("res://scenes/enemies/RangedEnemy.tscn"))
+		"leaper":
+			if _wave_alive_leaper_count() < 3:
+				_spawn_mob(load("res://scenes/enemies/Leaper.tscn"))
+			else:
+				_spawn_mob(melee_enemy_scene)
+		"slammer":
+			_spawn_mob(slammer_enemy_scene)
+		_:
+			_spawn_mob(melee_enemy_scene)
+
+
+func _wave_alive_sorcerer_count() -> int:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("sorcerers"):
+		if is_instance_valid(e) and not ("_dead" in e and e._dead):
+			n += 1
+	return n
+
+
+func _wave_alive_leaper_count() -> int:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("leapers"):
+		if is_instance_valid(e) and not ("_dead" in e and e._dead):
+			n += 1
+	return n
 
 func _wave_count_alive() -> int:
 	var n := 0

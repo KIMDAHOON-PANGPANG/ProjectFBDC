@@ -331,21 +331,17 @@ const WAVE_FIELDS := [
 	["@", "─ 스폰 페이싱 ─"],
 	["tick_period", "틱 주기(초)", "WaveManager 가 결손을 재평가하는 주기.", "f"],
 	["max_spawn_per_tick", "틱당 최대 스폰", "한 틱에 추가되는 최대 마릿수(시각적 분산).", "i"],
-	["@", "─ 궁수(원거리) ─"],
-	["ranged_ratio", "궁수 비율(0~1)", "드립 스폰이 궁수일 확률. 롤에서 ranged 가 먼저 차감됨.", "f"],
-	["ranged_start_time", "궁수 등장 시각(초)", "궁수가 등장하기 시작하는 경과 시간(이전에는 0으로 취급).", "f"],
-	["@", "─ 슬래머 ─"],
-	["slammer_ratio", "슬래머 비율(근접슬롯 중)", "근접 슬롯 중 슬래머가 선택될 비율(0~1). 근접 비율 내부 분배.", "f"],
-	["slammer_start_time", "슬래머 등장 시각(초)", "슬래머 등장 시작 경과 시간(이전에는 0으로 취급).", "f"],
-	["@", "─ 리퍼(도약) ─"],
-	["leaper_ratio", "리퍼 비율(0~1)", "드립 스폰이 리퍼일 확률. 동시 3마리 캡 있음.", "f"],
-	["leaper_start_time", "리퍼 등장 시각(초)", "리퍼 등장 시작 경과 시간(이전에는 0으로 취급).", "f"],
 ]
+
+## 스폰 로스터 OptionButton 항목 인덱스 ↔ 몬스터 key 매핑.
+const ROSTER_KEYS := ["melee", "ranged", "slammer", "leaper", "sorcerer"]
+const ROSTER_LABELS := ["근접(베이스)", "궁수", "슬래머", "리퍼", "주술사"]
 
 var _wave_curve = null
 var _wave_path: String = ""
 var _wave_points_box: VBoxContainer = null
 var _wave_fields_box: VBoxContainer = null
+var _wave_roster_box: VBoxContainer = null
 var _wave_chart: Control = null
 var _wave_metrics: Label = null
 var _wave_warnings: Label = null
@@ -401,11 +397,23 @@ func _build_wave_tab() -> Control:
 	add_btn.pressed.connect(_on_wave_add_point)
 	vb.add_child(add_btn)
 
-	# 비율 / 이벤트 단순 필드.
-	vb.add_child(_note("근접 잡몹은 베이스 — 항상 나머지 슬롯을 채움(별도 게이트/비율 없음). 주술사는 싱글톤(동시 1, 5% 굴림)."))
+	# 이벤트 / 페이싱 단순 필드(종류 비율은 아래 '스폰 로스터'로 이전됨).
+	vb.add_child(_note("종류 편성은 아래 '스폰 로스터'에서. 근접 잡몹은 베이스(미매칭/엔트리없음 폴백). 주술사는 가중치 무관 싱글톤(동시 1, 5% 굴림)."))
 	_wave_fields_box = VBoxContainer.new()
 	_wave_fields_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vb.add_child(_wave_fields_box)
+
+	# 스폰 로스터 — 배열 기반 종류 편성(추가/삭제). 비어있으면 레거시 폴백 동작.
+	vb.add_child(_section("─ 스폰 로스터 (종류 / 등장시각 / 수량 / on·off) ─"))
+	vb.add_child(_note("드립 스폰 종류를 직접 편성한다. 비어있으면 레거시(궁수/슬래머/리퍼 비율) 동작 그대로. 수량=상대 가중치(weighted-random). 주술사는 가중치 무관·활성 시 싱글톤 5% 굴림. 챕터 로드 시 레거시 값에서 자동 prefill(표시만, 편집 전엔 저장 안 함)."))
+	_wave_roster_box = VBoxContainer.new()
+	_wave_roster_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_child(_wave_roster_box)
+	var roster_add := Button.new()
+	roster_add.text = "＋ 엔트리 추가"
+	roster_add.tooltip_text = "로스터 끝에 엔트리 추가(근접/0초/가중치1/on). 추가 즉시 .tres 저장."
+	roster_add.pressed.connect(_on_wave_roster_add)
+	vb.add_child(roster_add)
 
 	# 가정 처치율 슬라이더.
 	vb.add_child(_section("─ 시뮬레이션 ─"))
@@ -499,6 +507,7 @@ func _load_wave_chapter(idx: int) -> void:
 	_wave_curve = load(_wave_path)
 	_rebuild_wave_points()
 	_rebuild_wave_fields()
+	_rebuild_wave_roster()
 	# 스크럽 위젯 범위 갱신 — 위젯이 이미 생성된 경우에만.
 	var dur := _sim_duration()
 	if _wave_scrub_slider != null:
@@ -630,6 +639,273 @@ func _on_wave_delete_point(i: int) -> void:
 	_wave_curve.curve_lvs = lvs
 	_save_wave()
 	_rebuild_wave_points()
+	_refresh_wave_sim()
+
+
+# ── 스폰 로스터(배열) 편집 ───────────────────────────────────────────────────
+
+# 로스터 행 목록 재구성. spawn_keys 가 비어있으면 레거시→엔트리 prefill(메모리만, 저장X).
+func _rebuild_wave_roster() -> void:
+	if _wave_roster_box == null:
+		return
+	for c in _wave_roster_box.get_children():
+		c.queue_free()
+	if _wave_curve == null:
+		_wave_roster_box.add_child(_note("⚠ 챕터 로드 실패"))
+		return
+	# 비어있으면 레거시에서 prefill — 저장 금지(사용자 미커밋 튜닝 보호).
+	if not _curve_has_roster():
+		_roster_prefill_from_legacy()
+	# 헤더 행.
+	var head := HBoxContainer.new()
+	for txt in ["종류", "등장시각(s)", "수량(가중치)", "on", ""]:
+		var l := Label.new()
+		l.text = txt
+		l.custom_minimum_size = Vector2(110, 0)
+		l.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
+		head.add_child(l)
+	_wave_roster_box.add_child(head)
+	var n: int = _roster_keys().size()
+	if n == 0:
+		_wave_roster_box.add_child(_note("(로스터 비어있음 → 레거시 동작. '＋ 엔트리 추가'로 배열 편성 시작)"))
+		return
+	for i in n:
+		_wave_roster_box.add_child(_wave_roster_row(i))
+
+
+func _curve_has_roster() -> bool:
+	return _roster_keys().size() > 0
+
+
+# 로스터 배열 안전 접근 — class_name 캐시 미갱신/구버전 리소스 대비("spawn_keys" 부재 시 빈배열).
+func _roster_keys() -> PackedStringArray:
+	if _wave_curve == null or not ("spawn_keys" in _wave_curve):
+		return PackedStringArray()
+	var v = _wave_curve.spawn_keys
+	return v if v != null else PackedStringArray()
+
+
+func _roster_starts() -> PackedFloat32Array:
+	if _wave_curve == null or not ("spawn_start_times" in _wave_curve):
+		return PackedFloat32Array()
+	var v = _wave_curve.spawn_start_times
+	return v if v != null else PackedFloat32Array()
+
+
+func _roster_weights() -> PackedFloat32Array:
+	if _wave_curve == null or not ("spawn_weights" in _wave_curve):
+		return PackedFloat32Array()
+	var v = _wave_curve.spawn_weights
+	return v if v != null else PackedFloat32Array()
+
+
+func _roster_enabled() -> PackedInt32Array:
+	if _wave_curve == null or not ("spawn_enabled" in _wave_curve):
+		return PackedInt32Array()
+	var v = _wave_curve.spawn_enabled
+	return v if v != null else PackedInt32Array()
+
+
+# 차트 종류 마커용 시작시각 — 로스터(있으면) 활성 enabled 엔트리 중 최소 start_time,
+# 없으면 레거시 *_start_time. enabled==1 인 엔트리가 없으면 0 반환(마커 = 미표시: <=0).
+func _roster_start_for(key: String) -> float:
+	if _curve_has_roster():
+		var keys: PackedStringArray = _roster_keys()
+		var starts: PackedFloat32Array = _roster_starts()
+		var ens: PackedInt32Array = _roster_enabled()
+		var best: float = -1.0
+		for i in keys.size():
+			if str(keys[i]) != key:
+				continue
+			var en: int = ens[i] if i < ens.size() else 1
+			if en != 1:
+				continue
+			var st: float = starts[i] if i < starts.size() else 0.0
+			if best < 0.0 or st < best:
+				best = st
+		# enabled 엔트리 없음 → 0(마커 그리지 않음). start==0 이면 0(마커 생략 — _draw_marker mt<=0 가드).
+		return maxf(0.0, best)
+	# 레거시.
+	match key:
+		"ranged": return float(_wave_curve.ranged_start_time)
+		"slammer": return float(_wave_curve.slammer_start_time)
+		"leaper": return float(_wave_curve.leaper_start_time)
+	return 0.0
+
+
+# 경고 진단용 — 로스터에서 key 의 활성(enabled==1 && weight>0) 엔트리 최소 start_time.
+# 없으면 -1.0(=미등장 경고).
+func _roster_active_start_for(key: String) -> float:
+	if _wave_curve == null:
+		return -1.0
+	var keys: PackedStringArray = _roster_keys()
+	var starts: PackedFloat32Array = _roster_starts()
+	var weights: PackedFloat32Array = _roster_weights()
+	var ens: PackedInt32Array = _roster_enabled()
+	var best: float = -1.0
+	for i in keys.size():
+		if str(keys[i]) != key:
+			continue
+		var en: int = ens[i] if i < ens.size() else 1
+		var w: float = weights[i] if i < weights.size() else 0.0
+		if en != 1 or w <= 0.0:
+			continue
+		var st: float = starts[i] if i < starts.size() else 0.0
+		if best < 0.0 or st < best:
+			best = st
+	return best
+
+
+# 레거시 종류별 필드 → 동등 엔트리 배열을 _wave_curve.spawn_* 에 in-memory set.
+# ⚠ 저장 금지 — GUI 표시/시뮬용. (자동 마이그레이션 강제저장이 챕터 튜닝을 덮으면 안 됨)
+func _roster_prefill_from_legacy() -> void:
+	if _wave_curve == null:
+		return
+	var rr: float = clampf(float(_wave_curve.ranged_ratio), 0.0, 1.0)
+	var lr: float = clampf(float(_wave_curve.leaper_ratio), 0.0, maxf(0.0, 1.0 - rr))
+	var sr: float = clampf(float(_wave_curve.slammer_ratio), 0.0, 1.0)
+	var rest: float = maxf(0.0, 1.0 - rr - lr)
+	var slam_w: float = rest * sr
+	var mel_w: float = rest * (1.0 - sr)
+	# 엔트리(가중치=레거시 비율로 환산 → weighted-random 비율이 동등 의도 유지).
+	var keys := PackedStringArray()
+	var starts := PackedFloat32Array()
+	var weights := PackedFloat32Array()
+	var ens := PackedInt32Array()
+	# 근접 베이스(항상).
+	keys.append("melee"); starts.append(0.0); weights.append(maxf(0.0001, mel_w)); ens.append(1)
+	# 궁수.
+	keys.append("ranged"); starts.append(float(_wave_curve.ranged_start_time)); weights.append(rr); ens.append(1 if rr > 0.0 else 0)
+	# 슬래머.
+	keys.append("slammer"); starts.append(float(_wave_curve.slammer_start_time)); weights.append(slam_w); ens.append(1 if sr > 0.0 else 0)
+	# 리퍼.
+	keys.append("leaper"); starts.append(float(_wave_curve.leaper_start_time)); weights.append(lr); ens.append(1 if lr > 0.0 else 0)
+	# 주술사(싱글톤·5% 굴림 — 가중치 무관, 표시용 0.05).
+	keys.append("sorcerer"); starts.append(0.0); weights.append(0.05); ens.append(1)
+	_wave_curve.spawn_keys = keys
+	_wave_curve.spawn_start_times = starts
+	_wave_curve.spawn_weights = weights
+	_wave_curve.spawn_enabled = ens
+
+
+func _wave_roster_row(i: int) -> Control:
+	var hb := HBoxContainer.new()
+	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 종류 OptionButton.
+	var ob := OptionButton.new()
+	ob.custom_minimum_size = Vector2(110, 0)
+	for k in ROSTER_LABELS.size():
+		ob.add_item(ROSTER_LABELS[k], k)
+	var _rk := _roster_keys()
+	var cur_key: String = str(_rk[i]) if i < _rk.size() else "melee"
+	var sel: int = ROSTER_KEYS.find(cur_key)
+	ob.select(sel if sel >= 0 else 0)
+	ob.item_selected.connect(func(idx):
+		var arr: PackedStringArray = _roster_keys()
+		if i < arr.size() and idx >= 0 and idx < ROSTER_KEYS.size():
+			arr[i] = ROSTER_KEYS[idx]
+			_wave_curve.spawn_keys = arr
+			_save_wave()
+			_refresh_wave_sim())
+	hb.add_child(ob)
+	# 등장시각.
+	var tb := SpinBox.new()
+	tb.min_value = 0.0
+	tb.max_value = 99999.0
+	tb.step = 1.0
+	tb.custom_minimum_size = Vector2(110, 0)
+	var _rs := _roster_starts()
+	tb.value = float(_rs[i]) if i < _rs.size() else 0.0
+	tb.value_changed.connect(func(v):
+		var arr: PackedFloat32Array = _roster_starts()
+		if i < arr.size():
+			arr[i] = v
+			_wave_curve.spawn_start_times = arr
+			_save_wave()
+			_refresh_wave_sim())
+	hb.add_child(tb)
+	# 수량(가중치).
+	var wb := SpinBox.new()
+	wb.min_value = 0.0
+	wb.max_value = 999.0
+	wb.step = 0.05
+	wb.custom_minimum_size = Vector2(110, 0)
+	var _rw := _roster_weights()
+	wb.value = float(_rw[i]) if i < _rw.size() else 1.0
+	wb.value_changed.connect(func(v):
+		var arr: PackedFloat32Array = _roster_weights()
+		if i < arr.size():
+			arr[i] = v
+			_wave_curve.spawn_weights = arr
+			_save_wave()
+			_refresh_wave_sim())
+	hb.add_child(wb)
+	# on/off.
+	var cb := CheckBox.new()
+	cb.custom_minimum_size = Vector2(40, 0)
+	var _re := _roster_enabled()
+	cb.button_pressed = (i < _re.size() and _re[i] == 1)
+	cb.toggled.connect(func(on):
+		var arr: PackedInt32Array = _roster_enabled()
+		if i < arr.size():
+			arr[i] = 1 if on else 0
+			_wave_curve.spawn_enabled = arr
+			_save_wave()
+			_refresh_wave_sim())
+	hb.add_child(cb)
+	# 삭제.
+	var del := Button.new()
+	del.text = "✕"
+	del.tooltip_text = "이 엔트리 삭제"
+	del.pressed.connect(func(): _on_wave_roster_delete(i))
+	hb.add_child(del)
+	return hb
+
+
+func _on_wave_roster_add() -> void:
+	if _wave_curve == null:
+		return
+	# prefill 이 아직 안 됐으면(빈 로스터) 먼저 메모리 prefill 해서 사용자 기존 편성 보존.
+	if not _curve_has_roster():
+		_roster_prefill_from_legacy()
+	var keys: PackedStringArray = _roster_keys()
+	var starts: PackedFloat32Array = _roster_starts()
+	var weights: PackedFloat32Array = _roster_weights()
+	var ens: PackedInt32Array = _roster_enabled()
+	keys.append("melee")
+	starts.append(0.0)
+	weights.append(1.0)
+	ens.append(1)
+	_wave_curve.spawn_keys = keys
+	_wave_curve.spawn_start_times = starts
+	_wave_curve.spawn_weights = weights
+	_wave_curve.spawn_enabled = ens
+	_save_wave()
+	_rebuild_wave_roster()
+	_refresh_wave_sim()
+
+
+func _on_wave_roster_delete(i: int) -> void:
+	if _wave_curve == null:
+		return
+	var keys: PackedStringArray = _roster_keys()
+	var starts: PackedFloat32Array = _roster_starts()
+	var weights: PackedFloat32Array = _roster_weights()
+	var ens: PackedInt32Array = _roster_enabled()
+	if i >= 0 and i < keys.size():
+		keys.remove_at(i)
+	if i >= 0 and i < starts.size():
+		starts.remove_at(i)
+	if i >= 0 and i < weights.size():
+		weights.remove_at(i)
+	if i >= 0 and i < ens.size():
+		ens.remove_at(i)
+	_wave_curve.spawn_keys = keys
+	_wave_curve.spawn_start_times = starts
+	_wave_curve.spawn_weights = weights
+	_wave_curve.spawn_enabled = ens
+	_save_wave()
+	_rebuild_wave_roster()
 	_refresh_wave_sim()
 
 
@@ -775,6 +1051,10 @@ func _sim_lv_at(t: float) -> int:
 func _sim_composition(t: float) -> Dictionary:
 	if _wave_curve == null:
 		return {}
+	# 로스터(있으면) 기반 — 활성 비주술사 엔트리 가중치 합으로 종류별 비율.
+	if _curve_has_roster():
+		return _sim_composition_roster(t)
+	# 레거시 폴백.
 	var rr: float = float(_wave_curve.ranged_ratio) if t >= float(_wave_curve.ranged_start_time) else 0.0
 	var lr: float = float(_wave_curve.leaper_ratio) if t >= float(_wave_curve.leaper_start_time) else 0.0
 	var sr: float = float(_wave_curve.slammer_ratio) if t >= float(_wave_curve.slammer_start_time) else 0.0
@@ -790,6 +1070,46 @@ func _sim_composition(t: float) -> Dictionary:
 		"slammer": slam,
 		"leaper": lr,
 		"sorc": 0.05,
+		"sorc_active": true,
+		"rate": _sim_rate_at(t),
+		"lv": _sim_lv_at(t),
+	}
+
+
+# 로스터 기반 t 시점 구성 — 활성(enabled&start<=t) 비주술사 엔트리 가중치 합으로 비율.
+func _sim_composition_roster(t: float) -> Dictionary:
+	var keys: PackedStringArray = _roster_keys()
+	var starts: PackedFloat32Array = _roster_starts()
+	var weights: PackedFloat32Array = _roster_weights()
+	var ens: PackedInt32Array = _roster_enabled()
+	var sums := {"melee": 0.0, "ranged": 0.0, "slammer": 0.0, "leaper": 0.0}
+	var total: float = 0.0
+	var sorc_active := false
+	for i in keys.size():
+		var en: int = ens[i] if i < ens.size() else 1
+		var st: float = starts[i] if i < starts.size() else 0.0
+		if en != 1 or t < st:
+			continue
+		var k: String = str(keys[i])
+		if k == "sorcerer":
+			sorc_active = true
+			continue
+		var w: float = weights[i] if i < weights.size() else 0.0
+		if w <= 0.0:
+			continue
+		if not sums.has(k):
+			# 미지정 종류 → 근접 베이스로 합산(roster_pick_key 의 미매칭 폴백과 동일).
+			k = "melee"
+		sums[k] += w
+		total += w
+	var inv: float = (1.0 / total) if total > 0.0 else 0.0
+	return {
+		"melee": sums["melee"] * inv,
+		"ranged": sums["ranged"] * inv,
+		"slammer": sums["slammer"] * inv,
+		"leaper": sums["leaper"] * inv,
+		"sorc": (0.05 if sorc_active else 0.0),
+		"sorc_active": sorc_active,
 		"rate": _sim_rate_at(t),
 		"lv": _sim_lv_at(t),
 	}
@@ -812,17 +1132,18 @@ func _update_wave_compo_readout() -> void:
 		return
 	var elite_state: String = "출현" if _wave_scrub_t >= float(_wave_curve.elite_time) else "미출현"
 	var boss_state: String = "출현" if _wave_scrub_t >= float(_wave_curve.boss_time) else "미출현(%.0fs 후)" % maxf(0.0, float(_wave_curve.boss_time) - _wave_scrub_t)
+	var sorc_txt: String = "활성(5% 굴림, 싱글톤)" if bool(c.get("sorc_active", true)) else "미활성(로스터 엔트리 없음/off)"
 	_wave_compo.text = (
 		"t=%.0fs (레벨 %d) · 스폰비율 %.2f/s\n"
 		+ "근접(베이스) %.0f%% ~%.2f/s · 궁수 %.0f%% ~%.2f/s · 슬래머 %.0f%% ~%.2f/s · 리퍼 %.0f%% ~%.2f/s\n"
-		+ "주술사: 활성(5%% 굴림, 싱글톤) · 엘리트: %s · 보스: %s"
+		+ "주술사: %s · 엘리트: %s · 보스: %s"
 	) % [
 		_wave_scrub_t, c["lv"], rate,
 		c["melee"] * 100.0, c["melee"] * rate,
 		c["ranged"] * 100.0, c["ranged"] * rate,
 		c["slammer"] * 100.0, c["slammer"] * rate,
 		c["leaper"] * 100.0, c["leaper"] * rate,
-		elite_state, boss_state,
+		sorc_txt, elite_state, boss_state,
 	]
 
 
@@ -888,9 +1209,9 @@ func _draw_wave_chart() -> void:
 	# 이벤트 마커 세로선.
 	_draw_marker(ctrl, _wave_curve.elite_time, dur, pad_l, pad_t, w, h, Color(1.0, 0.6, 0.1), false, "E")
 	_draw_marker(ctrl, _wave_curve.boss_time, dur, pad_l, pad_t, w, h, Color(0.7, 0.4, 1.0), false, "B")
-	_draw_marker(ctrl, _wave_curve.ranged_start_time, dur, pad_l, pad_t, w, h, Color(0.5, 0.8, 1.0), true, "R")
-	_draw_marker(ctrl, _wave_curve.slammer_start_time, dur, pad_l, pad_t, w, h, Color(0.95, 0.55, 0.2), true, "S")
-	_draw_marker(ctrl, _wave_curve.leaper_start_time, dur, pad_l, pad_t, w, h, Color(0.7, 0.5, 0.95), true, "L")
+	_draw_marker(ctrl, _roster_start_for("ranged"), dur, pad_l, pad_t, w, h, Color(0.5, 0.8, 1.0), true, "R")
+	_draw_marker(ctrl, _roster_start_for("slammer"), dur, pad_l, pad_t, w, h, Color(0.95, 0.55, 0.2), true, "S")
+	_draw_marker(ctrl, _roster_start_for("leaper"), dur, pad_l, pad_t, w, h, Color(0.7, 0.5, 0.95), true, "L")
 
 	# 시리즈B(투영 생존) — 파랑.
 	_draw_series(ctrl, alive_pts, dur, alive_scale, pad_l, pad_t, w, h, Color(0.35, 0.6, 1.0), 1.5)
@@ -975,9 +1296,9 @@ func _draw_wave_compo_chart() -> void:
 	_draw_marker(ctrl, _wave_curve.boss_time, dur, pad_l, pad_t, w, h, Color(0.7, 0.4, 1.0), false, "B")
 
 	# 종류 등장 시작 마커(점선).
-	_draw_marker(ctrl, _wave_curve.ranged_start_time, dur, pad_l, pad_t, w, h, col_ranged, true, "R")
-	_draw_marker(ctrl, _wave_curve.slammer_start_time, dur, pad_l, pad_t, w, h, col_slammer, true, "S")
-	_draw_marker(ctrl, _wave_curve.leaper_start_time, dur, pad_l, pad_t, w, h, col_leaper, true, "L")
+	_draw_marker(ctrl, _roster_start_for("ranged"), dur, pad_l, pad_t, w, h, col_ranged, true, "R")
+	_draw_marker(ctrl, _roster_start_for("slammer"), dur, pad_l, pad_t, w, h, col_slammer, true, "S")
+	_draw_marker(ctrl, _roster_start_for("leaper"), dur, pad_l, pad_t, w, h, col_leaper, true, "L")
 
 	# 축.
 	ctrl.draw_line(Vector2(pad_l, pad_t), Vector2(pad_l, pad_t + h), Color(0.4, 0.4, 0.5), 1.0)
@@ -1107,19 +1428,29 @@ func _update_wave_metrics() -> void:
 	# 6) 투영 생존 HARD_CAP 도달(과밀).
 	if int(round(alive_peak)) >= _SIM_HARD_CAP:
 		warns.append("⚠ 투영 동시생존이 HARD_CAP(%d) 도달 — 과밀 / 처치율 부족" % _SIM_HARD_CAP)
-	# 7~11) 몬스터 종류별 미등장 진단.
-	if float(_wave_curve.ranged_start_time) > dur:
-		warns.append("⚠ 궁수가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.ranged_start_time), dur])
-	elif float(_wave_curve.ranged_ratio) <= 0.0:
-		warns.append("⚠ 궁수 비율 0 — 전혀 안 나옴")
-	if float(_wave_curve.leaper_start_time) > dur:
-		warns.append("⚠ 리퍼가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.leaper_start_time), dur])
-	elif float(_wave_curve.leaper_ratio) <= 0.0:
-		warns.append("⚠ 리퍼 비율 0 — 전혀 안 나옴")
-	if float(_wave_curve.slammer_start_time) > dur:
-		warns.append("⚠ 슬래머가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.slammer_start_time), dur])
-	elif float(_wave_curve.slammer_ratio) <= 0.0:
-		warns.append("⚠ 슬래머 비율 0 — 전혀 안 나옴")
+	# 7~11) 몬스터 종류별 미등장 진단 — 로스터 있으면 엔트리 기반, 없으면 레거시.
+	if _curve_has_roster():
+		for diag in [["ranged", "궁수"], ["slammer", "슬래머"], ["leaper", "리퍼"]]:
+			var dk: String = diag[0]
+			var dn: String = diag[1]
+			var st: float = _roster_active_start_for(dk)
+			if st < 0.0:
+				warns.append("⚠ %s 로스터 엔트리 없음/off — 전혀 안 나옴" % dn)
+			elif st > dur:
+				warns.append("⚠ %s가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [dn, st, dur])
+	else:
+		if float(_wave_curve.ranged_start_time) > dur:
+			warns.append("⚠ 궁수가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.ranged_start_time), dur])
+		elif float(_wave_curve.ranged_ratio) <= 0.0:
+			warns.append("⚠ 궁수 비율 0 — 전혀 안 나옴")
+		if float(_wave_curve.leaper_start_time) > dur:
+			warns.append("⚠ 리퍼가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.leaper_start_time), dur])
+		elif float(_wave_curve.leaper_ratio) <= 0.0:
+			warns.append("⚠ 리퍼 비율 0 — 전혀 안 나옴")
+		if float(_wave_curve.slammer_start_time) > dur:
+			warns.append("⚠ 슬래머가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.slammer_start_time), dur])
+		elif float(_wave_curve.slammer_ratio) <= 0.0:
+			warns.append("⚠ 슬래머 비율 0 — 전혀 안 나옴")
 	# 곡선 스폰비율값 전부 0 — 잡몹 미스폰.
 	var all_zero: bool = true
 	for tgt in _wave_curve.curve_targets:

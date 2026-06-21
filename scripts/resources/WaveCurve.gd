@@ -50,6 +50,75 @@ extends Resource
 ## 슬래머 등장 시작 경과 시간(초). 0=처음부터. 스토리보드: ~40s(2렙 즈음).
 @export var slammer_start_time: float = 0.0
 
+## ── 스폰 로스터 (배열 기반 종류 편성) ──
+## 위 종류별 고정 필드(ranged_ratio 등)는 *레거시 폴백*. 로스터가 비어있으면
+## (has_roster()==false) Main/Testplay/시뮬은 전부 레거시 경로로 동작한다(현 동작 100% 보존).
+## 로스터에 엔트리가 있으면 그 배열이 종류 선택을 지배한다. 4개 병렬 배열이 같은
+## 인덱스로 한 엔트리를 이룬다(class_name 신규 Resource 회피 — 곡선 포인트와 동일 패턴).
+##   spawn_keys[i]        — 몬스터 key(melee/ranged/slammer/leaper/sorcerer …)
+##   spawn_start_times[i] — 등장 시작 경과 시간(초)
+##   spawn_weights[i]     — 상대 가중치(weighted-random). 주술사는 가중치풀에서 제외(아래)
+##   spawn_enabled[i]     — 1=스폰 on / 0=off
+## 주술사(sorcerer) 엔트리는 가중치 추첨에서 빠지고, "활성 여부"만 본다 —
+## 싱글톤+_SORCERER_CHANCE 굴림(Main) 의미 유지.
+@export_group("Spawn Roster")
+@export var spawn_keys: PackedStringArray = PackedStringArray([])
+@export var spawn_start_times: PackedFloat32Array = PackedFloat32Array([])
+@export var spawn_weights: PackedFloat32Array = PackedFloat32Array([])
+@export var spawn_enabled: PackedInt32Array = PackedInt32Array([])
+
+
+## 로스터가 채워져 있는가(엔트리 1개 이상). false 면 레거시 종류선택을 쓴다.
+func has_roster() -> bool:
+	return spawn_keys.size() > 0
+
+
+## t 시점에 활성(enabled==1 && start_time<=t)인 엔트리 인덱스 목록.
+func active_entries_at(t: float) -> Array:
+	var out: Array = []
+	var n: int = spawn_keys.size()
+	for i in n:
+		var en: int = spawn_enabled[i] if i < spawn_enabled.size() else 1
+		var st: float = spawn_start_times[i] if i < spawn_start_times.size() else 0.0
+		if en == 1 and t >= st:
+			out.append(i)
+	return out
+
+
+## t 시점 활성 sorcerer 엔트리가 존재하는가(가중치 무관 — 활성만).
+func sorcerer_entry_active_at(t: float) -> bool:
+	for i in active_entries_at(t):
+		if i < spawn_keys.size() and spawn_keys[i] == "sorcerer":
+			return true
+	return false
+
+
+## 가중치 추첨으로 t 시점 종류 key 를 고른다(sorcerer 제외). rng_val 은 0~1 난수.
+## 활성 비주술사 엔트리가 없거나 가중치 합<=0 이면 "" 반환(호출부에서 melee 폴백).
+func roster_pick_key(t: float, rng_val: float) -> String:
+	var idxs: Array = active_entries_at(t)
+	var total: float = 0.0
+	for i in idxs:
+		if i < spawn_keys.size() and spawn_keys[i] == "sorcerer":
+			continue
+		var w: float = spawn_weights[i] if i < spawn_weights.size() else 0.0
+		if w > 0.0:
+			total += w
+	if total <= 0.0:
+		return ""
+	var pick: float = clampf(rng_val, 0.0, 0.999999) * total
+	var acc: float = 0.0
+	for i in idxs:
+		if i < spawn_keys.size() and spawn_keys[i] == "sorcerer":
+			continue
+		var w2: float = spawn_weights[i] if i < spawn_weights.size() else 0.0
+		if w2 <= 0.0:
+			continue
+		acc += w2
+		if pick < acc:
+			return spawn_keys[i]
+	return ""
+
 
 ## Defensive lookup — caller passes elapsed time, gets back the active
 ## curve index. Returns 0 if the curve is empty (shouldn't happen with

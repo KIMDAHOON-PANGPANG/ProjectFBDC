@@ -804,6 +804,12 @@ func _request_spawn(lv: int) -> void:
 	if _wave_preset != 0:
 		_request_spawn_preset(lv)
 		return
+	# 스폰 로스터(배열 기반)가 채워져 있으면 그 경로로 — 비어있으면(현 모든 챕터)
+	# 아래 레거시 경로(ranged_ratio/leaper/slammer)로 100% 동일하게 동작.
+	var rc = _wave_curve()
+	if rc != null and rc.has_method("has_roster") and bool(rc.call("has_roster")):
+		_request_spawn_roster(lv, rc)
+		return
 	# 주술사(싱글톤) — 없으면 낮은 확률로 1마리.
 	if _try_spawn_sorcerer():
 		return
@@ -824,6 +830,55 @@ func _request_spawn(lv: int) -> void:
 		_spawn_one(leaper_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 		return
 	_spawn_melee_or_slammer(lv)
+
+
+## 현재 활성 WaveCurve 리소스(없으면 null). 로스터 분기·시각 산출에 사용.
+func _wave_curve():
+	if _wave_mgr != null and "curve" in _wave_mgr:
+		return _wave_mgr.curve
+	return null
+
+
+## 현재 웨이브 경과 시간(초). _wave_mgr 없거나 메서드 없으면 0.
+func _wave_elapsed() -> float:
+	if _wave_mgr != null and _wave_mgr.has_method("elapsed"):
+		return float(_wave_mgr.call("elapsed"))
+	return 0.0
+
+
+## 스폰 로스터(배열) 기반 종류 선택 — has_roster()==true 일 때만 호출.
+## 주술사는 가중치풀 밖에서 활성 여부+싱글톤+_SORCERER_CHANCE 굴림(레거시 의미 보존).
+## 그 외는 roster_pick_key 가중치 추첨 → key 별 적절한 scene/반경으로 스폰.
+func _request_spawn_roster(lv: int, rc) -> void:
+	var t: float = _wave_elapsed()
+	# 주술사 — 로스터에 활성 sorcerer 엔트리가 있을 때만 굴림(싱글톤 유지).
+	if rc.has_method("sorcerer_entry_active_at") and bool(rc.call("sorcerer_entry_active_at", t)):
+		if _try_spawn_sorcerer():
+			return
+	var key: String = ""
+	if rc.has_method("roster_pick_key"):
+		key = str(rc.call("roster_pick_key", t, randf()))
+	match key:
+		"ranged":
+			if ranged_enemy_scene != null:
+				_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
+				return
+		"leaper":
+			# 동시 생존 3마리 캡 — 차면 일반 근접 베이스로 폴백.
+			if leaper_enemy_scene != null and _alive_leaper_count() < 3:
+				_spawn_one(leaper_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
+				return
+		"slammer":
+			if slammer_enemy_scene != null:
+				_spawn_one(slammer_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
+				return
+		_:
+			pass  # melee / "" / 미매칭 → 아래 근접 베이스.
+	# 근접 베이스(엔트리 없거나 캡 폴백) — lv2 부터 LV2 데이터.
+	if lv >= 2:
+		_spawn_one_lv2(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
+	else:
+		_spawn_one(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 
 
 ## 살아있는(죽는 중 제외) 리퍼 수 — 동시 3마리 스폰 캡("leapers" 그룹 질의).
