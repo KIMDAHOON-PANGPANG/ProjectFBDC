@@ -21,6 +21,12 @@ extends Node3D
 @export var magnet_ramp: float = 0.35
 ## 램프 시작 속도(졸졸 시작) — 0이면 움직이는 PC 를 못 따라가므로 최소값 유지.
 @export var magnet_min_speed: float = 3.0
+## 일섬 킬로 떨어진(또는 일섬이 스친) 젬을 예약하는 넉넉한 반경 — 일반 자석(magnet_radius)보다 크게.
+## PC 가 이미 지나가도 슬래시-킬 젬을 잡아 예약.
+@export var slash_reserve_radius: float = 4.0
+## 일섬 도중 바닥의 기존 젬도 이 반경 안을 PC 가 스치면 예약(쓸어담는 느낌).
+## slash_reserve_radius 와 동일 기본값으로 두되 분리해 튜닝 가능.
+@export var slash_sweep_radius: float = 4.0
 # 라이프타임 없음 — 줍기 전까진 사라지지 않는다(요청).
 
 var exp_value: int = 1
@@ -36,6 +42,8 @@ var _reserved: bool = false
 ## reserved 시각 표시(살짝 떠오름)용 — _build_visual 에서 머티리얼 참조 보관.
 var _mat: StandardMaterial3D
 var _reserved_visualized: bool = false
+## 스폰 직후 1회 셀프예약 판정을 수행했는지(매 프레임 재판정 방지).
+var _spawn_reserve_checked: bool = false
 
 
 ## Set BEFORE add_child so _ready's visual build reads the right size/color.
@@ -99,11 +107,21 @@ func _process(delta: float) -> void:
 	if "exp_magnet_mult" in _player:
 		eff_magnet *= maxf(0.1, float(_player.exp_magnet_mult))
 
+	# 스폰 직후 1회: 이 젬이 일섬(대시+착지유예) 도중에 떨어졌다면(=슬래시가 죽인 적의 젬),
+	# PC 는 이미 대시로 지나가 magnet_radius 밖이다. 넉넉한 slash_reserve_radius 안이면 즉시 예약해
+	# 일섬 종료 후 따라와 먹히게 한다. 너무 먼 젬까지 예약하지 않도록 반경으로 게이트.
+	if not _spawn_reserve_checked:
+		_spawn_reserve_checked = true
+		if in_slash and not _reserved and dist <= slash_reserve_radius:
+			_set_reserved()
+
 	# 일섬 중 — 즉시 흡입하지 않는다. 자석 권역을 스쳐 지나가면 "예약"으로 마킹만 하고
 	# 이동/수집은 안 한다. 일섬이 끝나면 예약된 젬이 PC 로 뒤늦게 따라와 먹힌다.
 	if in_slash:
 		_home_t = 0.0
-		if dist <= eff_magnet and not _reserved:
+		# 일섬이 스친 바닥 젬 + 슬래시-킬로 방금 떨어진 젬을 넉넉한 반경으로 예약(쓸어담는 느낌).
+		# magnet_radius(1.75)는 빠른 대시가 지나간 뒤라 거의 못 잡으므로 전용 sweep 반경 사용.
+		if not _reserved and dist <= maxf(eff_magnet, slash_sweep_radius):
 			_set_reserved()
 		return
 
