@@ -1178,7 +1178,9 @@ func _update_wave_compo_readout() -> void:
 		return
 	var elite_state: String = "출현" if _wave_scrub_t >= float(_wave_curve.elite_time) else "미출현"
 	var boss_state: String = "출현" if _wave_scrub_t >= float(_wave_curve.boss_time) else "미출현(%.0fs 후)" % maxf(0.0, float(_wave_curve.boss_time) - _wave_scrub_t)
-	var sc: float = (float(_wave_curve.call("sorcerer_chance_at", _wave_scrub_t, 0.05)) if (_wave_curve.has_method("sorcerer_chance_at") and _curve_has_roster()) else 0.05)
+	# ⚠ WaveCurve 는 @tool 아님 → 에디터에선 placeholder 라 .call() 불가. 확률은
+	# _sim_composition 이 로컬 산출해 c["sorc"] 로 이미 담아둠(로스터=실확률, 레거시=0.05).
+	var sc: float = float(c.get("sorc", 0.05))
 	var sorc_txt: String = ("활성(%.0f%% 굴림, 싱글톤)" % (sc * 100.0)) if bool(c.get("sorc_active", true)) else "미활성(로스터 엔트리 없음/off)"
 	_wave_compo.text = (
 		"t=%.0fs (레벨 %d) · 스폰비율 %.2f/s\n"
