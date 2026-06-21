@@ -401,6 +401,20 @@ const _TIGHT_RING_RADIUS_MAX: float = 10.0
 ## chasing, and once it closes back inside the radius it counts again.
 const _BUDGET_CULL_DISTANCE: float = 30.0
 
+## --- Edge-band spawn (초반 가시성 핵심) ---
+## 카메라 footprint(offset 0,10.4,9.1 / fov 38°)은 PC 기준 방향별 가시 반경이
+## 크게 다르다: 뒤(+Z)≈5, 옆≈8.5, 앞(-Z)≈9, 앞 대각 코너≈12.5. 따라서 고정 반경
+## 6~12 스폰은 "앞쪽은 화면 안→거부→폴백 17유닛(너무 멈)" / "뒤쪽은 화면 밖이지만
+## 대시 중 안 보임" 이 된다. → 방향별로 프러스텀 경계를 직접 찾아(이진탐색) 그 바로
+## 바깥(_EDGE_BUFFER)에 놓으면 어느 방향이든 "화면 가장자리 바로 밖"이 되어 1~2초 내
+## 걸어 들어온다. 카메라 파라미터가 바뀌어도 자동 추종(하드코딩 반경 아님).
+## 화면 안에서 절대 안 생김(pop-in 금지) = edge + buffer 이므로 항상 프러스텀 밖.
+const _EDGE_BUFFER: float = 1.6        # 가시 경계로부터 바깥으로 띄우는 여유(유닛)
+const _EDGE_SEARCH_MAX: float = 26.0   # 경계 이진탐색 상한(이 안에서 경계를 못 찾으면 그대로 사용)
+const _EDGE_SEARCH_ITERS: int = 9      # 이진탐색 반복(2^9 → ~0.05유닛 정밀도)
+## 게임 시작/floor(화면 빔) 시 진행/정면 쪽에 우선 시드할 마릿수.
+const _SEED_COUNT: int = 2
+
 ## Pick a spawn position around the PC within [r_min, r_max], biased toward
 ## whichever angular direction currently has the FEWEST enemies. This
 ## defeats the "PC runs one way forever and slashes the chasing line" cheese
@@ -468,8 +482,9 @@ func _pick_sector_spawn(r_min: float, r_max: float) -> Vector3:
 	order.shuffle()  # tie-break randomization
 	order.sort_custom(func(a, b): return a[0] < b[0])
 
-	# 3) Walk sectors emptiest-first; for each, take up to 3 random picks.
-	# Accept the first off-screen pick.
+	# 3) Walk sectors emptiest-first; for each, take up to 3 random picks in
+	# [r_min,r_max]. Accept the first that's already off-screen (작은 반경 우선
+	# → 가까이 = 빨리 걸어 들어옴). 헤드리스면 첫 픽 채택.
 	var sector_span: float = TAU / float(_SPAWN_SECTOR_COUNT)
 	for entry in order:
 		var sec_idx: int = entry[1]
@@ -483,11 +498,13 @@ func _pick_sector_spawn(r_min: float, r_max: float) -> Vector3:
 			if not rig.call("is_world_pos_visible", pos + Vector3(0, 0.6, 0)):
 				return pos
 
-	# 4) Fallback: emptiest sector at extended radius, accept on-screen.
+	# 4) 모든 랜덤 픽이 화면 안이었다(앞/대각 방향 = 가시 반경이 r_max 보다 큼). 옛날엔
+	# r_max+5(17유닛) 고정 폴백으로 멀리 던져 "초반 텅 빔" 의 원흉이었다. 이제는 가장
+	# 비어있는 섹터 각도로 "프러스텀 경계 바로 밖"(edge + buffer)에 놓아 가장자리에서
+	# 곧장 걸어 들어오게 한다(방향별 경계 자동 산출 → 멀리 안 감, pop-in 없음).
 	var fb_idx: int = order[0][1]
 	var fb_ang: float = float(fb_idx) * sector_span + randf() * sector_span
-	var fb_radius: float = r_max + 5.0
-	return anchor + Vector3(cos(fb_ang) * fb_radius, 0.0, sin(fb_ang) * fb_radius)
+	return _edge_spawn_at(anchor, fb_ang)
 
 ## Path-wall spawn — drops the enemy a couple of seconds in front of
 ## the PC, anywhere inside a ±60° cone around their movement direction.
@@ -499,12 +516,13 @@ func _pick_sector_spawn(r_min: float, r_max: float) -> Vector3:
 ## briefly visible at the screen edge.
 func _pick_path_wall_spawn(vel: Vector3) -> Vector3:
 	var pc_pos: Vector3 = (_player as Node3D).global_position if _player != null else Vector3.ZERO
-	var anchor: Vector3 = pc_pos + vel * _PATH_WALL_LEAD_TIME
 	var center_angle: float = atan2(vel.z, vel.x)
 	var half_cone: float = deg_to_rad(_PATH_WALL_CONE_DEG)
 	var angle: float = center_angle + randf_range(-half_cone, half_cone)
-	var radius: float = lerp(_PATH_WALL_RADIUS_MIN, _PATH_WALL_RADIUS_MAX, randf())
-	return anchor + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+	# 진행방향 ±cone 안 "화면 가장자리 바로 밖"에 놓는다. 옛날엔 lead anchor(10유닛 앞)
+	# + radius 14~22 = 24~32유닛 앞이라 대시해도 한참 뒤에야 마주쳤다(초반/대시 공백 원흉).
+	# edge+buffer 면 대시 진행방향 화면 끝에서 곧장 등장 → "앞에 적이 보임" 충족, 멀리 안 감.
+	return _edge_spawn_at(pc_pos, angle)
 
 ## Tight-ring spawn — drops the enemy in a small ring around the PC's
 ## current position, any direction. Radius is just outside the slash
@@ -516,6 +534,52 @@ func _pick_tight_ring_spawn() -> Vector3:
 	var angle: float = randf() * TAU
 	var radius: float = lerp(_TIGHT_RING_RADIUS_MIN, _TIGHT_RING_RADIUS_MAX, randf())
 	return pc_pos + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+
+## 주어진 각도(XZ 평면, atan2(z,x) 규약)로 PC(anchor)에서 뻗어 카메라 프러스텀 경계까지의
+## 반경을 이진탐색으로 찾는다. 경계 = "마지막으로 화면 안인 반경". 헤드리스/카메라 없으면
+## 보수적 기본값(11)을 돌려준다. 반환값 + _EDGE_BUFFER 가 "가장자리 바로 밖" 스폰 반경.
+func _frustum_edge_radius(anchor: Vector3, angle: float) -> float:
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig == null or not rig.has_method("is_world_pos_visible"):
+		return 11.0  # 헤드리스/카메라 미존재 — 보수적 중간값
+	var dir := Vector3(cos(angle), 0.0, sin(angle))
+	var probe := func(r: float) -> bool:
+		return bool(rig.call("is_world_pos_visible", anchor + dir * r + Vector3(0, 0.6, 0)))
+	# 안쪽(보임)에서 시작해 바깥(안 보임)을 찾는다. 시작점이 이미 안 보이면 경계≈0.
+	var lo: float = 0.0
+	var hi: float = _EDGE_SEARCH_MAX
+	if not probe.call(lo):
+		return 0.0  # PC 바로 옆도 화면 밖(이례적) — 경계 0 취급
+	if probe.call(hi):
+		return hi   # 상한까지 전부 화면 안(이례적 광각) — 상한 반환
+	for _i in _EDGE_SEARCH_ITERS:
+		var mid: float = (lo + hi) * 0.5
+		if probe.call(mid):
+			lo = mid
+		else:
+			hi = mid
+	return hi  # hi = 첫 화면 밖 반경(경계 바로 바깥)
+
+## 지정 각도로 "화면 가장자리 바로 밖"(경계 + 버퍼) 위치를 돌려준다. pop-in 없음.
+func _edge_spawn_at(anchor: Vector3, angle: float) -> Vector3:
+	var r: float = _frustum_edge_radius(anchor, angle) + _EDGE_BUFFER
+	return anchor + Vector3(cos(angle) * r, 0.0, sin(angle) * r)
+
+## 게임 시작/floor 용 — PC 진행방향(정지 시 카메라 정면 = -Z) 쪽 ±cone 안 가장자리 밖.
+## 대시 중에도 "앞에 적이 보이게" + 뒤 유기 최소화.
+func _edge_spawn_forward() -> Vector3:
+	var anchor: Vector3 = Vector3.ZERO
+	if _player != null and is_instance_valid(_player):
+		anchor = (_player as Node3D).global_position
+	# 진행방향: 속도가 있으면 그쪽, 없으면 카메라 정면(-Z, atan2 규약 = +π/2 의 -방향).
+	var fwd: float = deg_to_rad(-90.0)  # -Z (atan2(z=-1,x=0) = -90°) = 카메라가 보는 정면
+	if _player != null and is_instance_valid(_player) and _player is CharacterBody3D:
+		var v: Vector3 = (_player as CharacterBody3D).velocity
+		v.y = 0.0
+		if v.length() >= _SPAWN_VEL_THRESHOLD:
+			fwd = atan2(v.z, v.x)
+	var angle: float = fwd + deg_to_rad(randf_range(-50.0, 50.0))
+	return _edge_spawn_at(anchor, angle)
 
 func _on_enemy_freed_with_ref(enemy: Node) -> void:
 	# Guard: during scene shutdown (quit / reload) Main itself may already
@@ -699,6 +763,11 @@ func _build_chapter_systems() -> void:
 	# result-screen "클리어 시간" reads as time-since-first-spawn rather
 	# than time-since-_ready (which includes the bootstrap frame).
 	_chapter_start_msec = Time.get_ticks_msec()
+
+	# 초반 시드 — 0초부터 1~2마리가 화면 가장자리 바로 밖에 등장해 곧장 걸어 들어온다.
+	# 카메라 rig 가 첫 프레임에 PC 위치로 스냅한 뒤(_ready) 프러스텀이 안정되도록 한 틱
+	# 미뤄 호출. WaveManager floor 와 별개로 "시작하자마자 텅 빔" 을 확실히 제거.
+	call_deferred("_seed_initial_mobs")
 
 	# M4 — apply permanent meta passives to the live PC + ExpSystem
 	# RIGHT AFTER they're built, before the first physics tick. Owned
@@ -896,6 +965,24 @@ func _count_alive_mobs() -> int:
 				continue  # trailing far behind — not in the PC's bubble.
 		n += 1
 	return n
+
+## 초반 시드 — 챕터 시작 직후 _SEED_COUNT 마리를 진행/정면 쪽 화면 가장자리 바로 밖에
+## 놓는다. _spawn_one 의 일반 경로를 타되 위치만 forward-edge 로 덮어써 종류/수명/배선은
+## 동일하게 유지. 카메라가 아직 없거나(헤드리스 부팅 등) PC 가 없으면 조용히 스킵.
+func _seed_initial_mobs() -> void:
+	if not is_inside_tree():
+		return
+	if melee_enemy_scene == null:
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	for i in _SEED_COUNT:
+		var inst := melee_enemy_scene.instantiate()
+		_inherit_bullettime(inst)
+		_enemies_root.add_child(inst)
+		if inst is Node3D:
+			(inst as Node3D).global_position = _edge_spawn_forward()
+		_wire_enemy_lifecycle(inst)
 
 ## One-shot at t=60 — three elites (types 1/2/3), reuses existing system.
 func _chapter_spawn_elites() -> void:
