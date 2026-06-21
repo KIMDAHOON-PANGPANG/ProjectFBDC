@@ -280,9 +280,14 @@ func _begin_windup(dir: Vector3) -> void:
 	move_and_slide()
 	if charge_telegraph_scene != null:
 		_charge_decal = charge_telegraph_scene.instantiate()
-		get_tree().current_scene.add_child(_charge_decal)
-		if _charge_decal.has_method("set_lane"):
-			_charge_decal.call("set_lane", global_position, _charge_dir, charge_width, charge_distance)
+		var host := _effect_host()
+		if host == null:
+			_charge_decal.queue_free()
+			_charge_decal = null
+		else:
+			host.add_child(_charge_decal)
+			if _charge_decal.has_method("set_lane"):
+				_charge_decal.call("set_lane", global_position, _charge_dir, charge_width, charge_distance)
 
 ## 윈드업 — 데칼이 charge_windup 초 동안 PC 를 호밍하며 따라다닌다. 끝나면 고정 + 돌진.
 func _state_windup(delta: float) -> void:
@@ -431,4 +436,30 @@ func _play_death_fade() -> void:
 	if _label != null:
 		t.tween_property(_label, "modulate:a", 0.0, duration)
 	t.tween_property(self, "position:y", position.y - 1.0, duration)
-	t.chain().tween_callback(queue_free)
+	t.chain().tween_callback(_safe_free)
+	# Backup free — the fade tween stalls under tree.paused (level-up) or a
+	# strong time-scale, which would otherwise strand a faded, collision-off
+	# boss with its HP bar floating. Scene-timer past the tween duration
+	# guarantees the free; _safe_free de-dupes the race.
+	var tree := get_tree()
+	if tree != null:
+		tree.create_timer(duration + 0.2).timeout.connect(_safe_free)
+
+
+## Free exactly once — death tween callback and backup timer may race.
+func _safe_free() -> void:
+	if is_instance_valid(self) and not is_queued_for_deletion():
+		queue_free()
+
+## World node to parent the charge telegraph under. Active scene normally;
+## falls back to parent / tree root during a scene reload (current_scene null).
+func _effect_host() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null:
+		return tree.current_scene
+	var p := get_parent()
+	if p != null:
+		return p
+	return tree.root

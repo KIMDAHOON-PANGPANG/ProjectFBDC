@@ -46,7 +46,11 @@ func _spawn_explosion(pos: Vector3) -> void:
 	if explosion_burst_scene == null:
 		return
 	var burst := explosion_burst_scene.instantiate() as Node3D
-	get_tree().current_scene.add_child(burst)
+	var host := _effect_host()
+	if host == null:
+		burst.queue_free()
+		return
+	host.add_child(burst)
 	burst.global_position = pos
 
 
@@ -61,8 +65,26 @@ func _spawn_circular_slash(pos: Vector3) -> void:
 	if circular_slash_scene == null:
 		return
 	var slash := circular_slash_scene.instantiate() as Node3D
-	get_tree().current_scene.add_child(slash)
+	var host := _effect_host()
+	if host == null:
+		slash.queue_free()
+		return
+	host.add_child(slash)
 	slash.global_position = pos
+
+
+## World node to parent spawned effects under. Active scene normally; falls
+## back to our parent (Main/Testplay) / tree root during a scene reload.
+func _effect_host() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null:
+		return tree.current_scene
+	var p := get_parent()
+	if p != null:
+		return p
+	return tree.root
 
 
 ## Type-2 elite died. If the PC is still mid-iaido dash, wait for

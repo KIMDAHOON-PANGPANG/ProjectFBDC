@@ -285,6 +285,21 @@ func _separation_vector() -> Vector3:
 func apply_knockback(dir: Vector3, speed: float) -> void:
 	_kb.push(dir, speed)
 
+## World node to parent spawned effects (telegraphs, decals) under. Normally
+## the active scene; during a scene reload current_scene is briefly null, so
+## we fall back to our own parent and finally the tree root. Returns null only
+## if we're fully detached (caller then skips spawning to avoid a crash).
+func _effect_host() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null:
+		return tree.current_scene
+	var p := get_parent()
+	if p != null:
+		return p
+	return tree.root
+
 ## Spawn a FanTelegraph at our feet aimed at the PC. We commit the
 ## position/direction now — the telegraph itself owns the rest (wind-up
 ## timer, sweep, damage). When the effect self-frees we clear `_attacking`
@@ -297,7 +312,13 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 		_attack_cd = data.melee_attack_cooldown
 		return
 	var fan := telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(fan)
+	var host := _effect_host()
+	if host == null:
+		# Scene is mid-reload (current_scene null) — bail without crashing.
+		fan.queue_free()
+		_attack_cd = data.melee_attack_cooldown
+		return
+	host.add_child(fan)
 	if fan.has_method("configure"):
 		fan.call("configure", global_position, to_player_xz,
 			fan_radius, fan_angle_deg, attack_damage, 1.0, 0.1)  # 윈드업 1초(스프라이트 34프레임 고정과 동기) → 35프레임에 타격
@@ -330,7 +351,12 @@ func _begin_slam(to_player_xz: Vector3) -> void:
 	if _player != null and is_instance_valid(_player):
 		target = (_player as Node3D).global_position
 	var decal = slam_telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(decal)
+	var host := _effect_host()
+	if host == null:
+		decal.queue_free()
+		_attack_cd = slam_cooldown
+		return
+	host.add_child(decal)
 	if decal.has_method("configure"):
 		decal.call("configure", target, slam_radius, slam_damage, slam_windup)
 	if decal.has_signal("tree_exited"):
@@ -418,7 +444,11 @@ func _spawn_leap_decal() -> void:
 	if leap_telegraph_scene == null:
 		return
 	var decal = leap_telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(decal)
+	var host := _effect_host()
+	if host == null:
+		decal.queue_free()
+		return
+	host.add_child(decal)
 	if decal.has_method("configure"):
 		decal.call("configure", _leap_end, leap_radius, leap_damage, leap_duration)
 	_active_leap_decal = decal

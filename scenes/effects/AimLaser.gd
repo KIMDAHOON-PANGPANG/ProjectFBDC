@@ -141,7 +141,17 @@ func _fire_arrow(from: Vector3) -> void:
 		arrow.speed = _arrow_speed
 		if _shooter and "time_scale_mult" in _shooter and "time_scale_mult" in arrow:
 			arrow.time_scale_mult = _shooter.time_scale_mult
-		get_tree().current_scene.add_child(arrow)
+		# Host = active scene; during a scene reload current_scene is briefly
+		# null, so fall back to our parent / tree root rather than crashing.
+		var tree := get_tree()
+		var host: Node = null
+		if tree != null:
+			host = tree.current_scene if tree.current_scene != null else (get_parent() if get_parent() != null else tree.root)
+		if host == null:
+			arrow.queue_free()
+			queue_free()
+			return
+		host.add_child(arrow)
 		if arrow.has_method("launch"):
 			arrow.call("launch", _last_dir, from + _last_dir * 0.5)
 	queue_free()

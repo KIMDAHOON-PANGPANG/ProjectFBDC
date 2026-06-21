@@ -191,7 +191,12 @@ func _begin_aim_shot() -> void:
 		return
 	_aiming = true
 	var laser = aim_laser_scene.instantiate()
-	get_tree().current_scene.add_child(laser)
+	var host := _effect_host()
+	if host == null:
+		laser.queue_free()
+		_aiming = false
+		return
+	host.add_child(laser)
 	if laser.has_method("configure"):
 		laser.call("configure", self, _player, ascene, data.arrow_speed)
 	if laser.has_signal("tree_exited"):
@@ -201,6 +206,20 @@ func _begin_aim_shot() -> void:
 
 func _on_aim_laser_done() -> void:
 	_aiming = false
+
+## World node to parent spawned projectiles/lasers under. Active scene
+## normally; falls back to our parent / tree root during a scene reload when
+## current_scene is briefly null. Null only if fully detached.
+func _effect_host() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null:
+		return tree.current_scene
+	var p := get_parent()
+	if p != null:
+		return p
+	return tree.root
 
 ## Legacy direct-fire path (no telegraph) — kept for the no-laser-scene case.
 func _fire_arrow_direct(direction: Vector3) -> void:
@@ -212,7 +231,11 @@ func _fire_arrow_direct(direction: Vector3) -> void:
 	var arrow = scene.instantiate()
 	if "time_scale_mult" in arrow:
 		arrow.time_scale_mult = time_scale_mult
-	get_tree().current_scene.add_child(arrow)
+	var host := _effect_host()
+	if host == null:
+		arrow.queue_free()
+		return
+	host.add_child(arrow)
 	if arrow.has_method("launch"):
 		arrow.speed = data.arrow_speed
 		arrow.call("launch", direction, global_position + Vector3(0, 0.6, 0) + direction * 0.5)

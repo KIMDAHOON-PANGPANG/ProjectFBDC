@@ -61,6 +61,12 @@ var _border: MeshInstance3D
 var _hp: HealthComponent
 # Node we glue ourselves above every frame. Defaults to our parent.
 var _follow_target: Node3D
+## True once we've ever locked onto a valid follow target. Gate for the
+## orphan self-free safety net: a bar that NEVER had a target (e.g. built
+## standalone in a tool) must not self-destruct, but a bar that HAD one and
+## then lost it (parent freed / detached) is an orphan and removes itself so
+## a stranded full-HP bar can never linger over an absent sprite.
+var _had_target: bool = false
 
 func _ready() -> void:
 	_build()
@@ -71,6 +77,7 @@ func _ready() -> void:
 	var p := get_parent()
 	if p is Node3D:
 		_follow_target = p
+		_had_target = true
 	# Snap to target immediately so the bar isn't at world origin for one
 	# frame before _process catches up.
 	_sync_to_target()
@@ -86,7 +93,19 @@ func _physics_process(_delta: float) -> void:
 	_sync_to_target()
 
 func _sync_to_target() -> void:
-	if _follow_target == null or not is_instance_valid(_follow_target):
+	# Orphan safety net: if we once had a valid target and it's now gone
+	# (freed / detached from the tree), remove ourselves. This guarantees a
+	# stranded full-HP bar can never hang in the air over a missing sprite,
+	# regardless of which upstream path failed to clean us up. The PC bar's
+	# target (Player) stays valid for the whole run, so it is never affected
+	# — judged purely on target validity, never on `visible` (the PC bar is
+	# hidden via visible=false yet must persist).
+	var lost: bool = _follow_target == null \
+		or not is_instance_valid(_follow_target) \
+		or not (_follow_target as Node).is_inside_tree()
+	if lost:
+		if _had_target and not is_queued_for_deletion():
+			queue_free()
 		return
 	global_position = _follow_target.global_position + follow_offset
 	_face_camera()
@@ -178,16 +197,32 @@ func attach_health(hp: HealthComponent) -> void:
 			_hp.damaged.disconnect(_on_damaged)
 		if _hp.has_signal("armor_changed") and _hp.armor_changed.is_connected(_on_damaged):
 			_hp.armor_changed.disconnect(_on_damaged)
+		if _hp.has_signal("died") and _hp.died.is_connected(_on_owner_died):
+			_hp.died.disconnect(_on_owner_died)
 	_hp = hp
 	if _hp != null:
 		_hp.damaged.connect(_on_damaged)
 		if _hp.has_signal("armor_changed"):
 			_hp.armor_changed.connect(_on_damaged)
+		# Hide the bar the instant the owner dies — the enemy then plays a
+		# fade/sink death animation for up to ~0.9s before it frees, and we
+		# don't want a (now mostly-empty) bar hanging over a vanishing
+		# sprite for that window. The bar still frees with its parent at the
+		# end of that animation; this just blanks it immediately. PC's
+		# HealthComponent never emits `died` while the run continues.
+		if _hp.has_signal("died"):
+			_hp.died.connect(_on_owner_died)
 		refresh()
 
 # damaged(amount) 와 armor_changed() 양쪽에 연결 — 기본값 0 으로 0인자 시그널도 수용.
 func _on_damaged(_amount: int = 0) -> void:
 	refresh()
+
+## Owner died — blank the bar immediately so the death fade/sink plays with
+## no leftover bar floating over the disappearing sprite. The node still
+## frees together with its parent enemy at the end of that animation.
+func _on_owner_died() -> void:
+	visible = false
 
 func refresh() -> void:
 	if _hp == null:

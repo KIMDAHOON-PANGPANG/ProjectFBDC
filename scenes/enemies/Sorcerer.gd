@@ -261,4 +261,17 @@ func _on_died() -> void:
 	if _label != null:
 		t.tween_property(_label, "modulate:a", 0.0, duration)
 	t.tween_property(self, "position:y", position.y - 0.6, duration)
-	t.chain().tween_callback(queue_free)
+	t.chain().tween_callback(_safe_free)
+	# Backup free — the fade tween stalls under tree.paused (level-up) or a
+	# strong time-scale, which would otherwise strand a faded, collision-off
+	# body with its HP bar floating. Scene-timer past the tween duration
+	# guarantees the free; _safe_free de-dupes the race.
+	var tree := get_tree()
+	if tree != null:
+		tree.create_timer(duration + 0.2).timeout.connect(_safe_free)
+
+
+## Free exactly once — death tween callback and backup timer may race.
+func _safe_free() -> void:
+	if is_instance_valid(self) and not is_queued_for_deletion():
+		queue_free()

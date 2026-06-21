@@ -192,7 +192,12 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 		_attack_cd = attack_cooldown
 		return
 	var fan := telegraph_scene.instantiate()
-	get_tree().current_scene.add_child(fan)
+	var host := _effect_host()
+	if host == null:
+		fan.queue_free()
+		_attack_cd = attack_cooldown
+		return
+	host.add_child(fan)
 	if fan.has_method("configure"):
 		fan.call("configure", global_position, to_player_xz,
 			fan_radius, fan_angle_deg, attack_damage, 0.5, 0.15)
@@ -268,7 +273,33 @@ func _play_death_fade() -> void:
 	if _label != null:
 		t.tween_property(_label, "modulate:a", 0.0, duration)
 	t.tween_property(self, "position:y", position.y - 0.6, duration)
-	t.chain().tween_callback(queue_free)
+	t.chain().tween_callback(_safe_free)
+	# Backup free — the fade tween stalls under tree.paused (level-up) or a
+	# strong time-scale, which would otherwise strand a collision-disabled,
+	# faded body with its HP bar hanging in the air. A scene-timer past the
+	# tween duration guarantees the free; _safe_free de-dupes the race.
+	var tree := get_tree()
+	if tree != null:
+		tree.create_timer(duration + 0.2).timeout.connect(_safe_free)
+
+
+## Free exactly once — death tween callback and backup timer may race.
+func _safe_free() -> void:
+	if is_instance_valid(self) and not is_queued_for_deletion():
+		queue_free()
+
+## World node to parent spawned effects under. Active scene normally; falls
+## back to parent / tree root during a scene reload (current_scene null).
+func _effect_host() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null:
+		return tree.current_scene
+	var p := get_parent()
+	if p != null:
+		return p
+	return tree.root
 
 ## RGB by effect_type — used for BOTH cube body albedo and head label modulate
 ## so the silhouette and the icon read the same color at a glance.

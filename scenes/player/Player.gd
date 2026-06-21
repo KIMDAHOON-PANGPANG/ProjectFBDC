@@ -471,12 +471,30 @@ func _apply_guardback(dir: Vector3) -> void:
 	_guardback_vel = dir.normalized() * data.parry_guardback_speed
 	_guardback_t = data.parry_guardback_dur
 
+## World node to parent spawned VFX/attacks under. Active scene normally;
+## during a scene reload current_scene is briefly null, so fall back to our
+## parent / tree root rather than crashing on add_child(null).
+func _effect_host() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null:
+		return tree.current_scene
+	var p := get_parent()
+	if p != null:
+		return p
+	return tree.root
+
 ## "쳐냈다" 반짝 — PC 앞에 흰/금 링이 잠깐 번쩍 퍼지고 사라진다.
 func _spawn_parry_spark() -> void:
 	# "쳐냈다" FX — 노란 섬광 입자가 사방으로 튀는 1회 버스트. 균일한 원형 셸이 안 되게
 	# 속도 편차 크게 + 약한 중력 + 댐핑으로 불규칙하게 흩뿌린다(원형 X, 섬광 O).
 	var p := CPUParticles3D.new()
-	get_tree().current_scene.add_child(p)
+	var host := _effect_host()
+	if host == null:
+		p.queue_free()
+		return
+	host.add_child(p)
 	p.global_position = global_position + Vector3(0, 0.9, 0)
 	p.one_shot = true
 	p.explosiveness = 1.0
@@ -549,7 +567,11 @@ func _spawn_pushback_ring(r: float) -> void:
 	mat.emission = Color(0.6, 0.85, 1.0)
 	mat.emission_energy_multiplier = 2.0
 	ring.material_override = mat
-	get_tree().current_scene.add_child(ring)
+	var host := _effect_host()
+	if host == null:
+		ring.queue_free()
+		return
+	host.add_child(ring)
 	ring.global_position = global_position + Vector3(0, 0.08, 0)
 	ring.scale = Vector3(0.2, 1.0, 0.2)
 	var t := ring.create_tween()
@@ -815,7 +837,11 @@ func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector
 		attack = slash_attack_scene.instantiate() as SlashAttack
 	else:
 		attack = SlashAttack.new()
-	get_tree().current_scene.add_child(attack)
+	var host := _effect_host()
+	if host == null:
+		attack.queue_free()
+		return
+	host.add_child(attack)
 	var ext: Vector3 = extents if extents.length_squared() > 0.0001 else data.slash_hit_extents
 	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
@@ -1157,7 +1183,11 @@ func _spawn_melee_swing(dir: Vector3) -> void:
 	if melee_swing_scene == null:
 		return
 	var fx := melee_swing_scene.instantiate()
-	get_tree().current_scene.add_child(fx)
+	var host := _effect_host()
+	if host == null:
+		fx.queue_free()
+		return
+	host.add_child(fx)
 	if fx.has_method("configure"):
 		fx.call("configure", global_position, dir, data.melee_range, data.melee_angle_deg)
 

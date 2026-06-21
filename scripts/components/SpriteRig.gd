@@ -277,12 +277,36 @@ func _restore_base_modulate() -> void:
 
 func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
 	set_state(State.DEATH)
+	# Kill any in-flight blink tween first — its callback restores
+	# _base_modulate (alpha 1) and would fight / undo the death fade, and a
+	# blink killed mid-cycle could otherwise leave the sprite stuck invisible
+	# on a still-living-looking body.
+	if _blink_tween != null and _blink_tween.is_valid():
+		_blink_tween.kill()
 	if _sprite == null:
-		parent_to_free.queue_free()
+		_safe_free(parent_to_free)
 		return
 	var t := create_tween()
 	t.set_parallel(true)
 	t.tween_property(_sprite, "modulate:a", 0.0, duration)
 	t.tween_property(self, "position:y", position.y + 0.6, duration)
 	t.tween_property(self, "rotation:z", deg_to_rad(35.0 if _facing_right else -35.0), duration)
-	t.chain().tween_callback(parent_to_free.queue_free)
+	t.chain().tween_callback(_safe_free.bind(parent_to_free))
+	# Backup free path: the tween above can stall if the SceneTree is paused
+	# (level-up screen) or heavily time-scaled (bullet-time / hitstop) right
+	# as the enemy dies — leaving a collision-disabled, faded body that never
+	# frees while its HP bar lingers. A scene-timer firing slightly after the
+	# tween's nominal duration guarantees the node still dies. Whichever path
+	# fires first frees it; _safe_free guards against the double free.
+	if is_inside_tree():
+		var tree := get_tree()
+		if tree != null:
+			tree.create_timer(duration + 0.2).timeout.connect(_safe_free.bind(parent_to_free))
+
+
+## Free `node` exactly once — both the death tween's chained callback and the
+## backup scene-timer point here, and either may win the race. The validity +
+## queued-for-deletion guard makes the loser a no-op.
+func _safe_free(node: Node) -> void:
+	if is_instance_valid(node) and not node.is_queued_for_deletion():
+		node.queue_free()
