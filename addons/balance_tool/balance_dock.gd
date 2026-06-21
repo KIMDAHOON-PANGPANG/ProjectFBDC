@@ -904,14 +904,14 @@ func _build_levelup_tab() -> Control:
 
 	_load_exp_defaults()
 
-	vb.add_child(_note("레벨업 랩 — EXP 곡선/카드 풀 시각화·시뮬. 곡선 값은 ExpSystem.gd 기본값(읽기전용). 영구 편집은 .tres 추출 권장. 슬라이더는 시뮬 전용(.gd 저장 안 함)."))
+	vb.add_child(_note("레벨업 랩 — 레벨업에 젬을 몇 개 모아야 하는지 + 몇 분에 몇 레벨이 되는지 미리 보고 조절. (적 처치만으론 EXP 0, 떨어진 젬을 주워야 오름 · 잡몹 젬=1, 정예=2, 엘리트=3~10) · 값은 미리보기 전용(.gd 저장 안 함, 영구 반영은 .tres 추출)"))
 
-	# EXP 곡선 파라미터 섹션.
-	vb.add_child(_section("─ EXP 곡선 파라미터 (ExpSystem.gd · 시뮬 전용 오버라이드) ─"))
+	# 레벨업 곡선 섹션 — 레벨업당 필요한 젬 개수.
+	vb.add_child(_section("─ 레벨업 곡선 (레벨업당 필요한 젬 개수) ─"))
 	var param_specs := [
-		["최초 임계", "Lv1→2 에 필요한 첫 EXP", 0.0, 9999.0, 1.0, false, "first"],
-		["선형 증가량", "레벨당 임계 선형 증가량", 0.0, 9999.0, 1.0, false, "step"],
-		["2차 가속", "(lv-1)^2 에 곱하는 2차 가속 계수", 0.0, 9999.0, 0.1, true, "accel"],
+		["첫 레벨업 필요 젬", "Lv1→2 에 필요한 젬 개수(잡몹 1짜리 기준). 줄이면 첫 레벨업이 빨라짐.", 0.0, 9999.0, 1.0, false, "first"],
+		["레벨마다 +필요 젬", "레벨이 하나 오를 때마다 더 필요해지는 젬 개수.", 0.0, 9999.0, 1.0, false, "step"],
+		["후반 가팔라짐", "레벨이 높을수록 곡선이 가팔라지는 정도. 0이면 일정하게만 증가.", 0.0, 9999.0, 0.1, true, "accel"],
 	]
 	var param_inits := [_exp_first, _exp_step, _exp_accel]
 	for pi in param_specs.size():
@@ -945,18 +945,18 @@ func _build_levelup_tab() -> Control:
 		vb.add_child(hb)
 
 	# 시뮬레이션 섹션.
-	vb.add_child(_section("─ 시뮬레이션 ─"))
+	vb.add_child(_section("─ 시간 예측 (몇 분에 몇 레벨?) ─"))
 	var xhb := HBoxContainer.new()
 	xhb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var xlbl := Label.new()
-	xlbl.text = "가정 XP/분"
-	xlbl.tooltip_text = "처치+젬으로 분당 들어온다고 가정하는 EXP. 투영 레벨 곡선만 바뀜(.tres 저장 안 함)."
+	xlbl.text = "분당 젬 수입(예측용)"
+	xlbl.tooltip_text = "1분에 젬(=EXP)을 몇 개 줍는다고 가정할지. 예측 전용 — 실제 게임 값은 안 바뀜. 예: 60이면 초당 1개."
 	xlbl.custom_minimum_size = Vector2(160, 0)
 	xlbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	xlbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	xhb.add_child(xlbl)
 	var xsb := SpinBox.new()
-	xsb.tooltip_text = "처치+젬으로 분당 들어온다고 가정하는 EXP. 투영 레벨 곡선만 바뀜(.tres 저장 안 함)."
+	xsb.tooltip_text = "1분에 젬(=EXP)을 몇 개 줍는다고 가정할지. 예측 전용 — 실제 게임 값은 안 바뀜. 예: 60이면 초당 1개."
 	xsb.custom_minimum_size = Vector2(120, 0)
 	xsb.min_value = 0.0
 	xsb.max_value = 5000.0
