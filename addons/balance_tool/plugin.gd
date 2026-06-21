@@ -3,7 +3,7 @@ extends EditorPlugin
 
 ## 인하우스 밸런스 에디터 플러그인. 두 가지 진입점:
 ##   1) 메뉴: 프로젝트(Project) > 도구(Tools) > "밸런스 툴 (PC/몬스터)" → 별도 창으로 열림
-##   2) 좌측 도크 탭("밸런스 툴")
+##   2) 우측 도크 탭("밸런스 툴" — 인스펙터/그룹 탭 옆)
 ## Project > Project Settings > Plugins 에서 켜고 끌 수 있다.
 
 const _DockScript := preload("res://addons/balance_tool/balance_dock.gd")
@@ -14,9 +14,9 @@ var _win: Window
 
 
 func _enter_tree() -> void:
-	# 1) 좌측 상단 도크 탭.
+	# 1) 우측 상단 도크 탭 — 인스펙터/시그널/그룹 옆에 기본 배치(엔진 기동 시).
 	_dock = _DockScript.new()
-	add_control_to_dock(DOCK_SLOT_LEFT_UL, _dock)
+	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 	# 2) 메뉴 표시줄(프로젝트 > 도구)에서 창으로 열기.
 	add_tool_menu_item(_MENU, _open_window)
 
