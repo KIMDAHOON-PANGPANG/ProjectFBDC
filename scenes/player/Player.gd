@@ -110,6 +110,7 @@ var _heat_last_msec: int = 0
 ## 탈진 상태 — 이동 감소 + 일섬 발사 봉인.
 var _overheated: bool = false
 var _overheat_t: float = 0.0
+var _overheat_dur: float = 0.0
 
 # ── 4안 — 일섬 게이지 ──
 ## Fills from kills / gem pickups / perfect dodges. Slash (right-click)
@@ -649,6 +650,7 @@ func _add_heat() -> void:
 func _enter_overheat() -> void:
 	_overheated = true
 	_overheat_t = max(0.5, data.heat_overheat_duration - overheat_dur_reduce)
+	_overheat_dur = _overheat_t
 	_heat = data.heat_overheat_threshold
 	if _sprite_rig != null and _sprite_rig.has_method("flash"):
 		_sprite_rig.call("flash", 0.45)
@@ -675,6 +677,11 @@ func is_overheated() -> bool:
 	if _is_cooldown_resource():
 		return false
 	return _overheated
+
+func get_overheat_frac() -> float:
+	if not is_overheated():
+		return 0.0
+	return clamp(_overheat_t / max(_overheat_dur, 0.0001), 0.0, 1.0)
 
 
 func _is_pointer_over_ui() -> bool:

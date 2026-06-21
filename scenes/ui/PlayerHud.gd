@@ -29,6 +29,7 @@ var _player: Node = null
 var _hp_fill: ColorRect
 var _hp_label: Label
 var _heat_pips: Array = []
+var _heat_fills: Array = []
 var _dodge_pips: Array = []
 var _dodge_fills: Array = []
 var _level_label: Label
@@ -145,6 +146,13 @@ func _build() -> void:
 		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(pip)
 		_heat_pips.append(pip)
+		var fill := ColorRect.new()
+		fill.color = _HEAT_OVER
+		fill.position = Vector2(heat_x + i * 30.0, 62)
+		fill.size = Vector2(26, 0)
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(fill)
+		_heat_fills.append(fill)
 
 	# --- 회피 2스택 ---
 	var dodge_lbl := Label.new()
@@ -190,16 +198,31 @@ func _process(_delta: float) -> void:
 	if _hp_label != null:
 		_hp_label.text = "%d / %d" % [max(cur, 0), mx]
 	# 열기(=일섬 자원) 스택
-	var res := _slash_resource_frac()
-	var lit := int(ceil(res * float(_HEAT_STACKS)))
 	var over: bool = _player.has_method("is_overheated") and bool(_player.call("is_overheated"))
-	for i in _heat_pips.size():
-		if over:
-			_heat_pips[i].color = _HEAT_OVER
-		elif i < lit:
-			_heat_pips[i].color = _HEAT_LOW.lerp(_HEAT_HIGH, float(i) / float(max(_HEAT_STACKS - 1, 1)))
-		else:
+	if over:
+		var ofrac := 0.0
+		if _player.has_method("get_overheat_frac"):
+			ofrac = clampf(float(_player.call("get_overheat_frac")), 0.0, 1.0)
+		var gray := ofrac * float(_HEAT_STACKS)
+		for i in _heat_fills.size():
 			_heat_pips[i].color = _HEAT_OFF
+			var gh := 0.0
+			if i < int(floor(gray)):
+				gh = 16.0
+			elif i == int(floor(gray)):
+				gh = (gray - floor(gray)) * 16.0
+			_heat_fills[i].color = _HEAT_OVER
+			_heat_fills[i].size.y = gh
+			_heat_fills[i].position.y = 46.0 + (16.0 - gh)
+	else:
+		var res := _slash_resource_frac()
+		var lit := int(ceil(res * float(_HEAT_STACKS)))
+		for i in _heat_pips.size():
+			_heat_fills[i].size.y = 0.0
+			if i < lit:
+				_heat_pips[i].color = _HEAT_LOW.lerp(_HEAT_HIGH, float(i) / float(max(_HEAT_STACKS - 1, 1)))
+			else:
+				_heat_pips[i].color = _HEAT_OFF
 	# 회피 스택 — 꽉 찬 칸=가득 / 충전 중 칸=evade_refill_frac 만큼 아래→위로 차오름 / 빈칸=0.
 	var ev := 0
 	if _player.has_method("get_evade_stacks"):
