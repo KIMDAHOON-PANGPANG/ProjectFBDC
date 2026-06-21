@@ -124,10 +124,10 @@ func _physics_process(delta: float) -> void:
 
 	if _sprite_rig != null:
 		_sprite_rig.set_facing(dir.x)
-		if desired_dir.length_squared() > 0.01:
-			_sprite_rig.set_state(SpriteRig.State.WALK)
-		else:
-			_sprite_rig.set_state(SpriteRig.State.IDLE)
+		# 실제 이동량 기준 IDLE/WALK — 거리유지 밴드 정지·막힘·분리떨림으로 velocity≈0 이면
+		# IDLE. 임계값(0.04 = 0.2m/s 제곱)으로 분리벡터 미세 떨림 무시(깜빡임 방지).
+		var moving: bool = Vector3(velocity.x, 0.0, velocity.z).length_squared() > 0.04
+		_sprite_rig.set_state(SpriteRig.State.WALK if moving else SpriteRig.State.IDLE)
 
 	# Fire when in range and roughly facing.
 	_attack_cd -= delta

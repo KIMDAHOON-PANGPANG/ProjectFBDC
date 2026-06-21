@@ -30,6 +30,11 @@ extends Node3D
 ##   - CircularSlash (flat ground decal stand-in, hold + fade lifecycle)
 ##   - SlashAttack (yaw via atan2(-dz, dx) so local +X faces the target)
 
+## 윈드업(전조)이 끝나 데미지가 발동하는 바로 그 순간 발신 — 공격자(MeleeEnemy CHASER)가
+## 이 시점에 스트라이크 프레임(휘두름)으로 전환해 "휘두름 + 히트"가 동시에 보이게 한다.
+## 연결 안 한 공격자(엘리트 = 애니 없는 raw Sprite, 캔슬 시)에겐 무해.
+signal swing
+
 @export var radius: float = 1.8
 @export var angle_deg: float = 70.0
 @export var damage: int = 1
@@ -162,6 +167,9 @@ func _rebuild_sweep_mesh() -> void:
 func _begin_sweep() -> void:
 	if _consumed:
 		return
+	# 히트 타이밍 = 스트라이크 시점. 공격자가 이 순간 휘두름 프레임으로 전환하도록 신호
+	# (데미지 점검과 같은 프레임 → 휘두름과 히트가 정확히 일치). 캔슬되면 안 울린다.
+	swing.emit()
 	# 35프레임(스트라이크) 시점 데미지 점검(점-판정). 흰 스윕 라인은 제거 — 스프라이트
 	# 공격 모션(34 윈드업→35 스트라이크)이 스윙을 표현하므로 흰 선이 불필요.
 	_try_damage_player_now()

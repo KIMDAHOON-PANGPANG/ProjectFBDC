@@ -101,6 +101,9 @@ var _attack_cd: float = 0.0
 ## In-flight FanTelegraph ref (spawn-and-forget, but tracked so a
 ## preemptive kill can cancel it — ⏱ M3 후속). Cleared on telegraph done.
 var _active_telegraph: Node = null
+## CHASER 공격 윈드업 단계 — true 동안 IDLE 정지(휘두르지 않음, PC 향함) + 데칼 차오름.
+## FanTelegraph 의 `swing` 신호(히트 순간)에 false 로 풀리며 스트라이크 프레임으로 전환.
+var _melee_windup: bool = false
 ## 리프 상태 — true 동안 곡선 점프 중(추격/공격 잠금).
 var _leaping: bool = false
 var _leap_start: Vector3
@@ -196,7 +199,12 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		move_and_slide()
 		if _sprite_rig != null:
-			_sprite_rig.set_state(SpriteRig.State.ATTACK)
+			# CHASER 근접: 윈드업 동안은 IDLE 로 정지(휘두름 X) — 데칼이 차오르며 전조.
+			# 히트 순간(swing 신호)에 play_melee_strike 로 전환되므로 여기선 IDLE 만 유지.
+			# 슬래머/리프 등 다른 행동은 자체 윈드업 모션을 _begin_*에서 이미 세팅했으니
+			# CHASER + 윈드업 단계일 때만 IDLE 로 덮는다(다른 모션을 지우지 않게).
+			if behavior == Behavior.CHASER and _melee_windup:
+				_sprite_rig.set_state(SpriteRig.State.IDLE)
 		return
 
 	var to_player := _player.global_position - global_position
@@ -245,7 +253,10 @@ func _physics_process(delta: float) -> void:
 	velocity.y = 0.0
 	move_and_slide()
 	if _sprite_rig != null:
-		_sprite_rig.set_state(SpriteRig.State.WALK)
+		# 실제 이동량 기준 IDLE/WALK — 분리(boid)·막힘·도착으로 velocity≈0 이면 IDLE.
+		# 임계값(0.04 = 속도 0.2m/s 제곱)으로 분리벡터 미세 떨림은 무시(깜빡임 방지).
+		var moving: bool = Vector3(velocity.x, 0.0, velocity.z).length_squared() > 0.04
+		_sprite_rig.set_state(SpriteRig.State.WALK if moving else SpriteRig.State.IDLE)
 		_sprite_rig.set_facing(chase_dir.x)  # 바라보는 방향은 분리와 무관하게 플레이어 쪽
 
 
@@ -321,23 +332,40 @@ func _begin_telegraph(to_player_xz: Vector3) -> void:
 	host.add_child(fan)
 	if fan.has_method("configure"):
 		fan.call("configure", global_position, to_player_xz,
-			fan_radius, fan_angle_deg, attack_damage, 1.0, 0.1)  # 윈드업 1초(스프라이트 34프레임 고정과 동기) → 35프레임에 타격
+			fan_radius, fan_angle_deg, attack_damage, 1.0, 0.1)  # 윈드업 1초(데칼 차오름) → 끝에 타격
 	if fan.has_signal("tree_exited"):
 		fan.tree_exited.connect(_on_telegraph_done, CONNECT_ONE_SHOT)
+	# 히트 타이밍(윈드업 끝)에 스트라이크 프레임으로 전환 — 휘두름과 데미지가 동시.
+	if fan.has_signal("swing"):
+		fan.connect("swing", _on_telegraph_swing, CONNECT_ONE_SHOT)
 	_active_telegraph = fan
 	_attacking = true
+	_melee_windup = true
 	# Cooldown spans the full telegraph + sweep + a recovery breath.
 	_attack_cd = data.melee_attack_cooldown + 0.5
 	velocity = Vector3.ZERO
 	move_and_slide()
 	if _sprite_rig != null:
-		# 일관성 — 일반 애니메이션 재생. attack_fps 1.0 + _ATK_MELEE(64,65) 로 34프레임이
-		# ~1초 재생되다가 35프레임으로 전환(telegraph_time 1초와 동기 → 그 시점 타격).
-		_sprite_rig.set_state(SpriteRig.State.ATTACK)
+		# 윈드업 동안엔 휘두르지 않고 IDLE 로 정지(PC 향함). 빨간 FanTelegraph 데칼이
+		# 차오르며 전조를 표현하고, 차오름 끝(swing 신호)에 _on_telegraph_swing 이
+		# 스트라이크 프레임으로 전환한다(휘두름 + 히트 동시 = 예측 가능).
+		_sprite_rig.set_state(SpriteRig.State.IDLE)
 		_sprite_rig.set_facing(to_player_xz.x)
+
+## 히트 순간(FanTelegraph.swing) — 윈드업 IDLE 정지에서 스트라이크 프레임으로 전환.
+## 데칼 데미지 점검과 같은 프레임이라 "휘두름 + 히트"가 정확히 일치한다.
+func _on_telegraph_swing() -> void:
+	if not is_inside_tree():
+		return
+	_melee_windup = false
+	if _dead:
+		return
+	if _sprite_rig != null and _sprite_rig.has_method("play_melee_strike"):
+		_sprite_rig.call("play_melee_strike")
 
 func _on_telegraph_done() -> void:
 	_attacking = false
+	_melee_windup = false
 	_active_telegraph = null
 
 ## SLAMMER 슬램 시작 — PC 의 현재 위치를 중심으로 넓은 원형 데칼(LeapTelegraph 재사용)을
@@ -505,7 +533,9 @@ func _leap_standoff_move(to_player_xz: Vector3, dist: float) -> void:
 	velocity.y = 0.0
 	move_and_slide()
 	if _sprite_rig != null:
-		_sprite_rig.set_state(SpriteRig.State.WALK if move.length_squared() > 0.0001 else SpriteRig.State.IDLE)
+		# 실제 이동량 기준 — 대기(거의 정지)·막힘·분리떨림이면 IDLE. 임계값으로 떨림 무시.
+		var moving: bool = Vector3(velocity.x, 0.0, velocity.z).length_squared() > 0.04
+		_sprite_rig.set_state(SpriteRig.State.WALK if moving else SpriteRig.State.IDLE)
 		_sprite_rig.set_facing(dir.x)
 
 ## Called by SlashAttack when this enemy is inside its volume.
@@ -524,6 +554,7 @@ func take_hit(amount: int = 1) -> void:
 			_active_telegraph.call("cancel")
 		_active_telegraph = null
 		_attacking = false
+		_melee_windup = false
 	# 슬래머 힘주기 중 평타 적중 → 펜딩 슬램 캔슬(유령 데미지 방지).
 	if _active_slam_decal != null and is_instance_valid(_active_slam_decal):
 		if _active_slam_decal.has_method("cancel"):

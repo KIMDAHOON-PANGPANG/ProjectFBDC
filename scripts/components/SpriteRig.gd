@@ -212,6 +212,20 @@ func play_slam_strike() -> void:
 	_sprite.frame = _ATK_MELEE.y
 
 
+## 근접 잡몹(CHASER) 스트라이크 — 윈드업(IDLE 정지) 끝 = 히트 순간에 호출. 스트라이크
+## 프레임(35)을 한 번 확실히 보여 "휘두르며 그 방향으로 때린다"가 보이게(데미지와 동시).
+func play_melee_strike() -> void:
+	if not _animated or _sprite == null:
+		return
+	_state = State.ATTACK
+	_from = _ATK_MELEE.y
+	_to = _ATK_MELEE.y
+	_loop = false
+	_done = true
+	_anim_t = 0.0
+	_sprite.frame = _ATK_MELEE.y
+
+
 ## 피격 모션 1회(48-49). 적 피격 시 호출 — 끝나면 다음 set_state 가 복귀시킴.
 func play_hit() -> void:
 	if not _animated:
