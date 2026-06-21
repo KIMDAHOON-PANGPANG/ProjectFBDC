@@ -6,15 +6,16 @@
 [resource]
 script = ExtResource("1_pd")
 move_speed = 3.9
-max_slash_range = 9.0
+max_slash_range = 6.0
 max_charge_time = 1.0
 charge_speed_mult = 1.0
 slash_width = 1.2
 slash_cooldown = 0.3
+slash_dash_speed = 40.0
 slash_gauge_max = 120.0
 slash_gauge_on_kill = 2.5
 slash_gauge_on_gem = 1.2
 slash_gauge_on_perfect_dodge = 15.0
-heat_gain_base = 5.0
 heat_overheat_duration = 3.0
+heat_decay_delay = 2.0
 visuals = ExtResource("2_pv")
