@@ -115,13 +115,13 @@ func _process(delta: float) -> void:
 		if in_slash and not _reserved and dist <= slash_reserve_radius:
 			_set_reserved()
 
-	# 일섬 중 — 즉시 흡입하지 않는다. 자석 권역을 스쳐 지나가면 "예약"으로 마킹만 하고
-	# 이동/수집은 안 한다. 일섬이 끝나면 예약된 젬이 PC 로 뒤늦게 따라와 먹힌다.
-	if in_slash:
+	# 일섬 중 '차단'은 최초 예약 1회만 — 아직 미예약 젬만 즉시수집 대신 예약하고 대기한다.
+	# 이미 예약된 젬은 이 블록을 건너뛰어, 일섬 중이라도 아래 호밍/수집으로 따라와 먹힌다(요청).
+	if in_slash and not _reserved:
 		_home_t = 0.0
 		# 일섬이 스친 바닥 젬 + 슬래시-킬로 방금 떨어진 젬을 넉넉한 반경으로 예약(쓸어담는 느낌).
 		# magnet_radius(1.75)는 빠른 대시가 지나간 뒤라 거의 못 잡으므로 전용 sweep 반경 사용.
-		if not _reserved and dist <= maxf(eff_magnet, slash_sweep_radius):
+		if dist <= maxf(eff_magnet, slash_sweep_radius):
 			_set_reserved()
 		return
 
