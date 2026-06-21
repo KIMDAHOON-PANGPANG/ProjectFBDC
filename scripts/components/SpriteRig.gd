@@ -57,6 +57,10 @@ var _state: int = State.IDLE
 var _facing_right: bool = true
 var _base_modulate: Color = Color.WHITE
 var _blink_tween: Tween
+## flash() 의 트윈도 추적한다. 예전엔 untracked 라 flash 중 다른 flash/blink/death 가
+## 겹치면 옛 트윈이 modulate 를 멋대로 끝내(밝게/투명) 살아있는 몹이 안 보이는 잔존이
+## 생길 수 있었다. 추적해 두면 새 연출 시작 시·사망 시 확실히 kill + 베이스 복원한다.
+var _flash_tween: Tween
 var _animated: bool = false
 
 # 현재 재생 중인 애니 구간.
@@ -116,6 +120,18 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not _animated or _sprite == null:
 		return
+	# ── 가시성 안전망(다층 방어 A) ── 살아있는(=DEATH 가 아닌) 몹의 스프라이트가
+	# 어떤 이유로든(겹친 flash/blink 트윈이 중간에 죽어 modulate 가 꼬임 등) 거의 투명
+	# 하게 끼어 있고, 그걸 복원할 트윈도 더는 돌지 않는다면 베이스 알파로 강제 복원한다.
+	# DEATH(사망 페이드)·블링크/플래시 트윈 진행 중에는 손대지 않는다(연출 보존).
+	if _state != State.DEATH:
+		var blinking: bool = _blink_tween != null and _blink_tween.is_valid()
+		var flashing: bool = _flash_tween != null and _flash_tween.is_valid()
+		if not blinking and not flashing and _sprite.modulate.a < 0.04:
+			_sprite.modulate = _base_modulate
+		# 살아있는데 노드가 숨겨져 있으면(외부 실수 등) 다시 보이게.
+		if not _sprite.visible:
+			_sprite.visible = true
 	_anim_t += delta * maxf(time_scale_mult, 0.0) * _fps
 	var span: int = _to - _from + 1
 	if span <= 0:
@@ -295,16 +311,25 @@ func _refresh_texture() -> void:
 func flash(duration: float = 0.16) -> void:
 	if _sprite == null:
 		return
+	# 이전 flash 트윈을 죽이고 항상 베이스로 끝나게 추적한다 — 겹친 트윈이 modulate 를
+	# 어중간한(투명) 상태로 남기지 않도록. blink 트윈과도 충돌하지 않게 마지막에 복원.
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
 	var bright: Color = Color(3.0, 3.0, 3.0, _base_modulate.a)
-	var t := create_tween()
-	t.tween_property(_sprite, "modulate", bright, duration * 0.2)
-	t.tween_property(_sprite, "modulate", _base_modulate, duration * 0.8)
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_sprite, "modulate", bright, duration * 0.2)
+	_flash_tween.tween_property(_sprite, "modulate", _base_modulate, duration * 0.8)
+	_flash_tween.tween_callback(_restore_base_modulate)
 
 func start_iframe_blink(duration: float = 1.0) -> void:
 	if _sprite == null:
 		return
 	if _blink_tween != null and _blink_tween.is_valid():
 		_blink_tween.kill()
+	# 진행 중인 flash 트윈도 죽인다 — 안 그러면 blink 와 동시 진행해 modulate 가
+	# 꼬여(투명 잔존) 살아있는 몹이 안 보일 수 있다(다층 방어 A).
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
 	var bright: Color = Color(2.5, 2.5, 2.5, 1.0)
 	var invisible: Color = Color(_base_modulate.r, _base_modulate.g, _base_modulate.b, 0.0)
 	var half_cycle: float = 0.08
@@ -319,6 +344,23 @@ func _restore_base_modulate() -> void:
 	if _sprite != null:
 		_sprite.modulate = _base_modulate
 
+
+## 다층 방어 C 의 질의 지점 — 이 리그의 스프라이트가 실제로 화면에 보일 상태인가.
+## HpBar3D 가 매 프레임 호출해, 안 보이는(투명/숨김/텍스처 없음) 몹 위엔 바를 숨긴다.
+## DEATH(사망 페이드) 중이면 false(어차피 사라지는 중이라 바도 안 띄움).
+func is_sprite_rendering() -> bool:
+	if _sprite == null:
+		return false
+	if _state == State.DEATH:
+		return false
+	if not _sprite.visible:
+		return false
+	if _sprite.modulate.a < 0.04:
+		return false
+	if _sprite.texture == null:
+		return false
+	return true
+
 func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
 	set_state(State.DEATH)
 	# Kill any in-flight blink tween first — its callback restores
@@ -327,6 +369,10 @@ func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
 	# on a still-living-looking body.
 	if _blink_tween != null and _blink_tween.is_valid():
 		_blink_tween.kill()
+	# flash 트윈도 죽인다 — 사망 페이드(modulate:a→0)와 싸워 사라지다 다시 나타나는
+	# 잔존을 막는다.
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
 	if _sprite == null:
 		_safe_free(parent_to_free)
 		return

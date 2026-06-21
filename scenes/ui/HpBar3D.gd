@@ -67,6 +67,15 @@ var _follow_target: Node3D
 ## then lost it (parent freed / detached) is an orphan and removes itself so
 ## a stranded full-HP bar can never linger over an absent sprite.
 var _had_target: bool = false
+## 다층 방어 C — 추적 몹의 렌더 노드(SpriteRig 또는 Sprite3D). 처음 한 번 찾아 캐시.
+## 이게 "안 보이는" 상태면 바도 숨긴다(스프라이트 없는 허공 바 원천 차단).
+var _target_render: Node = null
+var _render_searched: bool = false
+## owner died 로 영구 숨김됐는지 — 이 경우 렌더 복귀해도 다시 보이게 하지 않는다.
+var _owner_dead: bool = false
+## PC 바 등 추적 대상이 "player" 그룹이면 가시성 자동관리에서 제외(PC 바는 항상
+## visible=false 유지가 정책이라 우리가 건드리면 안 됨).
+var _is_player_target: bool = false
 
 func _ready() -> void:
 	_build()
@@ -78,6 +87,7 @@ func _ready() -> void:
 	if p is Node3D:
 		_follow_target = p
 		_had_target = true
+		_is_player_target = (p as Node).is_in_group("player")
 	# Snap to target immediately so the bar isn't at world origin for one
 	# frame before _process catches up.
 	_sync_to_target()
@@ -109,6 +119,87 @@ func _sync_to_target() -> void:
 		return
 	global_position = _follow_target.global_position + follow_offset
 	_face_camera()
+	# 다층 방어 C — PC 바가 아닌(=몹) 바는, 추적 몹이 사망 처리됐거나 그 몹의
+	# 스프라이트가 실제로 안 보이는 상태면 바도 숨긴다. 스프라이트 없는 허공/땅의
+	# 풀HP 바가 어떤 원인으로도 노출되지 않게 하는 최종 게이트. PC 바(player 타겟)는
+	# 정책상 항상 visible=false 라 절대 손대지 않는다.
+	if not _is_player_target:
+		_update_render_gate()
+
+## 다층 방어 C — 추적 몹의 렌더 가시성에 따라 바 자신의 visible 을 끈다/켠다.
+## `_on_owner_died()` 가 영구 숨김(`_owner_dead`)한 바는 다시 켜지 않는다(사망 우선).
+func _update_render_gate() -> void:
+	if _owner_dead:
+		visible = false
+		return
+	# 추적 몹이 _dead 플래그를 들고 있으면(사망 페이드 중) 숨긴다.
+	if "_dead" in _follow_target and _follow_target._dead == true:
+		visible = false
+		return
+	var rendering: bool = _is_target_rendering()
+	# 안 보이는 몹 위엔 바도 숨김. 다시 보이면(블링크 종료 등) 복원.
+	visible = rendering
+
+## 추적 몹의 스프라이트가 실제로 화면에 보일 상태인가. SpriteRig 가 있으면 그
+## `is_sprite_rendering()` 질의(애니메이션 시트/셰이더 modulate 까지 반영), 없으면
+## 자식 Sprite3D 를 직접 검사(엘리트/보스의 "Visual" 노드). 둘 다 없으면 보임 취급
+## (예외 케이스에서 바를 과하게 숨기지 않도록 — 다른 안전망이 있다).
+func _is_target_rendering() -> bool:
+	if not _render_searched:
+		_render_searched = true
+		_target_render = _find_render_node(_follow_target)
+	var r := _target_render
+	if r == null or not is_instance_valid(r):
+		# 캐시가 무효화됐으면 한 번 더 찾는다(노드 교체 등 드문 경우).
+		_target_render = _find_render_node(_follow_target)
+		r = _target_render
+	if r == null:
+		return true
+	if r.has_method("is_sprite_rendering"):
+		return bool(r.call("is_sprite_rendering"))
+	# 순수 Sprite3D — modulate alpha / visible / texture 직접 검사.
+	if r is Sprite3D:
+		var s := r as Sprite3D
+		if not s.visible:
+			return false
+		if s.modulate.a < 0.04:
+			return false
+		if s.texture == null:
+			return false
+		return true
+	# VisualInstance3D 등 — visible 만 확인.
+	if r is Node3D:
+		return (r as Node3D).visible
+	return true
+
+## 추적 몹 서브트리에서 렌더 노드를 찾는다(우선순위: SpriteRig > Sprite3D).
+func _find_render_node(root_node: Node) -> Node:
+	if root_node == null:
+		return null
+	# 1순위: is_sprite_rendering 을 제공하는 노드(SpriteRig).
+	var rig := _find_with_method(root_node)
+	if rig != null:
+		return rig
+	# 2순위: 첫 Sprite3D.
+	return _find_sprite3d(root_node)
+
+func _find_with_method(n: Node) -> Node:
+	if n.has_method("is_sprite_rendering"):
+		return n
+	for c in n.get_children():
+		var r := _find_with_method(c)
+		if r != null:
+			return r
+	return null
+
+func _find_sprite3d(n: Node) -> Node:
+	if n is Sprite3D:
+		return n
+	for c in n.get_children():
+		var r := _find_sprite3d(c)
+		if r != null:
+			return r
+	return null
 
 ## Mirror the camera's full orientation so the bar is plane-on to the
 ## camera every frame. See class doc for why this is node-level (not
@@ -222,6 +313,7 @@ func _on_damaged(_amount: int = 0) -> void:
 ## no leftover bar floating over the disappearing sprite. The node still
 ## frees together with its parent enemy at the end of that animation.
 func _on_owner_died() -> void:
+	_owner_dead = true
 	visible = false
 
 func refresh() -> void:
