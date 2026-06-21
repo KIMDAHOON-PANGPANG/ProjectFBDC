@@ -182,6 +182,36 @@ func _attack_range() -> Vector2i:
 		_: return _ATK_MELEE
 
 
+## 슬래머 "힘주기" 전용 — slam_windup 길이에 맞춰 공격 윈드업/스트라이크 두 프레임을
+## 저 fps 로 왕복 루프해 정지처럼 보이지 않게(살아있는 힘주기 진동) 재생한다. 고정 길이
+## 애니인 일반 ATTACK(1회) 과 달리, 데칼 fill·쿨다운 시간과 시각이 일치한다.
+func play_slam_windup(windup: float) -> void:
+	if not _animated or _sprite == null:
+		return
+	_state = State.ATTACK
+	_from = _ATK_MELEE.x
+	_to = _ATK_MELEE.y
+	_loop = true
+	# 두 프레임(34 윈드업 ↔ 35 스트라이크) 왕복이 windup 동안 천천히 돌게 fps 조절.
+	_fps = max(2.0 / maxf(windup, 0.1), 0.5)
+	_anim_t = 0.0
+	_done = false
+	_sprite.frame = _from
+
+
+## 슬램 임팩트 — 스트라이크 프레임(35) 고정.
+func play_slam_strike() -> void:
+	if not _animated or _sprite == null:
+		return
+	_state = State.ATTACK
+	_from = _ATK_MELEE.y
+	_to = _ATK_MELEE.y
+	_loop = false
+	_done = true
+	_anim_t = 0.0
+	_sprite.frame = _ATK_MELEE.y
+
+
 ## 피격 모션 1회(48-49). 적 피격 시 호출 — 끝나면 다음 set_state 가 복귀시킴.
 func play_hit() -> void:
 	if not _animated:

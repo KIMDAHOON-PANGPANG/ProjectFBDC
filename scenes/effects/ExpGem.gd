@@ -30,6 +30,12 @@ var _mesh: MeshInstance3D
 var _age: float = 0.0
 ## 자석 권역 안에 머문 시간 — 호밍 속도 이지인 램프용.
 var _home_t: float = 0.0
+## 일섬(대시+착지유예) 중 자석 권역을 스쳐 "예약된" 젬. 일섬 종료 후엔 권역 밖이어도
+## PC 로 졸졸 따라와 수집된다(뒤늦게 따라와 먹히는 연출).
+var _reserved: bool = false
+## reserved 시각 표시(살짝 떠오름)용 — _build_visual 에서 머티리얼 참조 보관.
+var _mat: StandardMaterial3D
+var _reserved_visualized: bool = false
 
 
 ## Set BEFORE add_child so _ready's visual build reads the right size/color.
@@ -60,6 +66,7 @@ func _build_visual() -> void:
 	mat.emission_enabled = true
 	mat.emission = col
 	mat.emission_energy_multiplier = 2.2
+	_mat = mat
 	_mesh.material_override = mat
 	_mesh.position = Vector3(0, 0.5, 0)
 	add_child(_mesh)
@@ -70,30 +77,51 @@ func _process(delta: float) -> void:
 		return
 	_age += delta
 	# Gentle bob so the gem reads as a live pickup, not ground litter.
+	# reserved 젬은 살짝 떠올라(+0.12) "따라올 준비"를 시각적으로 알린다.
 	if _mesh != null:
-		_mesh.position.y = 0.5 + sin(_age * 4.0) * 0.08
+		var bob_base: float = 0.62 if _reserved else 0.5
+		_mesh.position.y = bob_base + sin(_age * 4.0) * 0.08
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
 		return
-	# 일섬(슬래시 대시 + 착지 유예) 중엔 경험치 젬을 자석/획득하지 않는다 (요청 — 일섬으로 젬 흡입 금지).
+	# 일섬(슬래시 대시 + 착지 유예) 여부.
 	var in_slash: bool = false
 	if _player.has_method("is_slash_vacuuming"):
 		in_slash = bool(_player.call("is_slash_vacuuming"))
 	elif _player.has_method("is_slashing"):
 		in_slash = bool(_player.call("is_slashing"))
-	if in_slash:
-		_home_t = 0.0
-		return
+
 	var to_pc: Vector3 = _player.global_position - global_position
 	to_pc.y = 0.0
 	var dist: float = to_pc.length()
-	if dist <= pickup_radius:
-		_collect()
-		return
 	# 레벨업 "경험치 자석" 카드 — PC.exp_magnet_mult 로 자석 반경 확대.
 	var eff_magnet: float = magnet_radius
 	if "exp_magnet_mult" in _player:
 		eff_magnet *= maxf(0.1, float(_player.exp_magnet_mult))
+
+	# 일섬 중 — 즉시 흡입하지 않는다. 자석 권역을 스쳐 지나가면 "예약"으로 마킹만 하고
+	# 이동/수집은 안 한다. 일섬이 끝나면 예약된 젬이 PC 로 뒤늦게 따라와 먹힌다.
+	if in_slash:
+		_home_t = 0.0
+		if dist <= eff_magnet and not _reserved:
+			_set_reserved()
+		return
+
+	# 비일섬: 이미 예약된 젬은 권역 밖이어도 PC 로 호밍해 따라가 수집된다.
+	if _reserved:
+		if dist <= pickup_radius:
+			_collect()
+			return
+		_home_t += delta
+		var rk: float = clamp(_home_t / max(magnet_ramp, 0.0001), 0.0, 1.0)
+		var rspeed: float = lerp(magnet_min_speed, magnet_speed, rk * rk)
+		global_position += to_pc.normalized() * rspeed * delta
+		return
+
+	# 일반(비예약) 수집 — 기존 로직 그대로.
+	if dist <= pickup_radius:
+		_collect()
+		return
 	if dist <= eff_magnet:
 		# 자석 권역 진입 — 호밍 시간 누적. 속도는 이지인(졸졸→빨라짐) 커브로 램프하고
 		# PC 를 매 프레임 재추적하므로, 움직이는 PC 뒤를 졸졸 따라붙어 빨려든다.
@@ -103,6 +131,14 @@ func _process(delta: float) -> void:
 		global_position += to_pc.normalized() * speed * delta
 	else:
 		_home_t = 0.0  # 권역 벗어나면 램프 리셋
+
+
+## 일섬 중 권역에 스친 젬을 예약 상태로 — 마킹 + 가벼운 시각 강조(emission 한 번 올림).
+func _set_reserved() -> void:
+	_reserved = true
+	if not _reserved_visualized and _mat != null:
+		_reserved_visualized = true
+		_mat.emission_energy_multiplier = 3.2
 
 
 func _collect() -> void:

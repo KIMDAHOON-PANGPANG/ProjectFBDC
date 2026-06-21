@@ -368,12 +368,20 @@ func _begin_slam(to_player_xz: Vector3) -> void:
 	velocity = Vector3.ZERO
 	move_and_slide()
 	if _sprite_rig != null:
-		_sprite_rig.set_state(SpriteRig.State.ATTACK)
+		# 슬래머 전용 — slam_windup 길이에 맞춰 힘주기 윈드업을 느리게 왕복 재생
+		# (일반 ATTACK 1회 재생은 고정 길이라 정지처럼 보이는 문제 회피).
+		if _sprite_rig.has_method("play_slam_windup"):
+			_sprite_rig.call("play_slam_windup", slam_windup)
+		else:
+			_sprite_rig.set_state(SpriteRig.State.ATTACK)
 		_sprite_rig.set_facing(to_player_xz.x)
 
 func _on_slam_done() -> void:
 	_attacking = false
 	_active_slam_decal = null
+	# 슬램 임팩트 시점 — 스트라이크 프레임 고정.
+	if _sprite_rig != null and _sprite_rig.has_method("play_slam_strike"):
+		_sprite_rig.call("play_slam_strike")
 
 ## 리프 시작 — 착지 지점에 빨간 원형 데칼을 깔고 곡선 점프를 건다.
 func _begin_leap(to_player_xz: Vector3, dist: float) -> void:

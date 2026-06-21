@@ -50,6 +50,12 @@ var _teleport_cd: float = 0.0
 var _phasing: bool = false
 var _phase_target: Vector3 = Vector3.ZERO
 var _kb = _KnockbackScript.new()
+## 카메라 rig(시야 게이트) — _ready 에서 lookup. 없으면 폴백 true(시야 안 취급).
+var _cam: Node
+## 진행 중 트윈 핸들 — 사망 시 명시 kill(사망 페이드 알파 경합 제거).
+var _cast_tween: Tween
+var _phase_tween: Tween
+var _flash_tween: Tween
 
 
 func _ready() -> void:
@@ -91,6 +97,25 @@ func _ready() -> void:
 		_sprite.modulate = _TINT
 
 	_player = get_tree().get_first_node_in_group("player")
+	_cam = get_tree().get_first_node_in_group("camera_rig")
+
+
+## PC 카메라 프러스텀(시야) 안에 있는지 — 폴백(카메라 없음)은 true.
+func _is_visible_now() -> bool:
+	if _cam == null or not is_instance_valid(_cam):
+		_cam = get_tree().get_first_node_in_group("camera_rig")
+	if _cam == null:
+		return true
+	if not _cam.has_method("is_world_pos_visible"):
+		return true
+	return bool(_cam.call("is_world_pos_visible", global_position))
+
+
+## 방어(도주/텔레포트) 패턴 발동 가능 — HP 30% 이하부터만 도주한다.
+func _is_defensive() -> bool:
+	if _health == null:
+		return false
+	return float(_health.hp) <= float(max_hp) * 0.3
 
 
 func _physics_process(delta: float) -> void:
@@ -122,24 +147,32 @@ func _physics_process(delta: float) -> void:
 	to_player.y = 0.0
 	var dist := to_player.length()
 
-	# PC 가 너무 가까이 쫓아오면 → 반투명 유령으로 화면 반대편 끝까지 활주(쿨 차면).
-	if dist <= teleport_range and _teleport_cd <= 0.0:
+	var visible_now: bool = _is_visible_now()
+
+	# 방어 패턴(도주/텔레포트) — HP 30% 이하 + PC 가 너무 가까이 + 쿨 차면 발동.
+	# (첫 피격 즉시 발동 X — HP 가 충분하면 도주 안 하고 시전·카이팅만.)
+	if dist <= teleport_range and _teleport_cd <= 0.0 and _is_defensive():
 		_begin_phase()
 		return
 
-	# 시야 안 + 시전 쿨 차면 → PC 주변 360° 장판 흩뿌리기.
-	if dist <= vision_range and _cast_cd <= 0.0:
+	# 시야 안 + 시전 쿨 차면 → PC 주변 360° 장판 흩뿌리기. 시야 밖이면 시전 스킵(쿨 미소비).
+	if visible_now and dist <= vision_range and _cast_cd <= 0.0:
 		_do_cast()
 		_cast_cd = cast_cooldown
 
-	# 카이팅 — 선호 거리 유지(너무 가까우면 물러나고 멀면 접근).
-	var keep: float = teleport_range + 4.0
+	# 이동 — 시야 밖이면 화면 안으로 복귀(PC 방향 강제), 시야 안이면 선호 거리 카이팅.
 	var dir := to_player.normalized() if dist > 0.001 else Vector3.ZERO
 	var move := Vector3.ZERO
-	if dist < keep - keep_band:
-		move = -dir
-	elif dist > keep + keep_band:
+	if not visible_now:
+		# 카메라 시야를 벗어났다 → PC 쪽으로 다가가 화면 안으로 복귀.
 		move = dir
+	else:
+		# 카이팅 — 선호 거리 유지(너무 가까우면 물러나고 멀면 접근).
+		var keep: float = teleport_range + 4.0
+		if dist < keep - keep_band:
+			move = -dir
+		elif dist > keep + keep_band:
+			move = dir
 	velocity.x = move.x * move_speed * time_scale_mult
 	velocity.z = move.z * move_speed * time_scale_mult
 	velocity.y = 0.0
@@ -166,23 +199,39 @@ func _do_cast() -> void:
 	# 시전 연출 — 보라 섬광(잠깐 밝게).
 	if _sprite != null:
 		var orig: Color = _sprite.modulate
-		var t := create_tween()
-		t.tween_property(_sprite, "modulate", Color(2.0, 1.6, 2.5, orig.a), 0.06)
-		t.tween_property(_sprite, "modulate", orig, 0.16)
+		if _cast_tween != null and _cast_tween.is_valid():
+			_cast_tween.kill()
+		_cast_tween = create_tween()
+		_cast_tween.tween_property(_sprite, "modulate", Color(2.0, 1.6, 2.5, orig.a), 0.06)
+		_cast_tween.tween_property(_sprite, "modulate", orig, 0.16)
 
 
 ## 점멸 대신 — 반투명 유령이 되어 화면 반대편 끝까지 phase_speed 로 스르르 미끄러진다.
 ## (사라지지 않고 활주 경로가 보여 PC 가 어디로 가는지 추적 가능.)
 func _begin_phase() -> void:
-	var flee_dir := Vector3(1, 0, 0)
-	var base: Vector3 = global_position
+	# 도주 목적지 — PC 반대(뒤·화면 밖)로 가지 않고, PC 를 향한 측면 원호로 비껴
+	# 빠져 화면 안에 머무른다. 단 PC 와 너무 가까워지지 않게 최소 거리(keep) 보정.
+	var dest: Vector3 = global_position
 	if _player != null and is_instance_valid(_player):
-		var away := global_position - (_player as Node3D).global_position
-		away.y = 0.0
-		if away.length() > 0.1:
-			flee_dir = away.normalized()
-		base = (_player as Node3D).global_position
-	var dest := base + flee_dir * teleport_dist
+		var pc: Vector3 = (_player as Node3D).global_position
+		var to_pc := pc - global_position
+		to_pc.y = 0.0
+		var fwd := to_pc.normalized() if to_pc.length() > 0.1 else Vector3(1, 0, 0)
+		# 측면(±90°) 벡터 — PC 와의 현재 좌/우 부호로 화면 안쪽을 택한다.
+		var side := Vector3(fwd.z, 0.0, -fwd.x)
+		var rel := global_position - pc
+		if Vector3(rel.x, 0.0, rel.z).dot(side) < 0.0:
+			side = -side
+		# 측면 위주 + PC 쪽 성분 살짝 섞기(화면 안쪽으로 비껴 빠짐).
+		var move_dir := (side + fwd * 0.4).normalized()
+		dest = global_position + move_dir * teleport_dist
+		# PC 로부터 최소 keep 이상 떨어지게 보정(너무 붙지 않게).
+		var keep: float = teleport_range + 4.0
+		var dp := dest - pc
+		dp.y = 0.0
+		if dp.length() < keep:
+			var push := dp.normalized() if dp.length() > 0.01 else fwd
+			dest = pc + push * keep
 	_phase_target = Vector3(dest.x, global_position.y, dest.z)
 	_phasing = true
 	_teleport_cd = teleport_cooldown
@@ -191,8 +240,10 @@ func _begin_phase() -> void:
 	velocity = Vector3.ZERO
 	# 반투명으로 스르르 페이드(유령화).
 	if _sprite != null:
-		var t := create_tween()
-		t.tween_property(_sprite, "modulate:a", 0.32, 0.22)
+		if _phase_tween != null and _phase_tween.is_valid():
+			_phase_tween.kill()
+		_phase_tween = create_tween()
+		_phase_tween.tween_property(_sprite, "modulate:a", 0.32, 0.22)
 
 
 ## 유령 활주 한 프레임 — 목표까지 직접 이동(충돌 무시), 도착하면 종료.
@@ -214,8 +265,10 @@ func _end_phase() -> void:
 	_phasing = false
 	collision_layer = 1 << 2  # Enemy — 활주 끝나면 다시 피격/충돌 가능.
 	if _sprite != null:
-		var t := create_tween()
-		t.tween_property(_sprite, "modulate:a", _TINT.a, 0.22)
+		if _phase_tween != null and _phase_tween.is_valid():
+			_phase_tween.kill()
+		_phase_tween = create_tween()
+		_phase_tween.tween_property(_sprite, "modulate:a", _TINT.a, 0.22)
 
 
 func apply_knockback(dir: Vector3, speed: float) -> void:
@@ -237,9 +290,11 @@ func _on_damaged(_amount: int) -> void:
 		return
 	var orig: Color = _sprite.modulate
 	var flash := Color(2.5, 2.5, 2.5, orig.a)
-	var t := create_tween()
-	t.tween_property(_sprite, "modulate", flash, 0.04)
-	t.tween_property(_sprite, "modulate", orig, 0.12)
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_sprite, "modulate", flash, 0.04)
+	_flash_tween.tween_property(_sprite, "modulate", orig, 0.12)
 
 
 func _on_died() -> void:
@@ -247,6 +302,11 @@ func _on_died() -> void:
 		return
 	_dead = true
 	_kb.vel = Vector3.ZERO
+	# 진행 중 트윈(시전 섬광 / 유령 페이드 / 피격 플래시)을 명시 kill — 사망 페이드
+	# 알파와 경합하지 않게(밝기/알파가 도로 복원되며 시체가 깜빡이는 것 방지).
+	for h in [_cast_tween, _phase_tween, _flash_tween]:
+		if h != null and h.is_valid():
+			h.kill()
 	if _health != null:
 		_health.clear_stagger()
 	set_meta("death_position", global_position)

@@ -88,7 +88,7 @@ const MON_FIELDS := [
 	["attack_range", "공격/시전 거리", "공격·텔레그래프 시작 거리(원거리=사격 사거리).", "f"],
 	["attack_cooldown", "공격 간격(초)", "공격 사이 간격.", "f"],
 	["attack_damage", "공격 데미지", "근접/부채 적중 데미지.", "i"],
-	["@", "─ 부채 공격 (근접) ─"],
+	["@", "─ 부채 공격 (근접) ─", ["melee", "leaper", "slammer"]],
 	["fan_radius", "부채 반경", "부채 텔레그래프 반경(유닛).", "f"],
 	["fan_angle_deg", "부채 각도", "부채 텔레그래프 각도(도).", "f"],
 	["@", "─ 군집 / 경직 ─"],
@@ -96,21 +96,21 @@ const MON_FIELDS := [
 	["separation_weight", "분리 가중치", "추격 대비 분리 힘 비중.", "f"],
 	["armor_max", "아머(경직 게이지)", "0=아머 없음. 데미지 누적 시 경직.", "i"],
 	["stagger_duration", "경직 시간(초)", "아머 소거 시 행동 불가 시간.", "f"],
-	["@", "─ [궁수] 원거리 ─"],
+	["@", "─ [궁수] 원거리 ─", ["ranged"]],
 	["keep_distance", "원거리 선호 거리", "[궁수] 유지하려는 거리(유닛).", "f"],
 	["arrow_speed", "화살 속도", "[궁수] 발사체 속도(유닛/초).", "f"],
 	["aim_lock_duration", "조준 노출 시간", "[궁수] 발사 전 조준 텔레그래프 시간(초).", "f"],
-	["@", "─ [리퍼] 도약 ─"],
+	["@", "─ [리퍼] 도약 ─", ["leaper"]],
 	["leap_chance", "도약 확률", "[리퍼] 사거리 내에서 도약 발동 확률(0~1).", "f"],
 	["leap_radius", "도약 슬램 반경", "[리퍼] 내려찍기 원형 반경(유닛).", "f"],
 	["leap_damage", "도약 슬램 데미지", "[리퍼] 내려찍기 데미지.", "i"],
-	["@", "─ [슬래머] 슬램 ─"],
+	["@", "─ [슬래머] 슬램 ─", ["slammer"]],
 	["slam_range", "슬램 발동 거리", "[슬래머] 이 거리 안이면 힘주기 시작.", "f"],
 	["slam_windup", "슬램 힘주기(초)", "[슬래머] 내려찍기 전 정지 차징 시간(초).", "f"],
 	["slam_radius", "슬램 반경", "[슬래머] 광역 슬램 반경(넓음=회피 전용).", "f"],
 	["slam_damage", "슬램 데미지", "[슬래머] 슬램 적중 데미지.", "i"],
 	["slam_cooldown", "슬램 쿨다운(초)", "[슬래머] 슬램 후 다음 공격까지.", "f"],
-	["@", "─ [주술사] 장판 / 텔레포트 ─"],
+	["@", "─ [주술사] 장판 / 텔레포트 ─", ["sorcerer"]],
 	["vision_range", "시야 반경", "[주술사] PC 를 보는(장판 시전) 거리.", "f"],
 	["zone_count", "장판 개수", "[주술사] 한 번에 까는 장판 수.", "i"],
 	["zone_radius", "장판 반경", "[주술사] 각 장판 원형 반경(유닛).", "f"],
@@ -120,7 +120,7 @@ const MON_FIELDS := [
 	["zone_precursor", "장판 전조(초)", "[주술사] 흐릿한 전조가 채워지는 시간(초).", "f"],
 	["teleport_cooldown", "텔레포트 쿨(초)", "[주술사] 텔레포트 재사용 대기.", "f"],
 	["teleport_range", "텔레포트 발동 거리", "[주술사] PC 가 이 안에 오면 점멸.", "f"],
-	["@", "─ [보스] 돌진 ─"],
+	["@", "─ [보스] 돌진 ─", ["boss"]],
 	["charge_range", "돌진 시작 거리", "[보스] 아주 먼 거리에서 돌진 시작.", "f"],
 	["charge_windup", "돌진 호밍(초)", "[보스] 데칼이 PC 를 따라다니는 시간.", "f"],
 	["charge_speed", "돌진 속도", "[보스] 돌진 직진 속도(유닛/초).", "f"],
@@ -235,11 +235,20 @@ func _rebuild_monster_fields(idx: int) -> void:
 	if idx < 0 or idx >= _mon_table.monsters.size():
 		return
 	var m = _mon_table.monsters[idx]
+	var mkey: String = str(m.key) if ("key" in m) else ""
 	var saver := Callable(self, "_save").bind(_mon_table, MONSTER_TABLE)
+	# 선택한 몬스터 타입(key)에 해당하는 섹션만 노출 — 섹션마커 3번째 요소가 적용 key
+	# 배열(태그). 태그 없는(공용) 섹션은 항상 표시. 필드는 현재 섹션이 보일 때만 생성.
+	var section_visible: bool = true
 	for spec in MON_FIELDS:
 		if spec[0] == "@":
-			_mon_fields_box.add_child(_section(spec[1]))
-		elif spec[0] in m:
+			if spec.size() > 2 and spec[2] is Array:
+				section_visible = mkey in spec[2]
+			else:
+				section_visible = true
+			if section_visible:
+				_mon_fields_box.add_child(_section(spec[1]))
+		elif section_visible and spec[0] in m:
 			_mon_fields_box.add_child(_field_row(m, spec, saver))
 
 
