@@ -52,7 +52,7 @@ var _spawn_accum: float = 0.0
 func set_curve(c: WaveCurve) -> void:
 	curve = c
 	_elapsed = 0.0
-	_tick_accum = 0.0
+	_tick_accum = c.tick_period  # 첫 틱 즉시 발동(t≈0 부터 스폰 — 0.8s 초반 공백 제거)
 	_spawn_accum = 0.0
 	_elites_fired = false
 	_boss_fired = false
@@ -101,6 +101,11 @@ func _maintain_population() -> void:
 	if not is_equal_approx(target_mult, 1.0):
 		rate *= target_mult
 	_spawn_accum += rate * curve.tick_period
+	# 최소 존재 보장 — 활성 웨이브인데 화면이 비면(카운트 0) 즉시 1~2마리 스폰해
+	# 초반 공백 + "스폰됐다 바로 사라지는" 체감을 막는다. 적은 거리 leash 디스폰이
+	# 없으므로(MeleeEnemy: 추격 못 벗어남) 무한 스폰루프가 아니다.
+	if alive == 0 and rate > 0.0:
+		_spawn_accum = maxf(_spawn_accum, 2.0)
 	var n: int = int(_spawn_accum)
 	if n <= 0:
 		return
