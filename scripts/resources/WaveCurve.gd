@@ -66,6 +66,8 @@ extends Resource
 @export var spawn_start_times: PackedFloat32Array = PackedFloat32Array([])
 @export var spawn_weights: PackedFloat32Array = PackedFloat32Array([])
 @export var spawn_enabled: PackedInt32Array = PackedInt32Array([])
+## 엔트리 종료 경과시간(초). 0=종료없음=챕터끝까지=현 동작.
+@export var spawn_end_times: PackedFloat32Array = PackedFloat32Array([])
 
 
 ## 로스터가 채워져 있는가(엔트리 1개 이상). false 면 레거시 종류선택을 쓴다.
@@ -73,16 +75,31 @@ func has_roster() -> bool:
 	return spawn_keys.size() > 0
 
 
-## t 시점에 활성(enabled==1 && start_time<=t)인 엔트리 인덱스 목록.
+## 인덱스 i 엔트리가 t 시점에 활성인가 — enabled==1 && start<=t && (end<=0||t<end).
+func _entry_active_at(i: int, t: float) -> bool:
+	var en: int = spawn_enabled[i] if i < spawn_enabled.size() else 1
+	var st: float = spawn_start_times[i] if i < spawn_start_times.size() else 0.0
+	var et: float = spawn_end_times[i] if i < spawn_end_times.size() else 0.0
+	return en == 1 and t >= st and (et <= 0.0 or t < et)
+
+
+## t 시점에 활성(enabled==1 && start_time<=t && end 게이트)인 엔트리 인덱스 목록.
 func active_entries_at(t: float) -> Array:
 	var out: Array = []
 	var n: int = spawn_keys.size()
 	for i in n:
-		var en: int = spawn_enabled[i] if i < spawn_enabled.size() else 1
-		var st: float = spawn_start_times[i] if i < spawn_start_times.size() else 0.0
-		if en == 1 and t >= st:
+		if _entry_active_at(i, t):
 			out.append(i)
 	return out
+
+
+## t 시점 활성 sorcerer 엔트리의 확률값(spawn_weights)을 반환. 없으면 fallback 반환.
+func sorcerer_chance_at(t: float, fallback: float) -> float:
+	for i in active_entries_at(t):
+		if i < spawn_keys.size() and spawn_keys[i] == "sorcerer":
+			var w: float = spawn_weights[i] if i < spawn_weights.size() else fallback
+			return clampf(w, 0.0, 1.0)
+	return fallback
 
 
 ## t 시점 활성 sorcerer 엔트리가 존재하는가(가중치 무관 — 활성만).

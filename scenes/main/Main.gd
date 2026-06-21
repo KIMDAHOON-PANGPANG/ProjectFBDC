@@ -853,7 +853,10 @@ func _request_spawn_roster(lv: int, rc) -> void:
 	var t: float = _wave_elapsed()
 	# 주술사 — 로스터에 활성 sorcerer 엔트리가 있을 때만 굴림(싱글톤 유지).
 	if rc.has_method("sorcerer_entry_active_at") and bool(rc.call("sorcerer_entry_active_at", t)):
-		if _try_spawn_sorcerer():
+		var sc: float = _SORCERER_CHANCE
+		if rc.has_method("sorcerer_chance_at"):
+			sc = float(rc.call("sorcerer_chance_at", t, _SORCERER_CHANCE))
+		if _try_spawn_sorcerer(sc):
 			return
 	var key: String = ""
 	if rc.has_method("roster_pick_key"):
@@ -909,10 +912,11 @@ func _alive_sorcerer_count() -> int:
 
 
 ## 주술사가 없을 때만 낮은 확률로 1마리 스폰(싱글톤). 스폰했으면 true.
-func _try_spawn_sorcerer() -> bool:
+## chance: 로스터에서 읽은 확률(기본=_SORCERER_CHANCE 폴백).
+func _try_spawn_sorcerer(chance: float = _SORCERER_CHANCE) -> bool:
 	if sorcerer_enemy_scene == null or _alive_sorcerer_count() >= 1:
 		return false
-	if randf() >= _SORCERER_CHANCE:
+	if randf() >= chance:
 		return false
 	_spawn_sorcerer()
 	return true

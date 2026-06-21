@@ -621,7 +621,10 @@ func _wave_spawn_roster(rc) -> void:
 	var t: float = (float(_wave_mgr.call("elapsed")) if _wave_mgr.has_method("elapsed") else 0.0)
 	# 주술사 — 활성 엔트리 + 싱글톤(동시 1마리) 굴림.
 	if rc.has_method("sorcerer_entry_active_at") and bool(rc.call("sorcerer_entry_active_at", t)):
-		if sorcerer_enemy_scene != null and _wave_alive_sorcerer_count() < 1 and randf() < 0.05:
+		var sc: float = 0.05
+		if rc.has_method("sorcerer_chance_at"):
+			sc = float(rc.call("sorcerer_chance_at", t, 0.05))
+		if sorcerer_enemy_scene != null and _wave_alive_sorcerer_count() < 1 and randf() < sc:
 			_spawn_mob(sorcerer_enemy_scene)
 			return
 	var key: String = ""
