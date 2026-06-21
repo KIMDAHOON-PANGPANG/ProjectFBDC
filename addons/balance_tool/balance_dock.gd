@@ -326,20 +326,20 @@ const _SIM_HARD_CAP := 120
 # 웨이브 랩 단순 비율/이벤트 필드 — [필드명, 한글라벨, 한글툴팁, 타입]
 const WAVE_FIELDS := [
 	["@", "─ 챕터 이벤트 ─"],
-	["elite_time", "엘리트 등장(초)", "엘리트 3종 1회 스폰 시각.", "f"],
-	["boss_time", "보스 등장(초) = 챕터 길이", "보스 1회 스폰 시각. 챕터 종료 시점.", "f"],
+	["elite_time", "엘리트 출현 시각(초)", "엘리트 3종 1회 스폰 시각.", "f"],
+	["boss_time", "보스 출현 시각(초) = 챕터 길이", "보스 1회 스폰 시각. 챕터 종료 시점.", "f"],
 	["@", "─ 스폰 페이싱 ─"],
 	["tick_period", "틱 주기(초)", "WaveManager 가 결손을 재평가하는 주기.", "f"],
 	["max_spawn_per_tick", "틱당 최대 스폰", "한 틱에 추가되는 최대 마릿수(시각적 분산).", "i"],
-	["@", "─ 원거리 ─"],
-	["ranged_ratio", "원거리 비율", "드립 스폰이 원거리일 확률(0~1).", "f"],
-	["ranged_start_time", "원거리 시작(초)", "원거리가 등장하기 시작하는 경과 시간.", "f"],
+	["@", "─ 궁수(원거리) ─"],
+	["ranged_ratio", "궁수 비율(0~1)", "드립 스폰이 궁수일 확률. 롤에서 ranged 가 먼저 차감됨.", "f"],
+	["ranged_start_time", "궁수 등장 시각(초)", "궁수가 등장하기 시작하는 경과 시간(이전에는 0으로 취급).", "f"],
 	["@", "─ 슬래머 ─"],
-	["slammer_ratio", "슬래머 비율", "근접 슬롯 중 슬래머 비율(0~1).", "f"],
-	["slammer_start_time", "슬래머 시작(초)", "슬래머 등장 시작 경과 시간.", "f"],
-	["@", "─ 리퍼 ─"],
-	["leaper_ratio", "리퍼 비율", "리퍼(도약 몹) 드립 스폰 확률(0~1).", "f"],
-	["leaper_start_time", "리퍼 시작(초)", "리퍼 등장 시작 경과 시간.", "f"],
+	["slammer_ratio", "슬래머 비율(근접슬롯 중)", "근접 슬롯 중 슬래머가 선택될 비율(0~1). 근접 비율 내부 분배.", "f"],
+	["slammer_start_time", "슬래머 등장 시각(초)", "슬래머 등장 시작 경과 시간(이전에는 0으로 취급).", "f"],
+	["@", "─ 리퍼(도약) ─"],
+	["leaper_ratio", "리퍼 비율(0~1)", "드립 스폰이 리퍼일 확률. 동시 3마리 캡 있음.", "f"],
+	["leaper_start_time", "리퍼 등장 시각(초)", "리퍼 등장 시작 경과 시간(이전에는 0으로 취급).", "f"],
 ]
 
 var _wave_curve = null
@@ -350,6 +350,12 @@ var _wave_chart: Control = null
 var _wave_metrics: Label = null
 var _wave_warnings: Label = null
 var _wave_clear_rate: float = 2.0
+# 시각 스크럽 — 미리보기 전용(저장 안 함).
+var _wave_scrub_t: float = 0.0
+var _wave_compo: Label = null
+var _wave_compo_chart: Control = null
+var _wave_scrub_slider: HSlider = null
+var _wave_scrub_spin: SpinBox = null
 
 # ── 탭4 레벨업 랩 멤버 변수 ──
 const _LVL_MAX_LEVEL := 30
@@ -396,6 +402,7 @@ func _build_wave_tab() -> Control:
 	vb.add_child(add_btn)
 
 	# 비율 / 이벤트 단순 필드.
+	vb.add_child(_note("근접 잡몹은 베이스 — 항상 나머지 슬롯을 채움(별도 게이트/비율 없음). 주술사는 싱글톤(동시 1, 5% 굴림)."))
 	_wave_fields_box = VBoxContainer.new()
 	_wave_fields_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vb.add_child(_wave_fields_box)
@@ -422,12 +429,52 @@ func _build_wave_tab() -> Control:
 	hb.add_child(csb)
 	vb.add_child(hb)
 
-	# 차트.
+	# 시각 스크럽 컨트롤.
+	vb.add_child(_section("─ 시각 스크럽 (미리보기) ─"))
+	var scrub_hb := HBoxContainer.new()
+	scrub_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var scrub_lbl := Label.new()
+	scrub_lbl.text = "현재 시각(초)"
+	scrub_lbl.tooltip_text = "이 시각의 몬스터 구성 미리보기. .tres 저장 안 함."
+	scrub_lbl.custom_minimum_size = Vector2(100, 0)
+	scrub_hb.add_child(scrub_lbl)
+	_wave_scrub_slider = HSlider.new()
+	_wave_scrub_slider.min_value = 0.0
+	_wave_scrub_slider.max_value = 300.0
+	_wave_scrub_slider.step = 1.0
+	_wave_scrub_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_wave_scrub_slider.value = _wave_scrub_t
+	_wave_scrub_slider.value_changed.connect(func(v): _on_wave_scrub(v, true))
+	scrub_hb.add_child(_wave_scrub_slider)
+	_wave_scrub_spin = SpinBox.new()
+	_wave_scrub_spin.min_value = 0.0
+	_wave_scrub_spin.max_value = 99999.0
+	_wave_scrub_spin.step = 1.0
+	_wave_scrub_spin.custom_minimum_size = Vector2(80, 0)
+	_wave_scrub_spin.value = _wave_scrub_t
+	_wave_scrub_spin.value_changed.connect(func(v): _on_wave_scrub(v, false))
+	scrub_hb.add_child(_wave_scrub_spin)
+	vb.add_child(scrub_hb)
+
+	# 구성 readout 라벨.
+	_wave_compo = Label.new()
+	_wave_compo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_wave_compo.add_theme_color_override("font_color", Color(0.8, 0.95, 0.8))
+	vb.add_child(_wave_compo)
+
+	# 기존 스폰비율/투영생존 차트.
 	_wave_chart = Control.new()
 	_wave_chart.custom_minimum_size = Vector2(320, 220)
 	_wave_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_wave_chart.draw.connect(_draw_wave_chart)
 	vb.add_child(_wave_chart)
+
+	# 종류별 등장 타임라인 차트.
+	_wave_compo_chart = Control.new()
+	_wave_compo_chart.custom_minimum_size = Vector2(320, 90)
+	_wave_compo_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_wave_compo_chart.draw.connect(_draw_wave_compo_chart)
+	vb.add_child(_wave_compo_chart)
 
 	_wave_metrics = Label.new()
 	_wave_metrics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -452,6 +499,15 @@ func _load_wave_chapter(idx: int) -> void:
 	_wave_curve = load(_wave_path)
 	_rebuild_wave_points()
 	_rebuild_wave_fields()
+	# 스크럽 위젯 범위 갱신 — 위젯이 이미 생성된 경우에만.
+	var dur := _sim_duration()
+	if _wave_scrub_slider != null:
+		_wave_scrub_slider.max_value = dur
+		_wave_scrub_t = clampf(_wave_scrub_t, 0.0, dur)
+		_wave_scrub_slider.set_value_no_signal(_wave_scrub_t)
+	if _wave_scrub_spin != null:
+		_wave_scrub_spin.max_value = dur
+		_wave_scrub_spin.set_value_no_signal(_wave_scrub_t)
 	_refresh_wave_sim()
 
 
@@ -676,7 +732,98 @@ func _sim_duration() -> float:
 func _refresh_wave_sim() -> void:
 	if _wave_chart != null:
 		_wave_chart.queue_redraw()
+	if _wave_compo_chart != null:
+		_wave_compo_chart.queue_redraw()
 	_update_wave_metrics()
+	_update_wave_compo_readout()
+
+
+# ── 스크럽 콜백 ─────────────────────────────────────────────────────────────
+
+func _on_wave_scrub(v: float, from_slider: bool) -> void:
+	_wave_scrub_t = v
+	if from_slider:
+		if _wave_scrub_spin != null:
+			_wave_scrub_spin.set_value_no_signal(v)
+	else:
+		if _wave_scrub_slider != null:
+			_wave_scrub_slider.set_value_no_signal(v)
+	if _wave_chart != null:
+		_wave_chart.queue_redraw()
+	if _wave_compo_chart != null:
+		_wave_compo_chart.queue_redraw()
+	_update_wave_compo_readout()
+
+
+# ── 구성 시뮬 헬퍼 ────────────────────────────────────────────────────────────
+
+# WaveCurve.lv_for_elapsed 복제.
+func _sim_lv_at(t: float) -> int:
+	if _wave_curve == null:
+		return 1
+	var idx := _sim_index_for_elapsed(t)
+	var lvs: PackedInt32Array = _wave_curve.curve_lvs
+	if idx >= lvs.size():
+		return 1
+	return lvs[idx]
+
+
+# t 시점 몬스터 구성 시뮬 — Main._request_spawn 종류선택 수식 복제.
+# 반환: {melee, ranged, slammer, leaper, sorc, rate, lv}
+# melee/ranged/slammer/leaper 는 비주술사 풀 기준(합=1).
+# 롤 순서: ranged 먼저 차감 → leaper(1-rr 내) → slammer/melee(나머지 내부 분배).
+func _sim_composition(t: float) -> Dictionary:
+	if _wave_curve == null:
+		return {}
+	var rr: float = float(_wave_curve.ranged_ratio) if t >= float(_wave_curve.ranged_start_time) else 0.0
+	var lr: float = float(_wave_curve.leaper_ratio) if t >= float(_wave_curve.leaper_start_time) else 0.0
+	var sr: float = float(_wave_curve.slammer_ratio) if t >= float(_wave_curve.slammer_start_time) else 0.0
+	rr = clampf(rr, 0.0, 1.0)
+	# ranged 가 먼저 차감되므로 leaper 는 남은 (1-rr) 내에서만.
+	lr = clampf(lr, 0.0, maxf(0.0, 1.0 - rr))
+	var rest: float = maxf(0.0, 1.0 - rr - lr)
+	var slam: float = rest * clampf(sr, 0.0, 1.0)
+	var mel: float = rest * (1.0 - clampf(sr, 0.0, 1.0))
+	return {
+		"melee": mel,
+		"ranged": rr,
+		"slammer": slam,
+		"leaper": lr,
+		"sorc": 0.05,
+		"rate": _sim_rate_at(t),
+		"lv": _sim_lv_at(t),
+	}
+
+
+# 구성 readout 텍스트 갱신.
+func _update_wave_compo_readout() -> void:
+	if _wave_compo == null:
+		return
+	if _wave_curve == null:
+		_wave_compo.text = ""
+		return
+	var c: Dictionary = _sim_composition(_wave_scrub_t)
+	if c.is_empty():
+		_wave_compo.text = ""
+		return
+	var rate: float = c["rate"]
+	if rate <= 0.001:
+		_wave_compo.text = "t=%.0fs (레벨 %d) · 이 시각 스폰 없음(휴식 구간)" % [_wave_scrub_t, c["lv"]]
+		return
+	var elite_state: String = "출현" if _wave_scrub_t >= float(_wave_curve.elite_time) else "미출현"
+	var boss_state: String = "출현" if _wave_scrub_t >= float(_wave_curve.boss_time) else "미출현(%.0fs 후)" % maxf(0.0, float(_wave_curve.boss_time) - _wave_scrub_t)
+	_wave_compo.text = (
+		"t=%.0fs (레벨 %d) · 스폰비율 %.2f/s\n"
+		+ "근접(베이스) %.0f%% ~%.2f/s · 궁수 %.0f%% ~%.2f/s · 슬래머 %.0f%% ~%.2f/s · 리퍼 %.0f%% ~%.2f/s\n"
+		+ "주술사: 활성(5%% 굴림, 싱글톤) · 엘리트: %s · 보스: %s"
+	) % [
+		_wave_scrub_t, c["lv"], rate,
+		c["melee"] * 100.0, c["melee"] * rate,
+		c["ranged"] * 100.0, c["ranged"] * rate,
+		c["slammer"] * 100.0, c["slammer"] * rate,
+		c["leaper"] * 100.0, c["leaper"] * rate,
+		elite_state, boss_state,
+	]
 
 
 # ── 차트 ────────────────────────────────────────────────────────────────────
@@ -754,6 +901,101 @@ func _draw_wave_chart() -> void:
 	if font != null:
 		ctrl.draw_string(font, Vector2(2, pad_t + 8), "%.1f" % rate_peak, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(0.4, 1.0, 0.5))
 		ctrl.draw_string(font, Vector2(2, pad_t + 20), "cap%d" % _SIM_HARD_CAP, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(0.35, 0.6, 1.0))
+
+	# 스크럽 세로선(NOW).
+	var now_x: float = pad_l + (_wave_scrub_t / dur) * w
+	now_x = clampf(now_x, pad_l, pad_l + w)
+	ctrl.draw_line(Vector2(now_x, pad_t), Vector2(now_x, pad_t + h), Color(1.0, 1.0, 1.0, 0.9), 1.5)
+	if font != null:
+		ctrl.draw_string(font, Vector2(now_x + 2, pad_t + 9), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(1.0, 1.0, 1.0, 0.9))
+
+
+func _draw_wave_compo_chart() -> void:
+	var ctrl := _wave_compo_chart
+	if ctrl == null or _wave_curve == null:
+		return
+	var sz := ctrl.size
+	var pad_l := 36.0
+	var pad_b := 18.0
+	var pad_t := 8.0
+	var pad_r := 8.0
+	var w := sz.x - pad_l - pad_r
+	var h := sz.y - pad_t - pad_b
+	if w <= 10.0 or h <= 10.0:
+		return
+	var dur := _sim_duration()
+	var font := ctrl.get_theme_default_font()
+	var fsz := 10
+
+	# 배경.
+	ctrl.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.07, 0.08, 0.10))
+
+	# 격자(1분 간격).
+	var grid_col := Color(0.2, 0.22, 0.28)
+	var minute := 0
+	while float(minute * 60) <= dur:
+		var gx: float = pad_l + (float(minute * 60) / dur) * w
+		ctrl.draw_line(Vector2(gx, pad_t), Vector2(gx, pad_t + h), grid_col, 1.0)
+		if font != null:
+			ctrl.draw_string(font, Vector2(gx + 2, sz.y - 4), "%dm" % minute, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(0.5, 0.55, 0.65))
+		minute += 1
+
+	# 종류별 색 스택 밴드 — 시간축 dt=1.0 로 훑음.
+	# 색: 근접=회색 / 궁수=하늘 / 슬래머=주황 / 리퍼=보라
+	var col_melee := Color(0.6, 0.6, 0.65)
+	var col_ranged := Color(0.5, 0.8, 1.0)
+	var col_slammer := Color(0.95, 0.55, 0.2)
+	var col_leaper := Color(0.7, 0.5, 0.95)
+	var dt: float = 1.0
+	var t: float = 0.0
+	while t <= dur:
+		var c: Dictionary = _sim_composition(t)
+		if not c.is_empty():
+			var x0: float = pad_l + (t / dur) * w
+			var x1: float = pad_l + (minf(t + dt, dur) / dur) * w
+			var bw: float = maxf(x1 - x0, 1.0)
+			# 스택 쌓기 — 아래부터: 근접 / 궁수 / 슬래머 / 리퍼.
+			var y_bottom: float = pad_t + h
+			var stacks := [
+				[c["melee"], col_melee],
+				[c["ranged"], col_ranged],
+				[c["slammer"], col_slammer],
+				[c["leaper"], col_leaper],
+			]
+			for stack in stacks:
+				var frac: float = float(stack[0])
+				var band_h: float = frac * h
+				if band_h > 0.5:
+					ctrl.draw_rect(Rect2(x0, y_bottom - band_h, bw, band_h), stack[1] as Color)
+					y_bottom -= band_h
+		t += dt
+
+	# 이벤트 마커(엘리트·보스).
+	_draw_marker(ctrl, _wave_curve.elite_time, dur, pad_l, pad_t, w, h, Color(1.0, 0.6, 0.1), false, "E")
+	_draw_marker(ctrl, _wave_curve.boss_time, dur, pad_l, pad_t, w, h, Color(0.7, 0.4, 1.0), false, "B")
+
+	# 종류 등장 시작 마커(점선).
+	_draw_marker(ctrl, _wave_curve.ranged_start_time, dur, pad_l, pad_t, w, h, col_ranged, true, "R")
+	_draw_marker(ctrl, _wave_curve.slammer_start_time, dur, pad_l, pad_t, w, h, col_slammer, true, "S")
+	_draw_marker(ctrl, _wave_curve.leaper_start_time, dur, pad_l, pad_t, w, h, col_leaper, true, "L")
+
+	# 축.
+	ctrl.draw_line(Vector2(pad_l, pad_t), Vector2(pad_l, pad_t + h), Color(0.4, 0.4, 0.5), 1.0)
+	ctrl.draw_line(Vector2(pad_l, pad_t + h), Vector2(pad_l + w, pad_t + h), Color(0.4, 0.4, 0.5), 1.0)
+
+	# 범례 (우상단).
+	if font != null:
+		var lx: float = pad_l + 4.0
+		var ly: float = pad_t + 9.0
+		ctrl.draw_string(font, Vector2(lx, ly), "■근접", HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col_melee)
+		ctrl.draw_string(font, Vector2(lx + 36, ly), "■궁수", HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col_ranged)
+		ctrl.draw_string(font, Vector2(lx + 72, ly), "■슬래머", HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col_slammer)
+		ctrl.draw_string(font, Vector2(lx + 116, ly), "■리퍼", HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col_leaper)
+
+	# 스크럽 세로선(NOW).
+	var now_x: float = pad_l + (_wave_scrub_t / dur) * w
+	now_x = clampf(now_x, pad_l, pad_l + w)
+	ctrl.draw_line(Vector2(now_x, pad_t), Vector2(now_x, pad_t + h), Color(1.0, 1.0, 1.0, 0.9), 1.5)
 
 
 func _draw_series(ctrl: Control, pts: PackedVector2Array, dur: float, yscale: float, pad_l: float, pad_t: float, w: float, h: float, col: Color, width: float) -> void:
@@ -865,6 +1107,27 @@ func _update_wave_metrics() -> void:
 	# 6) 투영 생존 HARD_CAP 도달(과밀).
 	if int(round(alive_peak)) >= _SIM_HARD_CAP:
 		warns.append("⚠ 투영 동시생존이 HARD_CAP(%d) 도달 — 과밀 / 처치율 부족" % _SIM_HARD_CAP)
+	# 7~11) 몬스터 종류별 미등장 진단.
+	if float(_wave_curve.ranged_start_time) > dur:
+		warns.append("⚠ 궁수가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.ranged_start_time), dur])
+	elif float(_wave_curve.ranged_ratio) <= 0.0:
+		warns.append("⚠ 궁수 비율 0 — 전혀 안 나옴")
+	if float(_wave_curve.leaper_start_time) > dur:
+		warns.append("⚠ 리퍼가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.leaper_start_time), dur])
+	elif float(_wave_curve.leaper_ratio) <= 0.0:
+		warns.append("⚠ 리퍼 비율 0 — 전혀 안 나옴")
+	if float(_wave_curve.slammer_start_time) > dur:
+		warns.append("⚠ 슬래머가 챕터 내 등장 안 함(등장시각 %.0fs > 챕터 %.0fs)" % [float(_wave_curve.slammer_start_time), dur])
+	elif float(_wave_curve.slammer_ratio) <= 0.0:
+		warns.append("⚠ 슬래머 비율 0 — 전혀 안 나옴")
+	# 곡선 스폰비율값 전부 0 — 잡몹 미스폰.
+	var all_zero: bool = true
+	for tgt in _wave_curve.curve_targets:
+		if tgt > 0:
+			all_zero = false
+			break
+	if all_zero:
+		warns.append("⚠ 곡선 스폰비율값이 전부 0 — 잡몹 미스폰")
 
 	_wave_warnings.text = "\n".join(PackedStringArray(warns)) if warns.size() > 0 else "✔ 경고 없음"
 
