@@ -134,6 +134,9 @@ const MON_FIELDS := [
 var _mon_table = null
 var _mon_index: int = 0
 var _mon_fields_box: VBoxContainer
+var _mon_preview_icon: TextureRect = null
+var _mon_preview_swatch: ColorRect = null
+var _mon_preview_label: Label = null
 var _built: bool = false
 
 
@@ -210,6 +213,21 @@ func _build_monster_tab() -> Control:
 		opt.add_item("#%d  %s" % [m.id, m.display_name], i)
 	opt.item_selected.connect(_on_monster_selected)
 	vb.add_child(opt)
+	# 프리뷰 행 — 선택 몬스터 스프라이트(틴트 아이콘) + 컬러 스와치 + 기본 정보.
+	var prev := HBoxContainer.new()
+	prev.add_theme_constant_override("separation", 10)
+	_mon_preview_icon = TextureRect.new()
+	_mon_preview_icon.custom_minimum_size = Vector2(64, 64)
+	_mon_preview_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_mon_preview_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	prev.add_child(_mon_preview_icon)
+	_mon_preview_swatch = ColorRect.new()
+	_mon_preview_swatch.custom_minimum_size = Vector2(40, 64)
+	prev.add_child(_mon_preview_swatch)
+	_mon_preview_label = Label.new()
+	_mon_preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	prev.add_child(_mon_preview_label)
+	vb.add_child(prev)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -250,6 +268,28 @@ func _rebuild_monster_fields(idx: int) -> void:
 				_mon_fields_box.add_child(_section(spec[1]))
 		elif section_visible and spec[0] in m:
 			_mon_fields_box.add_child(_field_row(m, spec, saver))
+	_update_mon_preview(m)
+
+
+func _update_mon_preview(m) -> void:
+	if _mon_preview_icon == null:
+		return
+	var col := Color(0.82, 0.82, 0.85)
+	var cs: String = str(m.color) if ("color" in m) else ""
+	if cs != "" and Color.html_is_valid(cs):
+		col = Color.html(cs)
+	var ic: String = str(m.icon) if ("icon" in m) else ""
+	if ic != "" and ResourceLoader.exists(ic):
+		_mon_preview_icon.texture = load(ic)
+	else:
+		_mon_preview_icon.texture = null
+	_mon_preview_icon.modulate = col
+	if _mon_preview_swatch != null:
+		_mon_preview_swatch.color = col
+	if _mon_preview_label != null:
+		var id_str: String = str(int(m.id)) if ("id" in m) else "?"
+		var nm_str: String = str(m.display_name) if ("display_name" in m) else ""
+		_mon_preview_label.text = "#%s  %s\n%s" % [id_str, nm_str, cs]
 
 
 ## 한 줄: 한글 라벨(툴팁) + 편집기(SpinBox/LineEdit). 값 변경 → set + 저장 콜백.

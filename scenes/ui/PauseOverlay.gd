@@ -9,7 +9,7 @@ extends CanvasLayer
 ## (리로드된 Main 이 _apply_wave_preset 로 GameConfig.wave_preset 을 적용).
 
 const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
-const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
+const _SettingsPanelScene := preload("res://scenes/ui/SettingsPanel.tscn")
 
 var _dim: ColorRect
 var _menu: VBoxContainer
@@ -18,10 +18,7 @@ var _zoom_btn: Button
 var _contact_btn: Button
 var _resource_btn: Button
 var _aim_btn: Button
-## 몬스터 리스트(검색 에디터) 패널 + 검색창 + 필터용 행 캐시.
-var _monsters: VBoxContainer
-var _mon_search: LineEdit
-var _mon_rows: Array = []
+var _settings_panel
 
 
 func _ready() -> void:
@@ -48,17 +45,14 @@ func _pause() -> void:
 	visible = true
 	_menu.visible = true
 	_tools.visible = false
-	_monsters.visible = false
 
 func _resume() -> void:
 	visible = false
 	_tools.visible = false
-	_monsters.visible = false
 	get_tree().paused = false
 
 func _open_tools() -> void:
 	_menu.visible = false
-	_monsters.visible = false
 	_tools.visible = true
 	_refresh_toggles()
 
@@ -66,14 +60,17 @@ func _close_tools() -> void:
 	_tools.visible = false
 	_menu.visible = true
 
-func _open_monsters() -> void:
-	_menu.visible = false
-	_tools.visible = false
-	_monsters.visible = true
+func _open_settings() -> void:
+	if _settings_panel != null and _settings_panel.has_method("open"):
+		_settings_panel.call("open")
 
-func _close_monsters() -> void:
-	_monsters.visible = false
-	_menu.visible = true
+func _on_main_menu() -> void:
+	get_tree().paused = false
+	var st = get_node_or_null("/root/SceneTransition")
+	if st != null and st.has_method("change_scene"):
+		st.call("change_scene", "res://scenes/main/OutGame.tscn")
+	else:
+		get_tree().change_scene_to_file("res://scenes/main/OutGame.tscn")
 
 
 ## 모드 선택 = 컨트롤(밀리/일섬) + 웨이브 구성을 GameConfig 에 저장 후 씬 리로드(재시작).
@@ -132,7 +129,8 @@ func _build() -> void:
 	_menu.add_child(_title("⏸  일시정지"))
 	_menu.add_child(_info("모드: " + _mode_name()))
 	_menu.add_child(_btn("툴 에디터", _open_tools))
-	_menu.add_child(_btn("몬스터 리스트", _open_monsters))
+	_menu.add_child(_btn("설정", _open_settings))
+	_menu.add_child(_btn("메인 메뉴로", _on_main_menu))
 	_menu.add_child(_btn("계속하기 (ESC)", _resume))
 
 	# ── 툴 에디터 팝업(좌상단) — 웨이브 프리셋 + 옵션 토글 ──
@@ -160,99 +158,8 @@ func _build() -> void:
 	_refresh_toggles()
 	_tools.visible = false
 
-	_build_monsters()
-
-
-## 몬스터 리스트 — enemy.csv 의 display_name/concept/color/icon 을 읽어 검색 가능한 카드 목록.
-## 좌상단 패널 · 검색창(이름/컨셉 필터) · 스크롤 카드(틴트 아이콘 + 이름 + 컨셉 + 컬러 스와치).
-func _build_monsters() -> void:
-	_monsters = VBoxContainer.new()
-	_monsters.add_theme_constant_override("separation", 8)
-	_monsters.position = Vector2(24, 70)
-	_monsters.custom_minimum_size = Vector2(470, 0)
-	add_child(_monsters)
-	_monsters.add_child(_title("── 몬스터 리스트 (검색) ──"))
-	_mon_search = LineEdit.new()
-	_mon_search.placeholder_text = "이름 / 컨셉 검색…"
-	_mon_search.custom_minimum_size = Vector2(450, 34)
-	_mon_search.add_theme_font_size_override("font_size", 15)
-	_mon_search.text_changed.connect(_filter_monsters)
-	_monsters.add_child(_mon_search)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(450, 380)
-	_monsters.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 6)
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(list)
-	for row in _CombatDataScript.all_enemy_rows():
-		var nm: String = String(row.get("display_name", "")).strip_edges()
-		if nm == "":
-			continue
-		var concept: String = String(row.get("concept", ""))
-		var card := _make_monster_card(String(row.get("id", "")), nm, concept,
-			String(row.get("color", "")), String(row.get("icon", "")))
-		list.add_child(card)
-		_mon_rows.append({"node": card, "q": (nm + " " + concept).to_lower()})
-	_monsters.add_child(_btn("닫기", _close_monsters))
-	_monsters.visible = false
-
-
-func _make_monster_card(id_s: String, name_s: String, concept_s: String, color_s: String, icon_s: String) -> Control:
-	var col := Color(0.82, 0.82, 0.85)
-	if color_s != "" and Color.html_is_valid(color_s):
-		col = Color.html(color_s)
-	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.12, 0.12, 0.16, 0.96)
-	sb.set_corner_radius_all(6)
-	sb.set_content_margin_all(8)
-	panel.add_theme_stylebox_override("panel", sb)
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 10)
-	panel.add_child(hb)
-	# 아이콘(틴트 = 인게임 컬러).
-	var tex := TextureRect.new()
-	tex.custom_minimum_size = Vector2(52, 52)
-	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	if icon_s != "" and ResourceLoader.exists(icon_s):
-		tex.texture = load(icon_s)
-	tex.modulate = col
-	hb.add_child(tex)
-	# 이름 + 컨셉.
-	var vb := VBoxContainer.new()
-	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var nm := Label.new()
-	nm.text = "#%s  %s" % [id_s, name_s]
-	nm.add_theme_color_override("font_color", col)
-	nm.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	nm.add_theme_constant_override("outline_size", 4)
-	nm.add_theme_font_size_override("font_size", 17)
-	vb.add_child(nm)
-	var cc := Label.new()
-	cc.text = concept_s
-	cc.add_theme_color_override("font_color", Color(0.82, 0.85, 0.92))
-	cc.add_theme_font_size_override("font_size", 12)
-	cc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	cc.custom_minimum_size = Vector2(330, 0)
-	vb.add_child(cc)
-	hb.add_child(vb)
-	# 컬러 스와치.
-	var sw := ColorRect.new()
-	sw.color = col
-	sw.custom_minimum_size = Vector2(16, 0)
-	sw.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hb.add_child(sw)
-	return panel
-
-
-func _filter_monsters(query: String) -> void:
-	var q: String = query.to_lower().strip_edges()
-	for r in _mon_rows:
-		var n = r["node"]
-		if is_instance_valid(n):
-			n.visible = q == "" or (String(r["q"]).find(q) >= 0)
+	_settings_panel = _SettingsPanelScene.instantiate()
+	add_child(_settings_panel)
 
 
 ## 현재 모드 이름 — 컨트롤(밀리/일섬) + 웨이브 구성 조합.

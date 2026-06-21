@@ -14,9 +14,11 @@ const _BUILD_CONFIG := "res://resources/build_config.tres"
 const _MAIN_PATH := "res://scenes/main/Main.tscn"
 const _META_MENU_PATH := "res://scenes/ui/MetaMenu.tscn"
 const _CARD_UNLOCK_PATH := "res://scenes/ui/CardUnlock.tscn"
+const _SettingsPanelScene := preload("res://scenes/ui/SettingsPanel.tscn")
 
 var _souls_label: Label
 var _best_label: Label
+var _settings_panel
 
 
 func _ready() -> void:
@@ -88,6 +90,7 @@ func _build() -> void:
 	if _is_release_build():
 		# 빌드 EXE — 게임 시작 단일 진입(빌드 매니저가 구운 모드/토글 적용). 사망 화면 "이어서 하기"는 유지.
 		center.add_child(_make_button("게임 시작", _on_release_start))
+		center.add_child(_make_button("설정", _on_settings_pressed))
 		center.add_child(_make_button("종료", _on_quit_pressed))
 	else:
 		# 에디터/개발 — 전체 메뉴.
@@ -95,6 +98,7 @@ func _build() -> void:
 		center.add_child(_make_button("밸런싱 아레나 (F1 패널)", _on_arena_pressed))
 		center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
 		center.add_child(_make_button("카드 해금", _on_card_unlock_pressed))
+		center.add_child(_make_button("설정", _on_settings_pressed))
 		center.add_child(_make_button("종료", _on_quit_pressed))
 
 	_refresh_labels()
@@ -190,6 +194,14 @@ func _goto(path: String) -> void:
 		st.call("change_scene", path)
 	else:
 		get_tree().change_scene_to_file(path)
+
+
+func _on_settings_pressed() -> void:
+	if _settings_panel == null:
+		_settings_panel = _SettingsPanelScene.instantiate()
+		add_child(_settings_panel)
+	if _settings_panel.has_method("open"):
+		_settings_panel.call("open")
 
 
 func _on_quit_pressed() -> void:
