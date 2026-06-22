@@ -7,7 +7,7 @@ extends Node3D
 ##
 ## top_level 추적 + 노드 단위 빌보드. Player.tscn 자식으로 넣으면 Main/Testplay 자동 반영.
 
-@export var follow_offset: Vector3 = Vector3(0, 2.42, 0)  # 회피 스택바(2.16) 위
+@export var follow_offset: Vector3 = Vector3(0, 2.0, 0)  # 머리 위 — 캐릭터 쪽으로 내림(요청)
 @export var bar_width: float = 0.66
 @export var bar_height: float = 0.13
 @export var bg_color: Color = Color(0.08, 0.06, 0.05, 0.85)
@@ -53,6 +53,13 @@ func _update() -> void:
 	if _follow.has_method("get_heat_frac"):
 		frac = clamp(float(_follow.call("get_heat_frac")), 0.0, 1.0)
 	var over: bool = _follow.has_method("is_overheated") and bool(_follow.call("is_overheated"))
+	# 탈진 중엔 회색 칸이 잔여 탈진시간 비례로 줄어든다(하단 PlayerHud 열기 스택과 동기).
+	var ogray: int = PIPS
+	if over:
+		var ofrac: float = 1.0
+		if _follow.has_method("get_overheat_frac"):
+			ofrac = clamp(float(_follow.call("get_overheat_frac")), 0.0, 1.0)
+		ogray = int(ceil(ofrac * float(PIPS)))
 	# 켜진 칸 수 = ceil(frac × 5). 첫 일섬(10%)에도 1칸이 켜지도록 ceil.
 	var lit: int = int(ceil(frac * float(PIPS)))
 	for i in PIPS:
@@ -60,7 +67,7 @@ func _update() -> void:
 		if mat == null:
 			continue
 		if over:
-			mat.albedo_color = overheat_color
+			mat.albedo_color = overheat_color if i < ogray else empty_color
 		elif i < lit:
 			mat.albedo_color = cool_color.lerp(hot_color, float(i + 1) / float(PIPS))
 		else:
