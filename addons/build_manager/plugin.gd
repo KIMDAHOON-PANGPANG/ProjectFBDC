@@ -21,6 +21,8 @@ var _log_chk: CheckBox
 var _overheat_slow_chk: CheckBox
 var _name_edit: LineEdit
 var _status: Label
+var _build_btn: Button
+var _progress: ProgressBar
 
 
 func _enter_tree() -> void:
@@ -37,7 +39,7 @@ func _exit_tree() -> void:
 func _open_window() -> void:
 	if _win != null and is_instance_valid(_win):
 		_load_into_ui()
-		_win.popup_centered(Vector2i(430, 500))
+		_win.popup_centered(Vector2i(430, 540))
 		return
 	var base: Control = EditorInterface.get_base_control()
 	if base == null:
@@ -45,7 +47,7 @@ func _open_window() -> void:
 		return
 	_win = Window.new()
 	_win.title = "빌드 매니저 — 모드/토글 + EXE 빌드"
-	_win.min_size = Vector2i(390, 440)
+	_win.min_size = Vector2i(390, 480)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
@@ -57,7 +59,7 @@ func _open_window() -> void:
 	base.add_child(_win)
 	_win.close_requested.connect(_win.hide)
 	_load_into_ui()
-	_win.popup_centered(Vector2i(430, 500))
+	_win.popup_centered(Vector2i(430, 540))
 
 
 func _build_ui(parent: Control) -> void:
@@ -116,11 +118,19 @@ func _build_ui(parent: Control) -> void:
 	save_btn.pressed.connect(_save_config)
 	vb.add_child(save_btn)
 
-	var build_btn := Button.new()
-	build_btn.text = "▶ 빌드 + ZIP (설정 저장 + 익스포트 + 압축)"
-	build_btn.add_theme_color_override("font_color", Color(0.6, 1, 0.6))
-	build_btn.pressed.connect(_do_build)
-	vb.add_child(build_btn)
+	_build_btn = Button.new()
+	_build_btn.text = "▶ 빌드 + ZIP (설정 저장 + 익스포트 + 압축)"
+	_build_btn.add_theme_color_override("font_color", Color(0.6, 1, 0.6))
+	_build_btn.pressed.connect(_do_build)
+	vb.add_child(_build_btn)
+
+	_progress = ProgressBar.new()
+	_progress.min_value = 0.0
+	_progress.max_value = 100.0
+	_progress.value = 0.0
+	_progress.custom_minimum_size = Vector2(0, 18)
+	_progress.visible = false
+	vb.add_child(_progress)
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -189,21 +199,50 @@ func _save_config() -> void:
 
 func _do_build() -> void:
 	_save_config()
+	if _build_btn != null:
+		_build_btn.disabled = true
+	if _progress != null:
+		_progress.visible = true
+		_progress.value = 0.0
 	if _status != null:
-		_status.text = "빌드 중... 에디터가 수십 초 멈춥니다."
-	await get_tree().process_frame  # 라벨 한 번 렌더한 뒤 블로킹 익스포트.
+		_status.text = "빌드 준비 중..."
+	await get_tree().process_frame
 	var proj := ProjectSettings.globalize_path("res://")
 	var win_dir := ProjectSettings.globalize_path(_OUT_EXE).get_base_dir()
 	var out := win_dir.path_join("ProjectFBDC.exe")
 	DirAccess.make_dir_recursive_absolute(win_dir)
+	# 직전 산출물 제거 → 빌드 후 파일 존재 여부로 성공 판정(비블로킹이라 exit code 대신 사용).
+	if FileAccess.file_exists(out):
+		DirAccess.remove_absolute(out)
 	var args := PackedStringArray(["--headless", "--path", proj, "--export-debug", _EXPORT_PRESET, out])
-	var output: Array = []
-	var code := OS.execute(OS.get_executable_path(), args, output, true)
-	if code != 0 or not FileAccess.file_exists(out):
+	# 비블로킹 익스포트 — 별도 프로세스로 띄우고 폴링하며 게이지를 채운다(에디터 안 멈춤).
+	var pid := OS.create_process(OS.get_executable_path(), args)
+	if pid <= 0:
 		if _status != null:
-			_status.text = "❌ 익스포트 실패 (code %d) — 출력 콘솔 확인" % code
-		push_warning("[BuildManager] export(code %d):\n%s" % [code, "\n".join(output)])
+			_status.text = "❌ 익스포트 프로세스 시작 실패"
+		_end_build()
 		return
+	var elapsed := 0.0
+	while OS.is_process_running(pid):
+		await get_tree().create_timer(0.1).timeout
+		elapsed += 0.1
+		# 실제 % 를 못 받으므로 점근 곡선으로 0→90% 채움(완료 시 95→100%).
+		var frac := 1.0 - exp(-elapsed / 14.0)
+		if _progress != null:
+			_progress.value = clampf(frac * 90.0, 0.0, 90.0)
+		if _status != null:
+			_status.text = "빌드 중... (%.0f초) — 에디터는 계속 쓸 수 있음" % elapsed
+	if not FileAccess.file_exists(out):
+		if _status != null:
+			_status.text = "❌ 익스포트 실패 — 출력/익스포트 템플릿 확인"
+		push_warning("[BuildManager] export 실패: %s 가 생성되지 않음" % out)
+		_end_build()
+		return
+	if _progress != null:
+		_progress.value = 95.0
+	if _status != null:
+		_status.text = "ZIP 압축 중..."
+	await get_tree().process_frame
 	# ZIP 압축 — build/<파일명>.zip (내부 폴더 = 파일명).
 	var base := (_name_edit.text.strip_edges() if _name_edit != null else "")
 	if base == "":
@@ -211,6 +250,8 @@ func _do_build() -> void:
 	var build_root := ProjectSettings.globalize_path("res://build/")
 	var zip_path := build_root.path_join(base + ".zip")
 	if _zip_dir(zip_path, win_dir, base):
+		if _progress != null:
+			_progress.value = 100.0
 		if _status != null:
 			_status.text = "✅ 빌드 + ZIP 완료:\n" + zip_path
 		if _name_edit != null:
@@ -220,6 +261,13 @@ func _do_build() -> void:
 		if _status != null:
 			_status.text = "⚠ EXE 는 성공, ZIP 실패:\n" + out
 		OS.shell_open(win_dir)
+	_end_build()
+
+
+## 빌드 종료 — 버튼 재활성(게이지는 마지막 상태 유지, 다음 빌드 때 0 으로 리셋).
+func _end_build() -> void:
+	if _build_btn != null:
+		_build_btn.disabled = false
 
 
 ## build/ 안 기존 *_m<N>.zip 중 최대 N 을 찾아 다음 이름(+1) 제안.

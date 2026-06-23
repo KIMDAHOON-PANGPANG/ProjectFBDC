@@ -19,6 +19,7 @@ extends RefCounted
 ## 보너스 필드에 적용(런마다 리셋). move_speed/max_hp 만 직접(pc.csv·인스턴스 리셋).
 
 const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
+const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 const _CSV := "res://data/upgrades.csv"
 
 ## 로드된 카드 목록(CSV). CardUnlock 등 외부는 all_cards() 로 접근(자동 로드).
@@ -125,6 +126,9 @@ static func _is_available(c: Dictionary, elapsed_sec: float = 0.0, player: Node 
 		return false
 	var id := String(c.get("id", ""))
 	if id.is_empty():
+		return false
+	# 즉발 일섬 모드 — 차징 단계가 없어 '속발(charge_speed)' 카드는 효과가 없다 → 카드 풀에서 제외.
+	if id == "charge_speed" and _GameConfigScript.instant_slash_mode and _GameConfigScript.slash_aim_mode == 1:
 		return false
 	if bool(c.get("unique", false)) and player != null:
 		var owned_prop := "has_%s" % id
