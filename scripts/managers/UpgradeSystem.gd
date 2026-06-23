@@ -43,6 +43,27 @@ static func _clean(s: String) -> String:
 	return s.lstrip("﻿").strip_edges()
 
 
+static func _float_field(d: Dictionary, key: String, fallback: float) -> float:
+	var s := String(d.get(key, ""))
+	if s.is_valid_float():
+		return s.to_float()
+	return fallback
+
+
+static func _int_field(d: Dictionary, key: String, fallback: int) -> int:
+	var s := String(d.get(key, ""))
+	if s.is_valid_int():
+		return s.to_int()
+	return fallback
+
+
+static func _bool_field(d: Dictionary, key: String, fallback: bool) -> bool:
+	var s := String(d.get(key, "")).to_lower()
+	if s == "":
+		return fallback
+	return s == "1" or s == "true" or s == "yes"
+
+
 static func _load_csv() -> Array:
 	var out: Array = []
 	if not FileAccess.file_exists(_CSV):
@@ -75,9 +96,13 @@ static func _load_csv() -> Array:
 			"id": String(d.get("id", "")),
 			"name": String(d.get("name", "?")),
 			"desc": String(d.get("desc", "")),
-			"value": String(d.get("value", "0")).to_float(),
+			"value": _float_field(d, "value", 0.0),
 			"initial": String(d.get("initial", "1")) == "1",
-			"unlock_cost": int(String(d.get("unlock_cost", "0")).to_int()) if String(d.get("unlock_cost", "0")).is_valid_int() else 0,
+			"unlock_cost": _int_field(d, "unlock_cost", 0),
+			"weight": maxf(_float_field(d, "weight", 1.0), 0.0),
+			"rarity": String(d.get("rarity", "normal")),
+			"available_after_sec": maxf(_float_field(d, "available_after_sec", 0.0), 0.0),
+			"unique": _bool_field(d, "unique", false),
 		}
 		if card["id"] == "":
 			continue
@@ -86,23 +111,50 @@ static func _load_csv() -> Array:
 
 
 ## AVAILABLE 풀(initial 또는 언락됨)에서 서로 다른 카드 n 장 뽑기.
-static func draw(n: int) -> Array:
+static func draw(n: int, elapsed_sec: float = 0.0, player: Node = null) -> Array:
 	_ensure_loaded()
 	var pool: Array = []
 	for c in CARDS:
-		if _is_available(c):
+		if _is_available(c, elapsed_sec, player):
 			pool.append(c)
-	pool.shuffle()
-	return pool.slice(0, min(n, pool.size()))
+	return _draw_weighted(pool, n)
 
 
-static func _is_available(c: Dictionary) -> bool:
-	if c.get("initial", false):
-		return true
+static func _is_available(c: Dictionary, elapsed_sec: float = 0.0, player: Node = null) -> bool:
+	if elapsed_sec + 0.001 < float(c.get("available_after_sec", 0.0)):
+		return false
 	var id := String(c.get("id", ""))
 	if id.is_empty():
 		return false
-	return _MetaScript.is_card_unlocked(id)
+	if bool(c.get("unique", false)) and player != null:
+		var owned_prop := "has_%s" % id
+		if owned_prop in player and bool(player.get(owned_prop)):
+			return false
+	return bool(c.get("initial", false)) or _MetaScript.is_card_unlocked(id)
+
+
+static func _draw_weighted(pool: Array, n: int) -> Array:
+	var available := pool.duplicate()
+	var out: Array = []
+	while out.size() < n and not available.is_empty():
+		var total_weight := 0.0
+		for c in available:
+			total_weight += maxf(float(c.get("weight", 1.0)), 0.0)
+		if total_weight <= 0.0:
+			available.shuffle()
+			out.append(available.pop_back())
+			continue
+		var pick := randf() * total_weight
+		var acc := 0.0
+		var picked_idx := available.size() - 1
+		for i in range(available.size()):
+			acc += maxf(float(available[i].get("weight", 1.0)), 0.0)
+			if pick <= acc:
+				picked_idx = i
+				break
+		out.append(available[picked_idx])
+		available.remove_at(picked_idx)
+	return out
 
 
 static func card_by_id(id: String) -> Variant:
@@ -163,5 +215,10 @@ static func apply(card_id: String, player: Node, _exp_system: Node) -> void:
 			# 경험치 자석 반경 +value(픽당) — ExpGem 이 player.exp_magnet_mult 로 읽음.
 			if "exp_magnet_mult" in player:
 				player.exp_magnet_mult += v
+		"rare_circular_slash":
+			if "has_rare_circular_slash" in player:
+				player.has_rare_circular_slash = true
+			if "rare_circular_slash_radius" in player:
+				player.rare_circular_slash_radius = maxf(v, 0.5)
 		_:
 			push_warning("UpgradeSystem: unknown card id '%s'" % card_id)

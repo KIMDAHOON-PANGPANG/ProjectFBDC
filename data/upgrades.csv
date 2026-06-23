@@ -1,12 +1,13 @@
-id,name,desc,value,initial,unlock_cost
-식별자(영문키),표시 이름,카드 설명,효과 수치(픽당·튜닝),풀 등장(1=항상),언락 비용(혼·미사용시 0)
-move_speed,질풍,이동 속도 +8%,0.08,1,0
-max_hp,강건,최대 HP +1칸,1,1,0
-slash_range,발도 확장,기본 공격 범위 +15%,0.15,1,0
-charge_speed,속발,기본 공격 충전 시간 단축,0.08,1,0
-dodge,회피,회피율 +6%,0.06,1,0
-overheat_reduce,냉각,탈진 시간 -0.3초,0.3,1,0
-heat_delay_reduce,발열 억제,열 감소 시작 -0.4초,0.4,1,0
-attack_power,참격 강화,기본 공격 위력 +1,1,1,0
-evade_refill,보법,회피 스택 충전 속도 +12%,0.12,1,0
-exp_range,경험치 자석,경험치 획득 범위 +30%,0.3,1,0
+id,name,desc,value,initial,unlock_cost,weight,rarity,available_after_sec,unique
+식별자(영문키),표시 이름,카드 설명,효과 수치(픽당·튜닝),풀 등장(1=항상),언락 비용(혼·미사용시 0),등장 가중치,등급,등장 시간(초),1회성
+move_speed,질풍,이동 속도 +8%,0.08,1,0,1,normal,0,0
+max_hp,강건,최대 HP +1칸,1,1,0,1,normal,0,0
+slash_range,발도 확장,기본 공격 범위 +15%,0.15,1,0,1,normal,0,0
+charge_speed,속발,기본 공격 충전 시간 단축,0.08,1,0,1,normal,0,0
+dodge,회피,회피율 +6%,0.06,1,0,1,normal,0,0
+overheat_reduce,냉각,탈진 시간 -0.3초,0.3,1,0,1,normal,0,0
+heat_delay_reduce,발열 억제,열 감소 시작 -0.4초,0.4,1,0,1,normal,0,0
+attack_power,참격 강화,기본 공격 위력 +1,1,1,0,4,normal,0,0
+evade_refill,보법,회피 스택 충전 속도 +12%,0.12,1,0,1,normal,0,0
+exp_range,경험치 자석,경험치 획득 범위 +30%,0.3,1,0,1,normal,0,0
+rare_circular_slash,월영 원무,일섬 후 넓은 원형 범위를 추가로 벱니다,4.6,1,0,1,rare,60,1

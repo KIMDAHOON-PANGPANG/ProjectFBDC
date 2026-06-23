@@ -57,11 +57,11 @@ func _spawn_explosion(pos: Vector3) -> void:
 ## Public entry for non-elite callers (the Echo card) that just want a
 ## CircularSlash dropped at a position. Keeps `circular_slash_scene`
 ## owned by a single node instead of a copy living in Main.
-func spawn_circular_slash(pos: Vector3) -> void:
-	_spawn_circular_slash(pos)
+func spawn_circular_slash(pos: Vector3, radius: float = -1.0, attack_power: int = 1, ring_color: Color = Color(0.8, 0.95, 1.0, 0.85)) -> void:
+	_spawn_circular_slash(pos, radius, attack_power, ring_color)
 
 
-func _spawn_circular_slash(pos: Vector3) -> void:
+func _spawn_circular_slash(pos: Vector3, radius: float = -1.0, attack_power: int = 1, ring_color: Color = Color(0.8, 0.95, 1.0, 0.85)) -> void:
 	if circular_slash_scene == null:
 		return
 	var slash := circular_slash_scene.instantiate() as Node3D
@@ -70,6 +70,8 @@ func _spawn_circular_slash(pos: Vector3) -> void:
 		slash.queue_free()
 		return
 	host.add_child(slash)
+	if slash.has_method("configure"):
+		slash.call("configure", radius, attack_power, ring_color)
 	slash.global_position = pos
 
 

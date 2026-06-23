@@ -265,6 +265,8 @@ func _spawn_player() -> void:
 	# inside Player.gd.
 	if _player.has_signal("slash_finished"):
 		_player.slash_finished.connect(_on_player_slash_finished)
+	if _player.has_signal("rare_circular_slash_requested"):
+		_player.rare_circular_slash_requested.connect(_on_player_rare_circular_slash_requested)
 	# ⏱ Perfect dodge → short self-bullet-time (M3 후속). The service
 	# isn't built until _build_chapter_systems, so we route through a
 	# handler that defers to it (the PC can't dodge before then anyway).
@@ -706,6 +708,12 @@ func _spawn_echo_circular_at_player() -> void:
 		return
 	if _elite_effect_service != null:
 		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
+
+
+func _on_player_rare_circular_slash_requested(pos: Vector3, radius: float, attack_power: int) -> void:
+	if _elite_effect_service == null:
+		return
+	_elite_effect_service.spawn_circular_slash(pos, radius, attack_power, Color(0.72, 0.32, 1.0, 0.82))
 
 func _build_chapter_systems() -> void:
 	# EXP system as a child node so its lifetime tracks the scene.
@@ -1308,7 +1316,7 @@ func _on_leveled_up(_new_level: int) -> void:
 		tree.paused = false
 		return
 	# UpgradeSystem is a RefCounted static class — call statically via preload.
-	var cards: Array = _UpgradeSystemScript.draw(3)
+	var cards: Array = _UpgradeSystemScript.draw(3, _elapsed_seconds(), _player)
 	add_child(screen)
 	if screen.has_method("show_cards"):
 		screen.call("show_cards", cards)

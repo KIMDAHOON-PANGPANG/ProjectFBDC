@@ -16,6 +16,9 @@ signal card_selected(card_id: String)
 @export var card_gap: float = 24.0
 @export var card_bg: Color = Color(0.18, 0.18, 0.22, 1.0)
 @export var card_hover: Color = Color(0.28, 0.32, 0.42, 1.0)
+@export var rare_card_bg: Color = Color(0.25, 0.12, 0.38, 1.0)
+@export var rare_card_hover: Color = Color(0.38, 0.18, 0.56, 1.0)
+@export var rare_card_border: Color = Color(0.78, 0.45, 1.0, 1.0)
 
 var _overlay: ColorRect
 var _cards_root: Control
@@ -51,24 +54,34 @@ func show_cards(cards: Array) -> void:
 
 func _build_card_button(card_dict: Dictionary, index: int) -> Button:
 	var btn := Button.new()
+	var is_rare := String(card_dict.get("rarity", "normal")) == "rare"
 	btn.custom_minimum_size = card_size
 	btn.size = card_size
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	# Multi-line label text → name on top, blank, then desc.
-	btn.text = "%s\n\n%s" % [card_dict.get("name", "?"), card_dict.get("desc", "")]
+	var title := String(card_dict.get("name", "?"))
+	if is_rare:
+		title = "레어\n" + title
+	btn.text = "%s\n\n%s" % [title, card_dict.get("desc", "")]
 	btn.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	btn.add_theme_color_override("font_color_hover", Color(1, 1, 1, 1))
 	btn.add_theme_font_size_override("font_size", 16)
 	var style := StyleBoxFlat.new()
-	style.bg_color = card_bg
+	style.bg_color = rare_card_bg if is_rare else card_bg
+	if is_rare:
+		style.border_color = rare_card_border
+		style.border_width_left = 2
+		style.border_width_right = 2
+		style.border_width_top = 2
+		style.border_width_bottom = 2
 	style.corner_radius_top_left = 8
 	style.corner_radius_top_right = 8
 	style.corner_radius_bottom_left = 8
 	style.corner_radius_bottom_right = 8
 	btn.add_theme_stylebox_override("normal", style)
 	var hover_style := style.duplicate() as StyleBoxFlat
-	hover_style.bg_color = card_hover
+	hover_style.bg_color = rare_card_hover if is_rare else card_hover
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 	btn.pressed.connect(_on_card_pressed.bind(index))

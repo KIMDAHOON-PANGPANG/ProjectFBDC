@@ -7,6 +7,10 @@ extends Resource
 
 ## 게임 모드: 0=근접 밀리 / 1=근접 일섬 / 2=원거리 일섬
 @export var game_mode: int = 1
+## 일섬 자원: 0=열기 / 1=쿨다운
+@export var slash_resource_mode: int = 0
+## 일섬 조작: 0=충전 / 1=즉발
+@export var slash_aim_mode: int = 1
 ## 몬스터 몸 접촉 시 HP 피해.
 @export var contact_damage: bool = false
 ## 일섬 차징 시 카메라 줌(밀리 모드는 보통 OFF).

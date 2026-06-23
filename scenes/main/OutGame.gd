@@ -169,6 +169,8 @@ func _on_release_start() -> void:
 	var mode: int = (int(cfg.game_mode) if cfg != null and "game_mode" in cfg else 1)
 	_GameConfig.instant_slash_mode = (mode != 0)         # 0=밀리 / 1·2=일섬
 	_GameConfig.wave_preset = mode                        # 0/1/2 직접 매핑
+	_GameConfig.slash_resource_mode = (int(cfg.slash_resource_mode) if cfg != null and "slash_resource_mode" in cfg else 0)
+	_GameConfig.slash_aim_mode = (int(cfg.slash_aim_mode) if cfg != null and "slash_aim_mode" in cfg else 1)
 	_GameConfig.contact_damage_enabled = (bool(cfg.contact_damage) if cfg != null and "contact_damage" in cfg else false)
 	_GameConfig.charge_zoom_enabled = (bool(cfg.charge_zoom) if cfg != null and "charge_zoom" in cfg else true)
 	_goto(_MAIN_PATH)

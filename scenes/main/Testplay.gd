@@ -81,8 +81,10 @@ var _bullet_time_service: Node
 var _skill_viewer: CanvasLayer
 ## 현재 런에서 선택한 카드 목록 [{id, name}, ...].
 var _selected_cards: Array = []
+var _arena_start_msec: int = 0
 
 func _ready() -> void:
+	_arena_start_msec = Time.get_ticks_msec()
 	_warm_placeholder_cache()
 	_build_environment()
 	_build_lighting()
@@ -177,6 +179,8 @@ func _spawn_player() -> void:
 	# parity for card testing.
 	if _player.has_signal("slash_finished"):
 		_player.slash_finished.connect(_on_player_slash_finished)
+	if _player.has_signal("rare_circular_slash_requested"):
+		_player.rare_circular_slash_requested.connect(_on_player_rare_circular_slash_requested)
 	# ⏱ Perfect dodge → self-bullet-time (mirror of Main).
 	if _player.has_signal("perfect_dodge"):
 		_player.perfect_dodge.connect(_on_player_perfect_dodge)
@@ -352,6 +356,19 @@ func _spawn_echo_circular_at_player() -> void:
 	if _elite_effect_service != null:
 		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
 
+
+func _on_player_rare_circular_slash_requested(pos: Vector3, radius: float, attack_power: int) -> void:
+	if _elite_effect_service == null:
+		return
+	_elite_effect_service.spawn_circular_slash(pos, radius, attack_power, Color(0.72, 0.32, 1.0, 0.82))
+
+
+func _arena_elapsed_seconds() -> float:
+	if _arena_start_msec <= 0:
+		return 0.0
+	return float(Time.get_ticks_msec() - _arena_start_msec) / 1000.0
+
+
 func _on_leveled_up(_new_level: int) -> void:
 	if _player != null and is_instance_valid(_player) and _player.has_method("grant_iframe"):
 		var dur: float = (_player.data.levelup_iframe if _player.data != null else 1.0)
@@ -368,7 +385,7 @@ func _on_leveled_up(_new_level: int) -> void:
 	if screen == null:
 		tree.paused = false
 		return
-	var cards: Array = _UpgradeSystemScript.draw(3)
+	var cards: Array = _UpgradeSystemScript.draw(3, _arena_elapsed_seconds(), _player)
 	add_child(screen)
 	if screen.has_method("show_cards"):
 		screen.call("show_cards", cards)

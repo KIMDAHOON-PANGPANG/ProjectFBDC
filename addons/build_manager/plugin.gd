@@ -13,6 +13,8 @@ const _MENU := "빌드 매니저 (EXE 빌드)"
 
 var _win: Window
 var _mode_opt: OptionButton
+var _resource_opt: OptionButton
+var _aim_opt: OptionButton
 var _contact_chk: CheckBox
 var _zoom_chk: CheckBox
 var _log_chk: CheckBox
@@ -34,7 +36,7 @@ func _exit_tree() -> void:
 func _open_window() -> void:
 	if _win != null and is_instance_valid(_win):
 		_load_into_ui()
-		_win.popup_centered(Vector2i(430, 430))
+		_win.popup_centered(Vector2i(430, 500))
 		return
 	var base: Control = EditorInterface.get_base_control()
 	if base == null:
@@ -42,7 +44,7 @@ func _open_window() -> void:
 		return
 	_win = Window.new()
 	_win.title = "빌드 매니저 — 모드/토글 + EXE 빌드"
-	_win.min_size = Vector2i(390, 380)
+	_win.min_size = Vector2i(390, 440)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
@@ -54,7 +56,7 @@ func _open_window() -> void:
 	base.add_child(_win)
 	_win.close_requested.connect(_win.hide)
 	_load_into_ui()
-	_win.popup_centered(Vector2i(430, 430))
+	_win.popup_centered(Vector2i(430, 500))
 
 
 func _build_ui(parent: Control) -> void:
@@ -73,6 +75,18 @@ func _build_ui(parent: Control) -> void:
 	_mode_opt.add_item("근접 일섬", 1)
 	_mode_opt.add_item("원거리 일섬", 2)
 	vb.add_child(_mode_opt)
+
+	vb.add_child(_label("일섬 자원"))
+	_resource_opt = OptionButton.new()
+	_resource_opt.add_item("열기", 0)
+	_resource_opt.add_item("쿨다운", 1)
+	vb.add_child(_resource_opt)
+
+	vb.add_child(_label("일섬 조작"))
+	_aim_opt = OptionButton.new()
+	_aim_opt.add_item("충전", 0)
+	_aim_opt.add_item("즉발", 1)
+	vb.add_child(_aim_opt)
 
 	_contact_chk = CheckBox.new()
 	_contact_chk.text = "몬스터 충돌 피해"
@@ -136,6 +150,12 @@ func _load_into_ui() -> void:
 	var c = _load_cfg()
 	if _mode_opt != null:
 		_mode_opt.select(clampi(int(c.game_mode), 0, 2))
+	if _resource_opt != null:
+		var resource_mode: int = (int(c.slash_resource_mode) if "slash_resource_mode" in c else 0)
+		_resource_opt.select(clampi(resource_mode, 0, 1))
+	if _aim_opt != null:
+		var aim_mode: int = (int(c.slash_aim_mode) if "slash_aim_mode" in c else 1)
+		_aim_opt.select(clampi(aim_mode, 0, 1))
 	if _contact_chk != null:
 		_contact_chk.button_pressed = bool(c.contact_damage)
 	if _zoom_chk != null:
@@ -149,6 +169,8 @@ func _load_into_ui() -> void:
 func _save_config() -> void:
 	var c = _load_cfg()
 	c.game_mode = (_mode_opt.get_selected_id() if _mode_opt != null else 1)
+	c.slash_resource_mode = (_resource_opt.get_selected_id() if _resource_opt != null else 0)
+	c.slash_aim_mode = (_aim_opt.get_selected_id() if _aim_opt != null else 1)
 	c.contact_damage = (_contact_chk.button_pressed if _contact_chk != null else false)
 	c.charge_zoom = (_zoom_chk.button_pressed if _zoom_chk != null else true)
 	c.play_logging = (_log_chk.button_pressed if _log_chk != null else true)

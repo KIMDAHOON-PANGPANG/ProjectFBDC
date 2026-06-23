@@ -10,10 +10,28 @@ extends Area3D
 @export var ring_color: Color = Color(0.8, 0.95, 1.0, 0.85)
 @export var hold_time: float = 0.12
 @export var fade_time: float = 0.55
+@export var attack_power: int = 1
 
 var _shape: CollisionShape3D
 var _cyl_shape: CylinderShape3D
 var _disc: MeshInstance3D
+
+
+func configure(new_radius: float = -1.0, new_attack_power: int = 1, new_ring_color: Color = Color(0.8, 0.95, 1.0, 0.85)) -> void:
+	if new_radius > 0.0:
+		radius = new_radius
+	attack_power = maxi(new_attack_power, 1)
+	ring_color = new_ring_color
+	if _cyl_shape != null:
+		_cyl_shape.radius = radius
+	if _disc != null:
+		var mesh := _disc.mesh as CylinderMesh
+		if mesh != null:
+			mesh.top_radius = radius
+			mesh.bottom_radius = radius
+		var mat := _disc.material_override as StandardMaterial3D
+		if mat != null:
+			mat.albedo_color = ring_color
 
 func _ready() -> void:
 	monitoring = true
@@ -76,7 +94,7 @@ func _try_kill(node: Node) -> void:
 	var target: Node = node
 	while target != null:
 		if target.has_method("take_hit") and target.is_in_group("enemies"):
-			target.call("take_hit")
+			target.call("take_hit", attack_power)
 			return
 		target = target.get_parent()
 

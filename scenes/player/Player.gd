@@ -8,6 +8,7 @@ extends CharacterBody3D
 
 signal slash_started
 signal slash_finished
+signal rare_circular_slash_requested(pos: Vector3, radius: float, attack_power: int)
 ## Emitted when the PC's HP hits 0 — Main listens to trigger the
 ## GameOverScreen + SaveSystem.record_death. Fires BEFORE the sprite-rig
 ## death animation removes the node, so listeners can still read the
@@ -18,7 +19,7 @@ signal died
 ## BulletTimeService.start(short) for a self-bullet-time reward.
 signal perfect_dodge
 
-enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING }
+enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING, RECOVERING }
 
 ## 데이터 관리 로더 — pc_combat.json 값을 PlayerData 에 적용. class_name 캐시
 ## 미스를 피하려 preload + 정적 호출(헤드리스 안전).
@@ -179,6 +180,13 @@ var _is_multistrike_followup: bool = false
 ## the PC's foot 0.3s after every slash. Cheap & visual, no PC state.
 var has_echo: bool = false
 
+## Rare card — after an iaijutsu dash lands, fire a wider CircularSlash
+## before player control is released.
+var has_rare_circular_slash: bool = false
+var rare_circular_slash_radius: float = 4.6
+var rare_circular_slash_recovery: float = 0.18
+var _post_slash_recovery_t: float = 0.0
+
 ## Vampire — Main's award_exp_for_kill rolls vampire_chance on every
 ## kill and heals 1 HP on success.
 var has_vampire: bool = false
@@ -307,6 +315,8 @@ func _physics_process(delta: float) -> void:
 				_set_state(State.IDLE)
 		State.EVADING:
 			_update_evade(delta)
+		State.RECOVERING:
+			_update_post_slash_recovery(delta)
 
 func _handle_move(delta: float) -> void:
 	var input := Vector2(
@@ -827,16 +837,36 @@ func _update_dash(delta: float) -> void:
 	if _dust_emitter != null:
 		_dust_emitter.emitting = true
 	if t >= 1.0:
-		_cooldown_t = data.slash_cooldown
 		# 착지 회복 유예 — 도착 지점에서 적 충돌/탄에 즉시 피격되는 불쾌감 방지.
 		_slash_grace_t = max(_slash_grace_t, data.slash_post_grace)
-		slash_finished.emit()
-		_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
-		# Multistrike — schedule a second hit-trail along the same line,
-		# 0.18s after the dash lands. Followup spawns the trail only
-		# (no dash, no charging) so it reads as a quick echo strike.
-		if has_multistrike and not _is_multistrike_followup:
-			get_tree().create_timer(0.18).timeout.connect(_fire_multistrike_followup)
+		if has_rare_circular_slash:
+			rare_circular_slash_requested.emit(global_position, rare_circular_slash_radius, attack_power)
+			_post_slash_recovery_t = maxf(rare_circular_slash_recovery, 0.01)
+			_set_state(State.RECOVERING)
+		else:
+			_complete_slash_action()
+
+
+func _update_post_slash_recovery(delta: float) -> void:
+	_post_slash_recovery_t -= delta
+	velocity = Vector3.ZERO
+	move_and_slide()
+	if _dust_emitter != null:
+		_dust_emitter.emitting = false
+	if _post_slash_recovery_t <= 0.0:
+		_complete_slash_action()
+
+
+func _complete_slash_action() -> void:
+	_post_slash_recovery_t = 0.0
+	_cooldown_t = data.slash_cooldown
+	slash_finished.emit()
+	_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
+	# Multistrike — schedule a second hit-trail along the same line,
+	# 0.18s after the slash action completes. Followup spawns the trail
+	# only (no dash, no charging) so it reads as a quick echo strike.
+	if has_multistrike and not _is_multistrike_followup:
+		get_tree().create_timer(0.18).timeout.connect(_fire_multistrike_followup)
 
 func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO, burst: bool = false) -> void:
 	var attack: SlashAttack
@@ -1119,8 +1149,9 @@ func _update_melee(delta: float) -> void:
 		return
 	if _melee_cd > 0.0:
 		_melee_cd -= delta
-	# 차징(일섬)/대시/회피 중엔 기본 공격 억제. 그 외(이동 포함) 매 프레임 가능.
-	if _state == State.AIMING or _state == State.DASHING or _state == State.EVADING:
+	# 차징(일섬)/대시/후속베기/회피 중엔 기본 공격 억제.
+	if _state == State.AIMING or _state == State.DASHING \
+			or _state == State.RECOVERING or _state == State.EVADING:
 		return
 	if Input.is_action_pressed("fire") and _melee_cd <= 0.0:
 		if _is_pointer_over_ui():
