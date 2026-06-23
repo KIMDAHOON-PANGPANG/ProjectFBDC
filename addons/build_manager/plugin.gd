@@ -18,6 +18,7 @@ var _aim_opt: OptionButton
 var _contact_chk: CheckBox
 var _zoom_chk: CheckBox
 var _log_chk: CheckBox
+var _overheat_slow_chk: CheckBox
 var _name_edit: LineEdit
 var _status: Label
 
@@ -96,6 +97,10 @@ func _build_ui(parent: Control) -> void:
 	_zoom_chk.text = "카메라 줌인/줌아웃"
 	vb.add_child(_zoom_chk)
 
+	_overheat_slow_chk = CheckBox.new()
+	_overheat_slow_chk.text = "탈진 시 이동 감속"
+	vb.add_child(_overheat_slow_chk)
+
 	_log_chk = CheckBox.new()
 	_log_chk.text = "플레이 로그 기록 (EXE 옆 .txt)"
 	vb.add_child(_log_chk)
@@ -160,6 +165,8 @@ func _load_into_ui() -> void:
 		_contact_chk.button_pressed = bool(c.contact_damage)
 	if _zoom_chk != null:
 		_zoom_chk.button_pressed = bool(c.charge_zoom)
+	if _overheat_slow_chk != null:
+		_overheat_slow_chk.button_pressed = (bool(c.overheat_move_slow) if "overheat_move_slow" in c else false)
 	if _log_chk != null:
 		_log_chk.button_pressed = bool(c.play_logging)
 	if _name_edit != null and _name_edit.text.strip_edges() == "":
@@ -173,6 +180,7 @@ func _save_config() -> void:
 	c.slash_aim_mode = (_aim_opt.get_selected_id() if _aim_opt != null else 1)
 	c.contact_damage = (_contact_chk.button_pressed if _contact_chk != null else false)
 	c.charge_zoom = (_zoom_chk.button_pressed if _zoom_chk != null else true)
+	c.overheat_move_slow = (_overheat_slow_chk.button_pressed if _overheat_slow_chk != null else false)
 	c.play_logging = (_log_chk.button_pressed if _log_chk != null else true)
 	var err := ResourceSaver.save(c, _CONFIG_PATH)
 	if _status != null:

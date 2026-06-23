@@ -18,6 +18,7 @@ var _zoom_btn: Button
 var _contact_btn: Button
 var _resource_btn: Button
 var _aim_btn: Button
+var _overheat_slow_btn: Button
 var _settings_panel
 
 
@@ -88,6 +89,8 @@ func _on_toggle(key: String) -> void:
 		_GameConfigScript.charge_zoom_enabled = not _GameConfigScript.charge_zoom_enabled
 	elif key == "contact_dmg":
 		_GameConfigScript.contact_damage_enabled = not _GameConfigScript.contact_damage_enabled
+	elif key == "overheat_slow":
+		_GameConfigScript.overheat_move_slow_enabled = not _GameConfigScript.overheat_move_slow_enabled
 	_refresh_toggles()
 
 func _on_set_resource() -> void:
@@ -109,6 +112,8 @@ func _refresh_toggles() -> void:
 	if _aim_btn != null:
 		var am: int = _GameConfigScript.slash_aim_mode
 		_aim_btn.text = "일섬 에임: " + ("차징" if am == 0 else "즉발")
+	if _overheat_slow_btn != null:
+		_overheat_slow_btn.text = "탈진 이동 감속: " + ("ON" if _GameConfigScript.overheat_move_slow_enabled else "OFF")
 
 func _build() -> void:
 	# 어둡게 — 전체 화면 반투명 검정(ESC 눌렀음을 시각화 + 게임 클릭 차단). 리사이즈 추종.
@@ -154,6 +159,8 @@ func _build() -> void:
 	_tools.add_child(_resource_btn)
 	_aim_btn = _btn("", _on_set_aim)
 	_tools.add_child(_aim_btn)
+	_overheat_slow_btn = _btn("", _on_toggle.bind("overheat_slow"))
+	_tools.add_child(_overheat_slow_btn)
 	_tools.add_child(_btn("닫기", _close_tools))
 	_refresh_toggles()
 	_tools.visible = false

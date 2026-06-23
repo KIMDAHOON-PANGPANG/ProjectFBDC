@@ -11,6 +11,8 @@ extends Resource
 @export var slash_resource_mode: int = 0
 ## 일섬 조작: 0=충전 / 1=즉발
 @export var slash_aim_mode: int = 1
+## 탈진 시 이동 감속 패널티(기본 꺼짐 — 탈진 패널티는 발사 봉인만).
+@export var overheat_move_slow: bool = false
 ## 몬스터 몸 접촉 시 HP 피해.
 @export var contact_damage: bool = false
 ## 일섬 차징 시 카메라 줌(밀리 모드는 보통 OFF).

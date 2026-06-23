@@ -32,3 +32,7 @@ static var contact_damage_enabled: bool = false
 static var slash_resource_mode: int = 0
 ## 일섬 에임 방식(즉발 일섬 모드 전용): 0=차징(기본) / 1=즉발.
 static var slash_aim_mode: int = 0
+
+## 탈진(오버히트) 시 이동 감속 패널티 on/off. 기본 꺼짐 — 탈진 패널티는 일섬 발사 봉인만,
+## 이동 감속은 선택 토글. (BuildConfig.overheat_move_slow / ESC 툴에디터 토글로 제어)
+static var overheat_move_slow_enabled: bool = false

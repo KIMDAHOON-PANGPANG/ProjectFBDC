@@ -331,8 +331,9 @@ func _handle_move(delta: float) -> void:
 	var speed_mult: float = 1.0
 	if has_counter_step and Time.get_ticks_msec() <= counter_step_until_msec:
 		speed_mult = 1.5
-	# 열관리 — 탈진(오버히트) 중엔 이동속도 감소.
-	if _overheated:
+	# 열관리 — 탈진(오버히트) 중 이동 감속(토글). 기본 패널티는 발사 봉인만이며,
+	# 이동 감속은 GameConfig.overheat_move_slow_enabled 가 켜진 경우에만 적용.
+	if _overheated and _GameConfigScript.overheat_move_slow_enabled:
 		speed_mult *= data.heat_overheat_move_mult
 	# 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속 — PC 동선 방해.
 	if _zone_slow_t > 0.0:
