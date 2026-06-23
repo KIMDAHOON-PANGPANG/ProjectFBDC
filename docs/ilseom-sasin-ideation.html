@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일섬뱀서 · 2안 사신(四神) 사무라이 스킬 디자인</title>
+<style>
+  :root{
+    --bg:#0a0c12; --bg2:#10131d; --panel:#151926; --panel2:#1b2233;
+    --ink:#e8ecf5; --ink-dim:#9aa3b8; --ink-faint:#5e6781;
+    --line:#262d40; --line2:#323b54;
+    /* 사신 방위 컬러 */
+    --azure:#1FE0A8;   --azure-hi:#BFFFF0; --azure-lo:#2E8BC0;   /* 청룡 東 木 */
+    --tiger:#E8EAF0;   --tiger-hi:#ffffff; --tiger-gold:#C9A227; /* 백호 西 金 */
+    --vermil:#FF3B1F;  --vermil-hi:#FFB454; --vermil-lo:#B3210F; /* 주작 南 火 */
+    --tort:#3FA9C9;    --tort-hi:#DCEEF5;  --tort-lo:#1E4A6B;    /* 현무 北 水土 */
+    --gold:#d9b25a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(31,224,168,.06), transparent 60%),
+      radial-gradient(1100px 600px at 85% -5%, rgba(255,59,31,.06), transparent 60%),
+      var(--bg);
+    color:var(--ink); line-height:1.62; font-size:15px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 18px 90px}
+
+  /* 헤더 */
+  header{padding:46px 0 22px;text-align:center;position:relative}
+  .kicker{font-size:12px;letter-spacing:.34em;color:var(--ink-faint);text-transform:uppercase}
+  h1{font-size:30px;font-weight:800;margin:10px 0 6px;letter-spacing:-.01em}
+  h1 .sino{
+    background:linear-gradient(90deg,var(--azure),var(--tiger-gold),var(--vermil),var(--tort));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .sub{color:var(--ink-dim);font-size:14px;max-width:760px;margin:0 auto}
+  .compass{display:flex;justify-content:center;gap:8px;margin:18px 0 4px;flex-wrap:wrap}
+  .compass .c{
+    font-size:11px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);
+    display:flex;gap:6px;align-items:center;background:var(--panel)
+  }
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  /* 탭 */
+  nav.tabs{
+    position:sticky;top:0;z-index:50;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;
+    padding:10px;margin:22px 0 8px;background:rgba(10,12,18,.86);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:14px;
+  }
+  nav.tabs button{
+    font:inherit;font-size:13px;font-weight:600;color:var(--ink-dim);cursor:pointer;
+    background:transparent;border:1px solid transparent;border-radius:9px;padding:8px 13px;transition:.16s;
+  }
+  nav.tabs button:hover{color:var(--ink);background:var(--panel)}
+  nav.tabs button.active{color:#0a0c12;background:linear-gradient(90deg,var(--gold),#f0d692);border-color:transparent}
+
+  section.page{display:none;animation:fade .25s ease}
+  section.page.show{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  h2{font-size:21px;font-weight:800;margin:24px 0 4px;letter-spacing:-.01em}
+  h2 .num{color:var(--gold);font-size:14px;font-weight:700;margin-right:8px;font-variant-numeric:tabular-nums}
+  .lead{color:var(--ink-dim);font-size:14px;margin-bottom:18px;max-width:880px}
+  h3{font-size:16px;font-weight:700;margin:22px 0 8px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .grid{display:grid;gap:14px}
+  @media(min-width:760px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}}
+
+  /* 개요 */
+  .ov{border-left:3px solid var(--gold)}
+  .ov h4{font-size:14px;margin-bottom:6px;color:var(--gold)}
+  .ov p{font-size:13.5px;color:var(--ink-dim)}
+  .pill{display:inline-block;font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line2);color:var(--ink-dim);margin:3px 4px 0 0;background:var(--panel2)}
+  table.wuxing{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  table.wuxing th,table.wuxing td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  table.wuxing th{background:var(--panel2);color:var(--ink);font-weight:700}
+  table.wuxing td b{color:var(--ink)}
+
+  /* 코어 슬롯 매핑 */
+  .slotrow{display:grid;gap:12px}
+  @media(min-width:760px){.slotrow{grid-template-columns:150px 1fr}}
+  .slotkey{font-weight:800;font-size:15px}
+  .slotkey .key{display:inline-block;font-size:11px;font-weight:700;border:1px solid var(--line2);border-radius:6px;padding:2px 7px;margin-top:5px;color:var(--gold);background:var(--panel2)}
+  .slotnote{font-size:13px;color:var(--ink-dim)}
+  .qtag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;margin:0 4px 4px 0;border:1px solid}
+
+  /* 사신 필터 + 카드 */
+  .filterbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+  .filterbar .lbl{font-size:12px;color:var(--ink-faint);margin-right:2px}
+  .fbtn{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border-radius:999px;padding:6px 13px;border:1px solid var(--line2);background:var(--panel);color:var(--ink-dim);transition:.15s}
+  .fbtn:hover{color:var(--ink)}
+  .fbtn.active{color:#0a0c12}
+
+  .ssgrid{display:grid;gap:18px}
+  @media(min-width:860px){.ssgrid{grid-template-columns:1fr 1fr}}
+
+  .god{
+    border:1px solid var(--gline,var(--line));border-radius:16px;overflow:hidden;
+    background:linear-gradient(180deg,var(--gtint,rgba(255,255,255,.03)),transparent 40%),var(--panel);
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s;
+  }
+  .god:hover{transform:translateY(-3px);box-shadow:0 14px 34px rgba(0,0,0,.45);border-color:var(--gc)}
+  .god .top{padding:16px 18px;border-bottom:1px solid var(--line);position:relative;display:flex;gap:14px;align-items:center}
+  .seal{
+    flex:none;width:52px;height:52px;border-radius:12px;display:grid;place-items:center;
+    font-size:26px;font-weight:800;color:#08101a;border:1px solid rgba(255,255,255,.2);
+    box-shadow:inset 0 0 18px rgba(255,255,255,.25);
+  }
+  .god .gname{font-size:17px;font-weight:800;line-height:1.25}
+  .god .gmeta{font-size:11.5px;color:var(--ink-faint);margin-top:3px;letter-spacing:.04em}
+  .god .gswatch{display:flex;gap:5px;margin-top:7px}
+  .god .gswatch i{width:18px;height:10px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,.15)}
+  .god .body{padding:16px 18px}
+  .blk{margin-bottom:13px}
+  .blk:last-child{margin-bottom:0}
+  .blk .h{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;color:var(--gc);margin-bottom:4px;letter-spacing:.02em}
+  .blk .h .ic{font-size:13px}
+  .blk .t{font-size:13px;color:var(--ink-dim)}
+  .blk .t b{color:var(--ink)}
+  .sigbox{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--gc);border-radius:10px;padding:11px 12px}
+  .sigbox .sname{font-size:13.5px;font-weight:800;color:var(--ink)}
+  .corelist{display:grid;gap:7px;margin-top:4px}
+  .corelist .ci{display:grid;grid-template-columns:84px 1fr;gap:8px;font-size:12.5px}
+  .corelist .ci .ck{font-weight:700;color:var(--gc);font-size:11.5px;padding-top:1px}
+  .corelist .ci .cv{color:var(--ink-dim)}
+  .corelist .ci .cv b{color:var(--ink)}
+  ul.tight{margin:4px 0 0;padding-left:16px}
+  ul.tight li{font-size:12.5px;color:var(--ink-dim);margin-bottom:5px}
+  ul.tight li b{color:var(--ink)}
+  .duo{margin-top:5px}
+  .duo .d{font-size:12.5px;color:var(--ink-dim);margin-bottom:7px;padding-left:10px;border-left:2px solid var(--line2)}
+  .duo .d.syn{border-left-color:var(--azure)}
+  .duo .d.anti{border-left-color:var(--vermil)}
+  .duo .d .tagx{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:5px;margin-right:5px}
+  .syn .tagx{background:rgba(31,224,168,.16);color:var(--azure)}
+  .anti .tagx{background:rgba(255,59,31,.16);color:var(--vermil-hi)}
+  .archx{margin-top:8px;background:rgba(217,178,90,.06);border:1px dashed var(--gc);border-radius:10px;padding:10px 12px}
+  .archx .an{font-size:13px;font-weight:800;color:var(--ink)}
+  .archx .ap{font-size:12.5px;color:var(--ink-dim);margin-top:3px}
+
+  /* 빌드 아키타입 */
+  .arch{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel);position:relative;overflow:hidden}
+  .arch::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--ac,var(--gold))}
+  .arch .ahead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .arch .aname{font-size:16px;font-weight:800}
+  .arch .combo{font-size:12px;color:var(--ink-faint);margin-top:3px}
+  .arch .combo .b{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:3px}
+  .tier{font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;border:1px solid}
+  .tier.S{color:#ffd76b;border-color:#ffd76b;background:rgba(255,215,107,.1)}
+  .tier.A{color:#7fe0b0;border-color:#7fe0b0;background:rgba(127,224,176,.1)}
+  .tier.B{color:#8fb6e8;border-color:#8fb6e8;background:rgba(143,182,232,.1)}
+  .arch .play{font-size:13px;color:var(--ink-dim);margin:9px 0}
+  .arch .link{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .arch .link span{font-size:11px;padding:3px 8px;border-radius:6px;background:var(--panel2);border:1px solid var(--line2);color:var(--ink-dim)}
+
+  /* 매트릭스 */
+  .matwrap{overflow-x:auto}
+  table.mat{border-collapse:collapse;width:100%;min-width:560px;font-size:13px}
+  table.mat th,table.mat td{border:1px solid var(--line);padding:11px 10px;text-align:center}
+  table.mat th{background:var(--panel2)}
+  table.mat td.self{background:#0c0e16;color:var(--ink-faint)}
+  table.mat td .rel{font-weight:800;font-size:12px}
+  table.mat td .nm{font-size:11px;color:var(--ink-dim);margin-top:2px;display:block}
+  .rel.s{color:var(--azure)} .rel.x{color:var(--vermil-hi)} .rel.n{color:var(--ink-dim)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-dim);margin-top:10px}
+  .legend b.s{color:var(--azure)} .legend b.x{color:var(--vermil-hi)}
+
+  /* 적용 제안 */
+  .sug{counter-reset:s}
+  .sug .item{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .sug .item:last-child{border-bottom:none}
+  .sug .item .n{counter-increment:s;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--panel2);border:1px solid var(--line2);color:var(--gold)}
+  .sug .item .n::before{content:counter(s)}
+  .sug .item h4{font-size:14px;margin-bottom:3px}
+  .sug .item p{font-size:13px;color:var(--ink-dim)}
+  .sug .item code{font-size:12px;background:#0c0e16;border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--azure-hi)}
+
+  footer{margin-top:34px;text-align:center;color:var(--ink-faint);font-size:11.5px;letter-spacing:.04em}
+  .hr{height:1px;background:var(--line);margin:26px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">ProjectFBDC · Skill Ideation · 2안</div>
+    <h1>四神 사무라이 — <span class="sino">사신(四神) 거합 빌드</span></h1>
+    <p class="sub">봉황(주작)·청룡·백호·현무 사신의 힘을 다루는 거합 사무라이. HD-2D 핵앤슬래시 × VS 메타진행 × 인왕풍 텔레그래프 전투. 단일 캐릭터·챕터제·웨이브.</p>
+    <div class="compass">
+      <span class="c"><i class="dot" style="background:#1FE0A8"></i>東 청룡 木·風雷</span>
+      <span class="c"><i class="dot" style="background:#E8EAF0"></i>西 백호 金</span>
+      <span class="c"><i class="dot" style="background:#FF3B1F"></i>南 주작 火</span>
+      <span class="c"><i class="dot" style="background:#3FA9C9"></i>北 현무 水土</span>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-t="ov" class="active">1 · 개요</button>
+    <button data-t="slot">2 · 코어 슬롯</button>
+    <button data-t="gods">3 · 사신 4종</button>
+    <button data-t="arch">4 · 빌드 6종</button>
+    <button data-t="mat">5 · 상생·상극</button>
+    <button data-t="apply">6 · 적용 제안</button>
+  </nav>
+
+  <!-- ============ 1. 개요 ============ -->
+  <section class="page show" id="p-ov">
+    <h2><span class="num">01</span>컨셉 · 시스템 개요</h2>
+    <p class="lead">사신(四神)은 동·서·남·북 방위와 오행(五行)을 각각 맡는 수호 신수다. 거합 사무라이는 이 넷의 힘을 카드로 끌어와 <b>일섬(거합)을 사신식으로 재해석</b>한다. 한 사신은 코어 슬롯(일섬/스윙/회피/패리/젠) 전부를 자기 테마로 물들이며, 둘 이상을 섞으면 오행 상생·상극에 따른 듀오 시너지가 발생한다.</p>
+
+    <div class="grid g2">
+      <div class="card ov" style="--gc:#1FE0A8">
+        <h4>방위 · 오행 = 플레이 축</h4>
+        <p>사신은 단순 컬러 스킨이 아니라 <b>전투 철학의 4분면</b>이다. 청룡=흐름(연참), 백호=정지→폭발(일격필살), 주작=지속 광역(점화 도트), 현무=버티고 되받기(빙결 카운터). 공세 3 + 방어 1 구도라 빌드 선택에 명확한 트레이드오프가 생긴다.</p>
+      </div>
+      <div class="card ov" style="--gc:#d9b25a">
+        <h4>티어 구조</h4>
+        <p><b>시그니처</b>(일섬 재해석·1개) → <b>코어</b>(5슬롯 전부 물들임) → <b>보조</b>(패시브 2종) → <b>듀오</b>(타 사신과 상생/상극). 단일 사신만 깊게 파거나(순혈), 2~4 사신을 섞어(혼합) 듀오/사신합일을 노리는 두 갈래 성장.</p>
+      </div>
+    </div>
+
+    <h3>오행 · 방위 · 테마 매핑</h3>
+    <div class="card" style="padding:14px">
+      <div class="matwrap">
+      <table class="wuxing">
+        <tr><th>사신</th><th>방위·오행</th><th>한 줄 정체성</th><th>일섬 재해석</th><th>핵심 자원 연동</th></tr>
+        <tr><td><b style="color:var(--azure)">靑龍 청룡</b></td><td>東 · 木 · 風雷</td><td>속도·연참(連斬). 멈추면 손해, 흐르면 이득</td><td>벤 적→다음 적 번개 전이(체인)</td><td>Heat 연타 콤보 윈도우 / 기동</td></tr>
+        <tr><td><b style="color:var(--tiger-gold)">白虎 백호</b></td><td>西 · 金 · 秋</td><td>돌격·관통·치명. 한 방으로 끝낸다</td><td>풀차지 직선 관통 + 첫 대상 치명타</td><td>돌격 차지 / Heat 절제</td></tr>
+        <tr><td><b style="color:var(--vermil)">朱雀 주작</b></td><td>南 · 火 · 夏</td><td>지속 광역·점화 도트·부활</td><td>명중 전원 화염 낙인 + 잔불 화선</td><td>Heat 연타 점화 중첩</td></tr>
+        <tr><td><b style="color:var(--tort)">玄武 현무</b></td><td>北 · 水土 · 冬</td><td>방어·반격·빙결. 막은 만큼 벤다</td><td>충전 빙갑 가드 + 빙결/동결</td><td>한기(寒氣) = Heat 재테마 / 패리·닷지</td></tr>
+      </table>
+      </div>
+    </div>
+
+    <h3>성장 동선 (티어)</h3>
+    <div class="card">
+      <span class="pill">시그니처 카드(사신 입문 = 일섬 재해석 획득)</span>
+      <span class="pill">코어 강화(슬롯별 효과 심화)</span>
+      <span class="pill">보조 패시브 ×2</span>
+      <span class="pill">듀오 카드(2사신 — 상생/상극 분기)</span>
+      <span class="pill">사신합일(3~4사신 — 궁극)</span>
+      <p style="margin-top:10px;font-size:13px;color:var(--ink-dim)">레벨업 카드 1택 풀에 사신 카드가 섞여 등장. 한 사신을 먼저 픽하면 그 사신의 코어/보조가 우선 가중치로 떠 <b>순혈 빌드</b>가 쉽게 굴러가고, 다른 사신 시그니처를 마주치면 <b>혼합 빌드</b>로 분기. 기존 9종 카드(질풍/강건/발도확장/속발/회피/냉각/참격강화/보법/경험치자석)는 사신과 무관하게 모든 빌드의 베이스 가속재로 공존한다.</p>
+    </div>
+  </section>
+
+  <!-- ============ 2. 코어 슬롯 매핑 ============ -->
+  <section class="page" id="p-slot">
+    <h2><span class="num">02</span>코어 슬롯 매핑</h2>
+    <p class="lead">PC의 5개 능력 슬롯이 곧 사신이 물들이는 "코어"다. 사신을 픽하면 이 슬롯들의 입력·자원은 그대로 두고 <b>효과만 사신 테마로 치환</b>된다 — 신규 입력 추가 없이 기존 시스템에 얹힌다.</p>
+
+    <div class="card grid" style="gap:16px">
+      <div class="slotrow">
+        <div class="slotkey">일섬 <span class="key">RB 충전→돌진</span></div>
+        <div class="slotnote"><b>시그니처 슬롯.</b> 거합의 핵심. 자원 = 열관리(Heat)/쿨다운, 조준 차징/즉발 모드. 사신별 재해석: 청룡=연쇄 전이 · 백호=관통 치명 · 주작=광역 점화 · 현무=빙갑 가드+빙결. <code>slash_hit_extents</code>·<code>instant_slash_distance</code>·Heat를 데이터로 확장.</div>
+      </div>
+      <div class="slotrow">
+        <div class="slotkey">근접 스윙 <span class="key">LB 부채</span></div>
+        <div class="slotnote">일섬의 <b>셋업/포석</b> 역할로 사신화. 청룡=감전 표식(체인 연장) · 백호=치명 표식 · 주작=연소 전파 · 현무=빙결 누적/한기 연료. 스윙으로 군중에 표식을 깔고 일섬으로 거둔다.</div>
+      </div>
+      <div class="slotrow">
+        <div class="slotkey">회피 <span class="key">SPACE 2스택 i-frame</span></div>
+        <div class="slotnote">퍼펙트닷지(<code>_evade_elapsed ≤ 0.12</code>)→불릿타임 규칙은 공통. 사신별: 청룡=풍압 밀쳐냄+가속 · 백호=직후 즉시 풀차지 · 주작=불티 폭발/360° 점화링 · 현무=빙판 장판+한기/빙갑 충전.</div>
+      </div>
+      <div class="slotrow">
+        <div class="slotkey">패리 <span class="key">RB 즉발모드 발사체</span></div>
+        <div class="slotnote">발사체를 쳐내는 인왕풍 결정 슬롯. 사신별 보상 치환: 청룡=번개 반사+일섬 자원 회복 · 백호=돌격 차지+치명 스택 · 주작=화염 파편 흩뿌림+점화 가중 · 현무=빙결 화살 반사+한기 ×2(패리 특화 사신).</div>
+      </div>
+      <div class="slotrow">
+        <div class="slotkey">젠 버스트 <span class="key">미터 5 = 궁극</span></div>
+        <div class="slotnote">패리·퍼펙트 +1로 채운 5스택 풀폭 일섬. 사신 궁극으로 확장: 청룡=구천뇌룡(무제한 전이) · 백호=백호결전(전장 관통 치명) · 주작=봉황천무(광역 최대중첩 화염) · 현무=북명빙뢰(라인 동결+50%피해).</div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <h3>슬롯 × 자원 긴장 구조</h3>
+    <div class="grid g2">
+      <div class="card" style="padding:14px">
+        <span class="qtag" style="border-color:var(--vermil);color:var(--vermil-hi)">Heat 모드(즉발)</span>
+        <p style="font-size:13px;color:var(--ink-dim)">연타 콤보 윈도우로 위력↑ 대신 7발째 과열 → 탈진 리스크. 청룡·주작·백호 = "더 칠수록 강하지만 위험"이 핵심 긴장. 현무는 Heat를 <b>한기(寒氣)</b>로 재테마해 "패리·닷지로 충전, 빙섬으로 소비".</p>
+      </div>
+      <div class="card" style="padding:14px">
+        <span class="qtag" style="border-color:var(--azure);color:var(--azure)">젠 미터(궁극)</span>
+        <p style="font-size:13px;color:var(--ink-dim)">패리·퍼펙트차징·퍼펙트닷지로 채움. 현무 컨셉(완벽 방어=한기 응축)과 100% 합치. 모든 사신 궁극이 동일 미터를 공유하므로 "완벽 입력 5번"이 사신 정체성을 한 번에 터뜨리는 결정타로 통일된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. 사신 4종 카드 ============ -->
+  <section class="page" id="p-gods">
+    <h2><span class="num">03</span>사신 4종 카드</h2>
+    <p class="lead">각 사신은 방위·오행·컬러 + 시그니처 / 코어(5슬롯) / 보조(패시브) / 듀오(상생·상극)로 구성된다. 필터로 보고 싶은 사신만 추려보고, 카드에 호버하면 강조된다.</p>
+
+    <div class="filterbar" id="godfilter">
+      <span class="lbl">필터</span>
+      <button class="fbtn active" data-g="all" style="--fc:var(--gold)">전체</button>
+      <button class="fbtn" data-g="azure"  style="--fc:#1FE0A8">靑龍 청룡</button>
+      <button class="fbtn" data-g="tiger"  style="--fc:#C9A227">白虎 백호</button>
+      <button class="fbtn" data-g="vermil" style="--fc:#FF3B1F">朱雀 주작</button>
+      <button class="fbtn" data-g="tort"   style="--fc:#3FA9C9">玄武 현무</button>
+    </div>
+
+    <div class="ssgrid" id="godgrid"><!-- JS 주입 --></div>
+  </section>
+
+  <!-- ============ 4. 빌드 아키타입 6종 ============ -->
+  <section class="page" id="p-arch">
+    <h2><span class="num">04</span>빌드 아키타입 6종</h2>
+    <p class="lead">사신 2~4종 조합으로 만드는 대표 빌드. 단일 사신 순혈 2종 + 듀오 상생/상극 + 4종 사신합일 궁극. 기존 카드·열(Heat)·젠·패리 연동과 티어(체감 강도)를 함께 표기.</p>
+    <div class="grid" id="archgrid"><!-- JS 주입 --></div>
+  </section>
+
+  <!-- ============ 5. 상생·상극 매트릭스 ============ -->
+  <section class="page" id="p-mat">
+    <h2><span class="num">05</span>상생 · 상극 시너지 매트릭스</h2>
+    <p class="lead">오행(五行)과 플레이 철학에 기반한 사신 간 궁합. 행 사신을 기준으로 열 사신과 섞었을 때의 관계. <b style="color:var(--azure)">상생(相生)</b>=시너지 폭발, <b style="color:var(--vermil-hi)">상극(相剋)</b>=자원·리듬 충돌(하이리스크/변환 콤보), 중립=무난.</p>
+
+    <div class="card matwrap">
+      <table class="mat">
+        <tr>
+          <th>↓기준 \ 조합→</th>
+          <th style="color:var(--azure)">靑龍</th>
+          <th style="color:var(--tiger-gold)">白虎</th>
+          <th style="color:var(--vermil)">朱雀</th>
+          <th style="color:var(--tort)">玄武</th>
+        </tr>
+        <tr>
+          <th style="color:var(--azure)">靑龍<br><small>木·風雷</small></th>
+          <td class="self">—</td>
+          <td><span class="rel s">상생</span><span class="nm">흐름→돌격 충전 (금↔목 교차)</span></td>
+          <td><span class="rel s">상생</span><span class="nm">목생화 · 뇌화연환 들불</span></td>
+          <td><span class="rel x">상극</span><span class="nm">수뢰상쇄 · 모멘텀↔가드</span></td>
+        </tr>
+        <tr>
+          <th style="color:var(--tiger-gold)">白虎<br><small>金</small></th>
+          <td><span class="rel s">상생</span><span class="nm">연속 일격필살 공수일체</span></td>
+          <td class="self">—</td>
+          <td><span class="rel x">상극</span><span class="nm">화극금 · 절제↔흩뿌리기</span></td>
+          <td><span class="rel n">중립</span><span class="nm">고정→처형 보조 가능</span></td>
+        </tr>
+        <tr>
+          <th style="color:var(--vermil)">朱雀<br><small>火</small></th>
+          <td><span class="rel s">상생</span><span class="nm">목생화 · 폭풍의 들불</span></td>
+          <td><span class="rel x">상극</span><span class="nm">화극금 · 리듬 충돌</span></td>
+          <td class="self">—</td>
+          <td><span class="rel x">상극</span><span class="nm">수극화 · 증기폭발 변환</span></td>
+        </tr>
+        <tr>
+          <th style="color:var(--tort)">玄武<br><small>水土</small></th>
+          <td><span class="rel x">상극</span><span class="nm">수뢰상쇄 (但 뇌빙 변주)</span></td>
+          <td><span class="rel n">중립</span><span class="nm">동결→백호 치명 보강</span></td>
+          <td><span class="rel x">상극</span><span class="nm">수극화 · 증기폭발</span></td>
+          <td class="self">—</td>
+        </tr>
+      </table>
+      <div class="legend">
+        <span><b class="s">상생</b> 자원·표식이 곱셈으로 맞물림 → 권장</span>
+        <span><b class="x">상극</b> 리듬/자원 상쇄 → 페널티 or 전용 변환 콤보(증기폭발·뇌빙·담금질)</span>
+        <span>중립 무난, 한쪽이 메인·다른쪽 보조</span>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <h3>핵심 듀오 노트</h3>
+    <div class="grid g2">
+      <div class="card" style="--gc:var(--azure);border-left:3px solid var(--azure)">
+        <h4 style="color:var(--azure);font-size:14px">상생 — 뇌화연환 (청룡×주작)</h4>
+        <p style="font-size:13px;color:var(--ink-dim)">주작 화염 표식 위로 청룡 번개 체인이 지나면 전이 지점마다 폭발. 표식(주작)→점화 전이(청룡). 목생화·군중몰이 최강 상생.</p>
+      </div>
+      <div class="card" style="--gc:var(--tiger-gold);border-left:3px solid var(--tiger-gold)">
+        <h4 style="color:var(--tiger-gold);font-size:14px">상생 — 공수일체 (청룡×백호)</h4>
+        <p style="font-size:13px;color:var(--ink-dim)">청룡 속발/연속이 백호 돌격 차지를 빠르게 채워 "쉴 틈 없는 연속 일격필살". 흐름으로 만들고 한 방으로 끊는다.</p>
+      </div>
+      <div class="card" style="--gc:var(--vermil);border-left:3px solid var(--vermil)">
+        <h4 style="color:var(--vermil-hi);font-size:14px">상극 — 증기폭발 (현무×주작)</h4>
+        <p style="font-size:13px;color:var(--ink-dim)">수극화로 빙결↔점화가 기본은 상쇄. 단 전용 변환 패시브를 풀면 빙결+점화가 만난 적이 광역 증기 폭발로 터지는 하이리스크 변주.</p>
+      </div>
+      <div class="card" style="--gc:var(--tort);border-left:3px solid var(--tort)">
+        <h4 style="color:var(--tort-hi);font-size:14px">상극→변주 — 뇌빙 (현무×청룡)</h4>
+        <p style="font-size:13px;color:var(--ink-dim)">기본은 수뢰상쇄(모멘텀↔가드 충돌). 그러나 현무가 동결로 고정한 적에 청룡 다단 번개가 +50% 풀히트 = "고정→처형" 변주로 역전 가능.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 6. 적용 제안 ============ -->
+  <section class="page" id="p-apply">
+    <h2><span class="num">06</span>일섬뱀서 적용 제안</h2>
+    <p class="lead">신규 시스템 최소화·기존 코드 재활용을 원칙으로, 사신 빌드를 ProjectFBDC에 얹는 구체적 경로.</p>
+
+    <div class="card sug">
+      <div class="item"><div class="n"></div><div>
+        <h4>일섬은 데이터 확장으로 4사신 커버</h4>
+        <p><code>SlashAttack.configure</code>의 BoxShape extents(<code>slash_hit_extents</code> z=길이)·관통 플래그·치명 배수만 데이터로 얹으면 백호 관통·청룡 체인 기점이 신규 판정 없이 성립. 청룡 체인은 첫 적 처치 후 가까운 <code>"enemies"</code> 그룹 질의로 추가 <code>_spawn_slash_attack</code> 재귀(전이 횟수 = 충전 frac).</p>
+      </div></div>
+      <div class="item"><div class="n"></div><div>
+        <h4>Heat = 사신별 자원 재테마 (코드 1축)</h4>
+        <p>주작·청룡·백호는 기존 <code>_update_heat</code>/<code>combo_window</code> 그대로. 현무만 Heat 게이지를 "한기(寒氣)"로 라벨/연출 치환하고 충전원을 연타→패리·퍼펙트닷지로 스왑. <code>get_heat_frac</code> 게터·HeatBar3D 5스택 UI는 공용 재사용(칸색만 사신 컬러).</p>
+      </div></div>
+      <div class="item"><div class="n"></div><div>
+        <h4>상태이상 = HealthComponent armor/stagger 위에 표식 dict</h4>
+        <p>화염 도트·빙결 슬로우·감전 경직·치명 표식을 적 인스턴스의 표식 dict + 틱으로 통일 처리. 백호 아머 분쇄·현무 동결은 기존 <code>armor</code>를 즉시 0 / <code>stagger</code> 강제 진입으로 매핑(신규 상태머신 불요). 도트는 <code>HealthComponent.take_damage</code> 틱 호출.</p>
+      </div></div>
+      <div class="item"><div class="n"></div><div>
+        <h4>젠 버스트에 사신 분기 1개만 추가</h4>
+        <p>현재 풀폭 일섬(<code>_fire_slash</code> width×3, boss 5뎀) 분기에 "활성 사신" 플래그로 전이무제한/관통전체/최대중첩점화/라인동결 4갈래만 끼움. 미터·소비 규칙(<code>ZenSystem.consume_burst</code>)은 불변.</p>
+      </div></div>
+      <div class="item"><div class="n"></div><div>
+        <h4>카드 풀에 사신 카드군 추가 (CSV 확장)</h4>
+        <p><code>data/upgrades.csv</code>에 사신별 시그니처/코어/보조 행 추가, <code>UpgradeSystem.apply</code>가 Player 런타임 보너스 플래그(<code>azure_chain_max</code> 등)로 적용. <b>공유 <code>.tres</code> 직접 변형 금지</b> 컨벤션 준수 — 런마다 리셋되는 인스턴스 변수로만. 듀오/사신합일은 "두 플래그 동시 보유" 조건부 해금 카드로.</p>
+      </div></div>
+      <div class="item"><div class="n"></div><div>
+        <h4>VFX는 modulate 틴트 + 기존 데칼 재색</h4>
+        <p>일섬 trail·FanTelegraph·LeapTelegraph·CircularSlash의 emission/modulate만 사신 컬러로 스왑. 청록 번개·금빛 관통선·진홍 화선·군청 서리는 기존 파티클(parry_spark·explosion_burst) 색만 바꿔도 1차 프로토 성립. 신규 메시 불요.</p>
+      </div></div>
+      <div class="item"><div class="n"></div><div>
+        <h4>Main / Testplay 동기화 + 밸런스 툴 노출</h4>
+        <p>사신 자원·표식 배선을 <code>Main.gd</code>에 추가하면 <code>Testplay.gd</code> 미러 필수(동기화 규칙). 사신 신규 export 필드는 <code>balance_dock.gd</code> PC 탭 <code>"@사신"</code> 섹션 마커로 묶어 한글 라벨/툴팁 추가. 밸런스 시뮬(<code>balance_sim.gd</code>)에 사신별 TTK 곡선 분리.</p>
+      </div></div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="card" style="border-left:3px solid var(--gold)">
+      <h4 style="color:var(--gold);font-size:14px;margin-bottom:6px">권장 출시 스코프 (MVP → 확장)</h4>
+      <p style="font-size:13px;color:var(--ink-dim)"><b>1차:</b> 청룡(연참)·백호(일격필살) 2종 — 가장 적은 신규 시스템(체인 재귀 + 관통/치명 데이터)으로 "흐름 vs 폭발" 대조축 확보. <b>2차:</b> 주작(점화 도트 시스템)·현무(빙결+한기 재테마) 추가 후 듀오/매트릭스 개방. <b>3차:</b> 사신합일 4종 궁극·증기폭발/뇌빙 변환 콤보.</p>
+    </div>
+  </section>
+
+  <footer>ProjectFBDC · 2안 四神 사무라이 스킬 디자인 · 인터랙티브 아이디에이션 · docs/ilseom-sasin-ideation.html</footer>
+</div>
+
+<script>
+/* ---------- 데이터 ---------- */
+const GODS = [
+  {
+    key:"azure", cls:"azure", glyph:"龍",
+    name:"靑龍 거합 — 뇌룡일섬(雷龍一閃)", short:"靑龍 청룡",
+    c:"#1FE0A8", c2:"#BFFFF0", c3:"#2E8BC0",
+    swatch:["#1FE0A8","#BFFFF0","#2E8BC0"],
+    meta:"東方 · 木 · 風雷 · 봄",
+    theme:"한 번 벤 칼이 멈추지 않고 다음 적, 또 다음 적으로 번개처럼 전이(連鎖)된다. 느리게 충전했다 터뜨리는 현무/주작과 반대로, 청룡은 짧게 끊어 연속으로 베는 <b>속도와 연참(連斬)</b>. 거합을 '돌진 후 정지'가 아니라 '벤 곳에서 다음 적으로 번개 도약'으로 재해석한 기동형 사신.",
+    sig:{n:"뇌룡일섬(雷龍一閃) — 연쇄 거합", e:"충전 일섬이 첫 적을 베는 즉시 그 적을 기점으로 가까운 다음 적에게 번개로 전이해 추가 일섬 자동 발사(체인). 충전이 길수록 전이 횟수↑(풀차지 3연쇄). 전이된 적은 짧은 감전 경직(아머 추가 소거).", f:"즉발 모드(Heat)에선 연타 콤보 윈도우와 맞물려 7발 과열 전 체인으로 효율을 뽑는 리듬 플레이. 보스 단독엔 체인 대상이 없어 '군중에 강하고 보스엔 평범'한 명확한 트레이드오프."},
+    core:[
+      ["일섬","첫 타격 후 가까운 적으로 번개 전이(체인). 충전 길수록 전이 수↑. 즉발/Heat에선 짧은 체인+연사 리듬으로 보완."],
+      ["스윙","<b>뇌선참(雷線斬)</b> — 맞은 적 사이 번개 가닥 연결로 1회 광역 감전. 일섬 체인이 더 멀리 튀게 군중을 미리 표식."],
+      ["회피","<b>풍신보(風身步)</b> — 거리·속도↑, 종료 지점에 풍압 파동(밀침+감속). 군중을 빠져나가 다음 체인 각을 잡는 기동기."],
+      ["패리","<b>뇌반(雷返)</b> — 쳐낸 화살이 청록 번개로 가까운 적에 튕겨 감전. 성공 시 일섬 자원(열↓/게이지) 회복으로 공세 유지."],
+      ["젠","<b>구천뇌룡(九天雷龍)</b> — 다음 일섬 풀폭+최대사거리+전이 무제한(화면 내 모든 표식/감전 적 도미노). 보스 5뎀+잡몹 동시 소거."]
+    ],
+    sup:[
+      ["뇌맥(雷脈)","같은 적을 짧은 시간 안에 다시 베면 데미지·전이수↑(연속명중 스택). 끊지 않고 계속 베면 강해지는 모멘텀. 참격강화/속발과 결이 맞음."],
+      ["풍림(風林)","회피·전이 직후 이동·충전속도↑(나무가 뻗듯 가속). 질풍/속발/보법과 시너지 — 멈추면 손해, 흐르면 이득."]
+    ],
+    duo:[
+      ["syn","주작(南火) — 뇌화연환","화염 표식 위로 번개 체인이 지나면 전이 지점마다 폭발. 표식→점화 전이로 군중몰이 최강 상생(목생화)."],
+      ["anti","현무(北水土) — 수뢰상쇄","느리고 무거운 한 방·방어 컨셉이라 청룡의 끊임없는 전이 리듬과 정면 충돌. 가드 스택↔연쇄 모멘텀이 서로 자원을 갉는 하이리스크."]
+    ],
+    arch:{n:"연참 도류 (Chain Lightning Iaido)", p:"멈추지 않고 흐르며 베는 기동 딜러. 뇌선참으로 군중 감전 표식 → 일섬 체인 다수 처형 → 풍신보로 빠져나가 풍림 가속 → 다음 무리 진입. 약점은 단독 보스·정지전."}
+  },
+  {
+    key:"tiger", cls:"tiger", glyph:"虎",
+    name:"白虎 — 백호살(白虎殺)", short:"白虎 백호",
+    c:"#C9A227", c2:"#E8EAF0", c3:"#ffffff",
+    swatch:["#E8EAF0","#C9A227","#ffffff"],
+    meta:"西方 · 金 · 가을 · 殺",
+    theme:"사신 중 가장 공격적·직선적. <b>한 방으로 끝낸다</b>는 거합의 본질을 극대화. 키워드 = 돌격(突)·관통(貫)·치명(致命)·일격필살. 청룡이 흐름이라면 백호는 <b>정지→폭발의 단발 화력</b>. 군집 한가운데를 직선으로 가르고 빠져나오는 도살자 무드. 치명 시 화면 한 줄을 베는 금색 슬래시 + 강한 히트스탑.",
+    sig:{n:"백호살(白虎殺) — 호격일섬", e:"일섬 발사 시 돌진 거리/속도를 따라 위력이 누적되는 '돌격 차지'. 풀차지 일섬은 직선상 모든 적 관통하며 첫 대상에 치명타(2배+아머 즉시 분쇄). 처치 시 차지 일부 환급 → 직선 연쇄 도살.", f:"기존 일섬 돌진·관통·BoxShape(z=길이)를 그대로 활용 — z길이/관통 플래그/치명 배수만 데이터로 얹음. 자원 = Heat(연타할수록 위력↑이나 탈진 리스크)와 직결. 젠 풀폭과도 시너지."},
+    core:[
+      ["일섬","돌진 길수록 위력 누적, 풀차지=직선 관통+첫 대상 치명(아머 분쇄). 처치 시 차지 환급 → 직선 연쇄 도살."],
+      ["스윙","<b>호조(虎爪)</b> — 벤 적에 '표식'을 남기고, 표식된 적은 다음 일섬 치명 확률/배수↑. 스윙=셋업, 일섬=마무리 콤보 루프."],
+      ["회피","<b>잠행(潛)</b> — 직후 짧은 창 동안 다음 일섬이 즉시 풀차지(돌격 보너스). 퍼펙트닷지=불릿타임+확정 치명. 치고 빠지기 코어."],
+      ["패리","성공 보상이 '돌격 차지+치명 스택' 적립으로 치환. 궁수·주술사를 쳐내며 일섬 강화 = 방어가 아닌 '화력 충전' 행위."],
+      ["젠","<b>백호결전(白虎決)</b> — 풀폭 일섬이 화면 가로지르는 거대 관통 일섬으로 변해 직선 전체 치명+아머 전부 분쇄. 보스 다단 히트. '한 줄로 전장을 가르는' 정화."]
+    ],
+    sup:[
+      ["맹호의 발톱(猛虎之爪)","처치 직후 짧은 시간 다음 일섬 치명 배수 누적↑(연쇄 도살 보상). 빨리 벨수록 한 방이 무거워지는 가속도형 화력 패시브."],
+      ["금쇄(金碎)·아머 파쇄","일섬 치명타가 경직/아머(poise)를 즉시 전부 깎아 경직 확정. 엘리트·보스 아머 무력화 → 단일 처형 특화(armor 즉시 0)."]
+    ],
+    duo:[
+      ["syn","청룡(東木) — 공수일체","청룡 속발/연속이 백호 돌격 차지를 빠르게 채워 '쉴 틈 없는 연속 일격필살'. 금빛+청록 궤적 교차."],
+      ["anti","주작(南火) — 화극금","절제된 단발 치명 vs 흩뿌리는 지속 광역 — 화력 철학 정반대(화극금). Heat·리듬 충돌로 포지셔닝 방해. 둘 중 하나로 수렴 설계."]
+    ],
+    arch:{n:"도살자(屠) — 일격필살 돌격형", p:"호조로 표식 깔고 → 잠행으로 측면 파고들어 → 풀차지 호격일섬 직선 관통 치명 → 처치 환급 연쇄 도살. 패리·퍼펙트닷지로 젠 모아 백호결전으로 전장 정화. 약점=정지 프레임·Heat 탈진·포위."}
+  },
+  {
+    key:"vermil", cls:"vermil", glyph:"雀",
+    name:"朱雀 — 화공 거합(炎華一閃)", short:"朱雀 주작",
+    c:"#FF3B1F", c2:"#FFB454", c3:"#B3210F",
+    swatch:["#FF3B1F","#FFB454","#B3210F"],
+    meta:"南方 · 火 · 여름 · 不死",
+    theme:"진홍빛 불사조. 베면 끝나는 게 아니라 <b>불씨를 남긴다</b> — 화염 도트를 새기고, 불씨가 군집으로 번지며, 쓰러져도 화염 속에서 1회 부활. 모든 연출은 진홍→황금 그라데이션과 솟구치는 깃털. 직접 죽이기보다 광역을 도트로 녹이는 <b>지속 화공</b>.",
+    sig:{n:"염화일섬(炎華一閃)", e:"거합 베기가 적중한 모든 적에게 화염 낙인(도트) 부여. 궤적에 약 1초 잔불 화선(火線)이 남아 통과 적 추가 점화. 풀/오버차지 일섬은 착지점에서 봉황 폭발(광역 점화+넉백).", f:"히트앤런 리듬에 도트 지속딜을 얹어 한 번의 돌진으로 군집을 광역 점화. Heat 모드와 시너지 — 연타로 불씨를 겹쳐 쌓을수록 화력 폭증하되 과열 리스크↑."},
+    core:[
+      ["일섬","명중 전원 화염 낙인(N초 도트). 궤적에 1초 잔불 화선 → 통과 적 재점화. 풀차지=착지점 봉황 폭발(광역 점화+넉백)."],
+      ["스윙","<b>잔화 부채</b> — 이미 불붙은 적이 범위에 있으면 인접 미점화 적으로 불씨 번짐(연소 전파). 군집 점화 트리거."],
+      ["회피","<b>비화 회피</b> — 종료 지점에 불티 폭발 잔류. 퍼펙트닷지=불릿타임+자기중심 360° 점화 링(근접 전원 점화)."],
+      ["패리","<b>역화 패리</b> — 쳐낸 발사체를 화염 파편으로 변환해 전방 부채로 흩뿌림(주변 점화). 성공 시 다음 일섬 점화 도트 1스택 가중."],
+      ["젠","<b>봉황천무</b> — 풀폭 일섬이 거대 봉황 화염으로 화해 광역을 휩쓸고 닿은 전원 최대중첩 낙인. 발동 중 자기 도트 피해+폭. 궁극급 청소기."]
+    ],
+    sup:[
+      ["연소 중첩(燒)","낙인은 적 1체당 최대 N스택 누적·스택당 도트↑. 잔불 화선/부채 전파로 반복 점화해 만렙 도트를 쌓아 '크게 베고 도망쳐도 알아서 타 죽게'."],
+      ["잉걸 폭산(爆散)","도트로 죽은 적이 작게 폭발해 인접에 불씨 전이(연쇄 점화). 밀집 군집에서 한 마리가 타 죽으면 도미노 화재로 인원수 비례 가속."]
+    ],
+    duo:[
+      ["syn","청룡(東木) — 목생화","청룡 질풍 베기의 바람 길이 잔불 화선을 부채질해 도트 범위·피해 증폭(들불). 불씨를 멀리 퍼뜨리는 '폭풍의 들불'."],
+      ["anti","현무(北水土) — 수극화","현무 결빙/둔화 장판이 화염을 끄지만(점화 무효), '얼린 적 깨면 추가타' 빙결 시너지로 노선 분기. 상극 역이용 = 담금질(빙→화 급가열) 특수 콤보."]
+    ],
+    arch:{n:"들불 점화술사 (Wildfire Igniter)", p:"군집 한가운데를 관통해 광역 점화 → 잔불·부채 전파로 연소 스택 쌓고 → 잉걸 폭산 연쇄로 도미노 화재. 냉각/발열억제로 과열 막으며 연타 점화 유지, 위기엔 불사조 부활로 불바다를 버틴다. 고위험·고화력 광역 지속딜."}
+  },
+  {
+    key:"tort", cls:"tort", glyph:"龜",
+    name:"玄武 — 빙결 반사 거합(玄武 氷閃)", short:"玄武 현무",
+    c:"#3FA9C9", c2:"#DCEEF5", c3:"#1E4A6B",
+    swatch:["#1E4A6B","#3FA9C9","#DCEEF5"],
+    meta:"北方 · 水土 · 겨울 · 守",
+    theme:"거북-뱀의 합체 신수처럼 <b>버티다 되받는</b> 유일한 방어/반격형 사신. 막은 만큼 베고, 얼린 만큼 굳히고, 패리·회피로 쌓은 한기(寒氣)를 일섬에 실어 폭발시킨다. 완벽한 방어 순간마다 물안개·빙편이 사방으로 튄다. 키워드=거북등 가드·빙결 슬로우·반사·패리/퍼펙트닷지 보상.",
+    sig:{n:"현무 빙섬(玄武 氷閃) — 한기의 거합", e:"충전·돌진 동안 PC 둘레에 빙갑(氷甲) 오라 형성 → 충전 중 1회 피격 막음(가드 성공=즉시 풀충전). 벤 대상에 빙결 표식(둔화). 대상이 한기 스택 보유 시 사거리·폭↑+빙결→동결(2초)로 격상. 막고 버틴 보상을 베기에 환원.", f:"기존 일섬에 그대로 얹힘. Heat를 '한기(寒氣) 게이지'로 재테마 — 연타 과열 대신 패리·퍼펙트닷지·가드로 한기를 모아 빙섬에 소비. '막기→베기' 리듬 + VS 군집엔 빙결 슬로우가 광역 CC."},
+    core:[
+      ["일섬","빙갑이 충전 1회 피격 흡수(가드=풀충전+한기+1). 라인 적 빙결 둔화. 한기 보유 시 사거리·폭↑+동결(2s) 격상. 버티고 되받는 거합."],
+      ["스윙","<b>서리 베기</b> — 약한 빙결 누적, 같은 적 3회 누적 시 '한기 표식'(다음 빙섬 동결 연료)+PC 한기+1. 광역 슬로우로 동선 통제."],
+      ["회피","<b>수영(水影) 보법</b> — 종료 지점 1.5초 빙판 장판(밟는 적 슬로우). 퍼펙트닷지=한기+1+빙갑 1겹 즉시. '잘 피하는 것'이 자원원."],
+      ["패리","<b>빙벽 반사(氷壁返)</b> — 발사체를 빙결 화살로 반사(쏜 적 동결). 성공 시 한기+2(2배)+빙갑 1겹. 현무=패리 보상 특화 사신."],
+      ["젠","<b>북명빙뢰(北溟氷牢)</b> — 풀폭 빙섬이 라인 전 적 즉시 동결(3s)+받는 피해+50%+깨질 때 빙편 폭발(주변 전이). '완벽 입력 5번으로 전장을 통째로 얼린다'."]
+    ],
+    sup:[
+      ["거북등 응결(龜甲凝結)","일정 시간 피격 안 당하면 상시 빙갑 1겹 자동 유지(피격 시 소모 후 재축적). 회피·패리 없이도 '버티면 굳는다' 베이스라인 안전판."],
+      ["한기 전도(寒氣傳導)","동결/빙결 적 사망 시 주변에 빙결 전이, 빙결 적을 일섬 처치 시 한기 추가 환급. '얼린 군중을 베어 한기 회수' 선순환 엔진."]
+    ],
+    duo:[
+      ["syn","청룡(東木) — 뇌빙(雷氷)","현무가 빙결로 굳혀두면 청룡 연속참·번개가 동결 대상에 풀히트. '고정→처형' 듀오. 빙결 +50% 피해가 다단히트와 곱셈 시너지."],
+      ["anti","주작(南火) — 수극화","물이 불을 이겨 빙결↔화염이 상쇄(DoT/제어↓). 대신 증기 폭발(蒸氣爆發) 변환 패시브로 빙결+점화 만난 적이 광역 폭발하는 하이리스크 변주."]
+    ],
+    arch:{n:"氷壁劍士(빙벽검사) — 버티고 되받는 카운터 탱-거합", p:"패리·퍼펙트닷지·가드로 한기를 쌓고 빙섬·젠에 몰아 군중 동결 후 베어 처치 → 한기 회수 선순환. 보스전=패리 반사로 위협 되돌리기, 군집=평타 서리+빙판으로 전장을 얼려 갈아낸다. DPS는 낮지만 생존·CC·반격이 압도적."}
+  }
+];
+
+const ARCHS = [
+  {ac:"#1FE0A8", g:["azure"], tier:"A", name:"연참 도류", combo:"청룡 순혈",
+   play:"멈추지 않고 흐르며 베는 기동 군중섬멸. 뇌선참 감전 표식 → 일섬 체인 다수 처형 → 풍신보로 빠져 풍림 가속 → 다음 무리. 단독 보스·정지전이 약점.",
+   link:["속발","질풍","보법","발도확장","뇌맥·풍림 패시브","Heat 콤보 윈도우"]},
+  {ac:"#C9A227", g:["tiger"], tier:"A", name:"도살자 — 일격필살", combo:"백호 순혈",
+   play:"호조 표식 → 잠행 측면 진입 → 풀차지 호격일섬 직선 관통 치명 → 처치 환급 연쇄. 패리·닷지로 젠 모아 백호결전. 단발 사이 정지·Heat 탈진이 약점.",
+   link:["발도확장(관통 길이)","참격강화","속발/냉각","보법(잠행 루프)","퍼펙트닷지","젠 버스트"]},
+  {ac:"#FF3B1F", g:["azure","vermil"], tier:"S", name:"뇌화연환 — 폭풍의 들불", combo:"청룡 + 주작 (상생·목생화)",
+   play:"주작으로 군중에 화염 표식을 깔고, 청룡 번개 체인이 표식 위를 지나며 전이 지점마다 폭발 점화. 표식→점화 전이→잉걸 폭산 도미노로 화면 전체를 도트로 녹이는 최강 군중몰이. 보스 단독은 화력 떨어짐.",
+   link:["연소 중첩+뇌맥","경험치자석(군집 유지)","발도확장(화선·체인↑)","냉각(과열 방어)","Heat 점화 중첩"]},
+  {ac:"#E8EAF0", g:["azure","tiger"], tier:"S", name:"공수일체 — 연속 일격필살", combo:"청룡 + 백호 (상생·금↔목 교차)",
+   play:"청룡 속발/연속참으로 흐름을 만들어 백호 돌격 차지를 끊임없이 채우고, 차오르면 풀차지 관통 치명으로 끊는다. '쉴 틈 없는 연속 일섬'. 흐름으로 잡몹, 한 방으로 엘리트·보스 처형하는 만능 균형형. 손이 빠를수록 강함.",
+   link:["속발","참격강화","맹호의 발톱+뇌맥","보법","퍼펙트닷지","Heat 연타"]},
+  {ac:"#3FA9C9", g:["tort","azure"], tier:"B", name:"뇌빙 — 고정→처형", combo:"현무 + 청룡 (상극→변주)",
+   play:"기본은 수뢰상쇄(가드↔모멘텀 충돌) 상극이나, 현무가 빙결/동결로 군중을 고정해두면 청룡 다단 번개가 +50% 풀히트로 꽂히는 변주 빌드. 현무로 안전하게 묶고 청룡으로 폭딜. 고난도 운용 = 한기 관리+체인 각. 정석은 아닌 하이리스크.",
+   link:["한기 전도+뇌맥","빙섬(동결)","구천뇌룡 젠","냉각(한기 재해석)","퍼펙트닷지(한기원)"]},
+  {ac:"#d9b25a", g:["azure","tiger","vermil","tort"], tier:"S", name:"사신합일 — 四神 궁극", combo:"청룡+백호+주작+현무 (4종)",
+   play:"네 사신 시그니처를 모두 보유 시 해금되는 궁극 빌드. 젠 버스트가 '오신진(五神陣)'으로 격상 — 화면을 동결(현무)→번개 전이(청룡)→직선 관통 치명(백호)→봉황 화염 폭발(주작)이 한 사이클로 연쇄하는 사신 콤보. 자원·상극 관리 난도 최상, 보상은 화면 전체 처형. 빌드 완성형 엔드게임.",
+   link:["전 사신 보조 패시브","젠 미터 5","증기폭발/뇌빙 변환","발도확장+참격강화","Heat·한기 동시 운용"]}
+];
+
+/* ---------- 사신 카드 렌더 ---------- */
+const grid = document.getElementById('godgrid');
+GODS.forEach(g=>{
+  const coreHtml = g.core.map(c=>`<div class="ci"><div class="ck">${c[0]}</div><div class="cv">${c[1]}</div></div>`).join('');
+  const supHtml = g.sup.map(s=>`<li><b>${s[0]}</b> — ${s[1]}</li>`).join('');
+  const duoHtml = g.duo.map(d=>`<div class="d ${d[0]}"><span class="tagx">${d[0]==='syn'?'상생':'상극'}</span><b>${d[1]}</b><br>${d[2]}</div>`).join('');
+  const sw = g.swatch.map(s=>`<i style="background:${s}"></i>`).join('');
+  const el = document.createElement('div');
+  el.className = 'god';
+  el.dataset.g = g.key;
+  el.style.setProperty('--gc', g.c);
+  el.style.setProperty('--gtint', hexA(g.c,0.10));
+  el.innerHTML = `
+    <div class="top">
+      <div class="seal" style="background:linear-gradient(135deg,${g.c},${g.c2})">${g.glyph}</div>
+      <div>
+        <div class="gname">${g.name}</div>
+        <div class="gmeta">${g.meta}</div>
+        <div class="gswatch">${sw}</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="blk"><div class="h"><span class="ic">◇</span>테마</div><div class="t">${g.theme}</div></div>
+      <div class="blk">
+        <div class="h"><span class="ic">★</span>시그니처 — ${g.sig.n}</div>
+        <div class="sigbox"><div class="t" style="margin-bottom:5px">${g.sig.e}</div><div class="t" style="font-size:11.5px;color:var(--ink-faint)"><b style="color:var(--gc)">FIT</b> ${g.sig.f}</div></div>
+      </div>
+      <div class="blk"><div class="h"><span class="ic">▣</span>코어 (5슬롯)</div><div class="corelist">${coreHtml}</div></div>
+      <div class="blk"><div class="h"><span class="ic">＋</span>보조 패시브</div><ul class="tight">${supHtml}</ul></div>
+      <div class="blk"><div class="h"><span class="ic">⇄</span>듀오</div><div class="duo">${duoHtml}</div></div>
+      <div class="blk"><div class="h"><span class="ic">▶</span>대표 아키타입</div>
+        <div class="archx"><div class="an">${g.arch.n}</div><div class="ap">${g.arch.p}</div></div>
+      </div>
+    </div>`;
+  grid.appendChild(el);
+});
+
+/* ---------- 빌드 아키타입 렌더 ---------- */
+const ag = document.getElementById('archgrid');
+const gcMap = {azure:"#1FE0A8",tiger:"#C9A227",vermil:"#FF3B1F",tort:"#3FA9C9"};
+ARCHS.forEach(a=>{
+  const blocks = a.g.map(k=>`<span class="b" style="background:${gcMap[k]}"></span>`).join('');
+  const links = a.link.map(l=>`<span>${l}</span>`).join('');
+  const el = document.createElement('div');
+  el.className = 'arch';
+  el.style.setProperty('--ac', a.ac);
+  el.innerHTML = `
+    <div class="ahead">
+      <div>
+        <div class="aname">${a.name}</div>
+        <div class="combo">${blocks}${a.combo}</div>
+      </div>
+      <span class="tier ${a.tier}">TIER ${a.tier}</span>
+    </div>
+    <div class="play">${a.play}</div>
+    <div class="link">${links}</div>`;
+  ag.appendChild(el);
+});
+
+/* ---------- 탭 ---------- */
+const tabs = document.getElementById('tabs');
+const pages = {ov:'p-ov',slot:'p-slot',gods:'p-gods',arch:'p-arch',mat:'p-mat',apply:'p-apply'};
+tabs.addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  [...tabs.children].forEach(x=>x.classList.toggle('active', x===b));
+  Object.entries(pages).forEach(([k,id])=>{
+    document.getElementById(id).classList.toggle('show', k===b.dataset.t);
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+
+/* ---------- 사신 필터 ---------- */
+const gf = document.getElementById('godfilter');
+gf.addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  [...gf.querySelectorAll('.fbtn')].forEach(x=>{
+    const on = x===b;
+    x.classList.toggle('active', on);
+    x.style.background = on ? x.style.getPropertyValue('--fc') : '';
+    x.style.borderColor = on ? x.style.getPropertyValue('--fc') : '';
+  });
+  const sel = b.dataset.g;
+  document.querySelectorAll('#godgrid .god').forEach(c=>{
+    c.style.display = (sel==='all' || c.dataset.g===sel) ? '' : 'none';
+  });
+});
+// 초기 active 컬러
+const firstF = gf.querySelector('.fbtn.active');
+firstF.style.background = firstF.style.getPropertyValue('--fc');
+firstF.style.borderColor = firstF.style.getPropertyValue('--fc');
+
+/* ---------- util ---------- */
+function hexA(hex,a){
+  const h = hex.replace('#','');
+  const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>일섬뱀서 — 3안 전투 메커니즘 스킬트리</title>
+<style>
+  :root{
+    --bg:#0e0c0a; --bg2:#16120e; --panel:#1c1814; --panel2:#241e18;
+    --line:#3a3026; --line2:#564636; --gold:#c9a227; --gold2:#e8c14a;
+    --txt:#e8dcc8; --txt2:#b8a986; --txt3:#8a7c64; --txtdim:#6a5e4c;
+    --good:#6fd08c; --bad:#e2574d; --locked:#4a4036;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+    font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased;}
+  body{background:radial-gradient(circle at 50% -10%,#1a140e 0%,var(--bg) 55%);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 18px 80px;}
+  h1,h2,h3,h4{font-weight:600;color:var(--gold2);line-height:1.25;margin:0 0 .4em;}
+  h1{font-size:30px;letter-spacing:-.5px;}
+  h2{font-size:21px;border-left:3px solid var(--gold);padding-left:12px;margin-top:8px;}
+  h3{font-size:17px;color:var(--gold);}
+  h4{font-size:15px;color:var(--txt);}
+  p{margin:0 0 .7em;color:var(--txt2);}
+  a{color:var(--gold2);}
+  .kr{letter-spacing:-.2px;}
+  .lead{font-size:16px;color:var(--txt);max-width:820px;}
+  .section{margin:54px 0 0;}
+  .section-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .section-num{font-family:"Georgia",serif;font-size:13px;color:var(--gold);
+    border:1px solid var(--line2);border-radius:50%;width:30px;height:30px;
+    display:inline-flex;align-items:center;justify-content:center;flex:none;}
+  .hr{height:1px;background:linear-gradient(90deg,transparent,var(--line2),transparent);
+    margin:8px 0 22px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
+  .grid{display:grid;gap:14px;}
+  .muted{color:var(--txt3);}
+  .pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;
+    border:1px solid var(--line2);color:var(--txt2);background:var(--bg2);
+    letter-spacing:.3px;vertical-align:middle;}
+  .hanja{font-family:"Georgia",serif;}
+
+  /* ---- Overview cards ---- */
+  .ov-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));}
+  .ov-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;}
+  .ov-card .t{color:var(--gold2);font-weight:600;font-size:15px;margin-bottom:4px;
+    display:flex;align-items:center;gap:8px;}
+  .ov-card .ic{width:24px;height:24px;border-radius:6px;display:inline-flex;
+    align-items:center;justify-content:center;font-size:13px;font-family:Georgia,serif;flex:none;}
+  .ov-card p{font-size:13.5px;color:var(--txt2);margin:0;}
+
+  /* ---- Tree ---- */
+  .tree-shell{position:relative;}
+  .tree-top{display:flex;align-items:center;justify-content:space-between;
+    gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .budget{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .budget .pts{font-size:15px;color:var(--txt);}
+  .budget .pts b{color:var(--gold2);font-size:20px;font-weight:700;}
+  .budget input[type=range]{width:160px;accent-color:var(--gold);}
+  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);
+    border-radius:8px;padding:7px 14px;font-size:13.5px;cursor:pointer;
+    font-family:inherit;transition:background .12s,border-color .12s;}
+  .btn:hover{background:var(--line);border-color:var(--gold);}
+  .btn.gold{border-color:var(--gold);color:var(--gold2);}
+  .tree-stage{position:relative;width:100%;background:
+      radial-gradient(circle at 50% 50%,#181208 0%,#0d0a07 70%);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  #tree-svg{display:block;width:100%;height:auto;touch-action:pan-y;}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:12px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;color:var(--txt2);}
+  .legend i{width:11px;height:11px;border-radius:50%;display:inline-block;}
+
+  /* SVG node interaction */
+  .node{cursor:pointer;}
+  .node circle.ring{transition:stroke-width .1s,opacity .12s;}
+  .node.locked{cursor:not-allowed;}
+  .node.locked circle.body{opacity:.32;}
+  .node.locked text{opacity:.4;}
+  .edge{stroke-width:2.4;stroke-linecap:round;transition:stroke .15s,opacity .15s;}
+
+  /* tooltip */
+  #tip{position:absolute;pointer-events:none;z-index:40;max-width:300px;
+    background:#120f0b;border:1px solid var(--line2);border-radius:10px;
+    padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--txt2);
+    box-shadow:0 8px 28px rgba(0,0,0,.6);opacity:0;transform:translateY(4px);
+    transition:opacity .1s;}
+  #tip.show{opacity:1;transform:translateY(0);}
+  #tip .tt{font-size:13.5px;font-weight:600;color:var(--gold2);margin-bottom:3px;}
+  #tip .tier{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;
+    color:var(--txt3);margin-bottom:6px;}
+  #tip.key .tt{color:#ffd76a;}
+
+  /* ---- Branch panels ---- */
+  .br-grid{grid-template-columns:repeat(auto-fit,minmax(330px,1fr));}
+  .br-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    overflow:hidden;border-top:3px solid var(--bc,var(--gold));}
+  .br-head{padding:14px 18px 12px;}
+  .br-head .nm{font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;}
+  .br-head .nm .gj{font-family:Georgia,serif;font-size:22px;}
+  .br-head .ax{font-size:12px;color:var(--txt3);margin-top:2px;}
+  .br-body{padding:0 18px 16px;}
+  .br-concept{font-size:13px;color:var(--txt2);border-left:2px solid var(--bc);
+    padding-left:11px;margin:4px 0 14px;}
+  .tierband{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--txt3);margin:12px 0 5px;border-bottom:1px dashed var(--line);padding-bottom:3px;}
+  .nrow{display:flex;gap:9px;padding:5px 0;font-size:13px;}
+  .nrow .dot{width:9px;height:9px;border-radius:50%;flex:none;margin-top:6px;background:var(--bc);}
+  .nrow .nx b{color:var(--txt);font-weight:600;}
+  .nrow .nx span{color:var(--txt3);}
+  .key-box{margin-top:14px;background:#16120b;border:1px solid var(--bc);
+    border-radius:9px;padding:11px 13px;}
+  .key-box .kl{font-size:10.5px;letter-spacing:.6px;color:var(--bc);text-transform:uppercase;}
+  .key-box .kn{font-weight:700;color:#ffd76a;font-size:14.5px;margin:2px 0 5px;}
+  .key-box .ke{font-size:12.5px;color:var(--txt2);}
+  .key-box .kp{font-size:12.5px;color:var(--txt3);margin-top:7px;border-top:1px solid var(--line);padding-top:7px;}
+  .syn{font-size:12px;color:var(--txt3);margin-top:11px;}
+  .syn b{color:var(--txt2);}
+
+  /* ---- Builds ---- */
+  .bd-grid{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));}
+  .bd-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    display:flex;flex-direction:column;gap:9px;}
+  .bd-card .bn{font-size:16px;font-weight:600;color:var(--gold2);}
+  .bd-tags{display:flex;flex-wrap:wrap;gap:6px;}
+  .bd-tags .bt{font-size:11px;padding:2px 9px;border-radius:6px;font-family:Georgia,serif;}
+  .bd-card .bdesc{font-size:13px;color:var(--txt2);}
+  .bd-keys{font-size:12px;color:var(--txt3);}
+  .bd-keys b{color:var(--gold);}
+  .bd-card .btn{margin-top:auto;align-self:flex-start;}
+
+  /* ---- Apply ---- */
+  .apply-grid{grid-template-columns:1fr 1fr;}
+  @media(max-width:760px){.apply-grid{grid-template-columns:1fr;}}
+  table.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+  table.tbl th,table.tbl td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);
+    vertical-align:top;}
+  table.tbl th{color:var(--gold);font-weight:600;font-size:12px;}
+  table.tbl td{color:var(--txt2);}
+  ol.prio{margin:0;padding-left:20px;}
+  ol.prio li{margin-bottom:9px;color:var(--txt2);font-size:13.5px;}
+  ol.prio li b{color:var(--txt);}
+  .tag-new{font-size:10px;background:var(--gold);color:#1c1206;border-radius:4px;
+    padding:1px 5px;font-weight:700;margin-left:5px;}
+
+  .footer{margin-top:60px;font-size:12px;color:var(--txtdim);text-align:center;
+    border-top:1px solid var(--line);padding-top:18px;}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+  ::selection{background:var(--gold);color:#1c1206;}
+</style>
+</head>
+<body>
+<h2 class="sr-only">일섬뱀서 전투 메커니즘 스킬트리 3안 — 중앙 코어에서 7개 브랜치로 방사되는, 노드를 찍어 빌드를 만드는 인터랙티브 기획 문서</h2>
+<div class="wrap">
+
+  <header>
+    <div class="pill" style="margin-bottom:10px">ProjectFBDC · 아이디어 3안</div>
+    <h1 class="kr">전투 메커니즘 스킬트리</h1>
+    <p class="lead kr">신도 내러티브도 없다. <b style="color:var(--txt)">일섬 · 열기 · 회피 · 패리 · 젠</b> — 게임을 굴리는 메커니즘 그 자체를
+    디아블로 / PoE / VS 처럼 <b style="color:var(--gold2)">찍는</b> 스킬트리로 만든다. 중앙 코어(거합 사무라이)에서 7개 브랜치가 방사하고,
+    각 브랜치는 minor → notable → keystone 노드 체인으로 이어진다.</p>
+  </header>
+
+  <!-- ============ (1) 개요 ============ -->
+  <section class="section" id="s-overview">
+    <div class="section-head"><span class="section-num">1</span><h2>개요 — 무엇을, 어떻게 찍나</h2></div>
+    <div class="hr"></div>
+    <div class="grid ov-grid">
+      <div class="ov-card"><div class="t"><span class="ic" style="background:#2a2114;color:var(--gold2)">軸</span>메커니즘이 축</div>
+        <p>5대 전투 메커니즘(일섬·열기·회피·패리·젠)과 보조 2축(스윙 속도·생존)을 트리의 축으로 삼는다. 테마가 아니라 손에 쥔 동사 그 자체.</p></div>
+      <div class="ov-card"><div class="t"><span class="ic" style="background:#142a1d;color:var(--good)">＋</span>포인트로 찍기</div>
+        <p>레벨업 / 메타 진행으로 얻은 포인트를 노드에 투자. 선행 노드를 거쳐야 상위가 열린다. 예산 안에서 무엇을 포기할지가 빌드.</p></div>
+      <div class="ov-card"><div class="t"><span class="ic" style="background:#2a1414;color:#ffd76a">鍵</span>키스톤 = 정체성</div>
+        <p>각 브랜치 끝의 keystone은 강력한 이득과 명확한 대가를 함께 준다. 한 빌드는 보통 1~2개의 키스톤이 정의한다.</p></div>
+      <div class="ov-card"><div class="t"><span class="ic" style="background:#1a2030;color:#85b7eb">混</span>브랜치 혼합</div>
+        <p>한 브랜치에 올인하지 않아도 된다. 두세 브랜치의 minor/notable을 섞어 하이브리드 — 수류+젠, 회피+흡혈 같은 시너지 루프가 핵심 재미.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ (2) 인터랙티브 트리 ============ -->
+  <section class="section" id="s-tree">
+    <div class="section-head"><span class="section-num">2</span><h2>인터랙티브 스킬트리</h2></div>
+    <div class="hr"></div>
+    <p class="muted" style="font-size:13px;margin-bottom:14px">노드를 클릭해 할당/해제 · 호버하면 효과 툴팁 · 선행 노드를 안 찍으면 잠김(흐림) · 키스톤은 할당 시 강조. 예산 슬라이더로 포인트 한도 조절.</p>
+
+    <div class="tree-shell card" style="padding:16px">
+      <div class="tree-top">
+        <div class="budget">
+          <span class="pts">포인트 <b id="pts-used">0</b> / <span id="pts-max">28</span></span>
+          <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:8px">
+            예산 <input type="range" id="budget" min="12" max="48" step="1" value="28" />
+          </label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn gold" id="btn-reset"><span class="hanja">↺</span> 리셋</button>
+        </div>
+      </div>
+
+      <div class="tree-stage" id="tree-stage">
+        <svg id="tree-svg" viewBox="0 0 920 760" role="img" aria-label="7개 브랜치 스킬트리">
+          <g id="edges"></g>
+          <g id="nodes"></g>
+        </svg>
+        <div id="tip" role="tooltip"></div>
+      </div>
+
+      <div class="legend" id="legend"></div>
+    </div>
+  </section>
+
+  <!-- ============ (3) 브랜치 패널 ============ -->
+  <section class="section" id="s-branches">
+    <div class="section-head"><span class="section-num">3</span><h2>브랜치 7종</h2></div>
+    <div class="hr"></div>
+    <div class="grid br-grid" id="branch-panels"></div>
+  </section>
+
+  <!-- ============ (4) 추천 빌드 ============ -->
+  <section class="section" id="s-builds">
+    <div class="section-head"><span class="section-num">4</span><h2>추천 빌드 6종</h2></div>
+    <div class="hr"></div>
+    <p class="muted" style="font-size:13px;margin-bottom:14px">버튼을 누르면 위 트리에 해당 노드가 자동 할당된다(예산 자동 확대). 키스톤 조합으로 빌드 정체성을 미리 본다.</p>
+    <div class="grid bd-grid" id="build-cards"></div>
+  </section>
+
+  <!-- ============ (5) 적용 제안 ============ -->
+  <section class="section" id="s-apply">
+    <div class="section-head"><span class="section-num">5</span><h2>일섬뱀서 적용 제안</h2></div>
+    <div class="hr"></div>
+
+    <div class="grid apply-grid">
+      <div class="card">
+        <h3>기존 카드 풀 → 트리로 흡수</h3>
+        <p class="muted" style="font-size:13px">현 <code>data/upgrades.csv</code> 카드들은 대부분 minor 노드로 그대로 들어간다. 레벨업 = 카드 1장 = 트리 포인트 1점으로 통일.</p>
+        <table class="tbl">
+          <thead><tr><th>기존 카드</th><th>편입 브랜치 · 티어</th></tr></thead>
+          <tbody>
+            <tr><td>질풍(이속)</td><td>疾風 · minor 〔보법 단련 인근〕</td></tr>
+            <tr><td>강건(HP)</td><td>吸血 · minor 〔응혈〕</td></tr>
+            <tr><td>발도확장(사거리)</td><td>居合 · minor 〔발도/심도〕</td></tr>
+            <tr><td>속발(충전속도)</td><td>疾風 · minor 〔예열〕</td></tr>
+            <tr><td>회피(스택/쿨)</td><td>回避 · minor 〔잔심/여유〕</td></tr>
+            <tr><td>냉각·발열억제</td><td>熱 · minor 〔인내의 도신/잔불 유지〕</td></tr>
+            <tr><td>참격강화(피해)</td><td>居合 · minor 〔예기〕</td></tr>
+            <tr><td>보법(회피거리)</td><td>回避 · minor 〔보법 단련〕</td></tr>
+            <tr><td>경험치자석</td><td>吸血 · minor 〔거둠〕</td></tr>
+          </tbody>
+        </table>
+        <p class="muted" style="font-size:12px;margin-top:10px">→ 9장이 곧장 minor로 매핑됨. notable/keystone만 신규 구현하면 트리가 채워진다.</p>
+      </div>
+
+      <div class="card">
+        <h3>구현 우선순위</h3>
+        <ol class="prio">
+          <li><b>1. 데이터-드리븐 노드 정의</b><span class="tag-new">NEW</span> — 노드 = <code>SkillNode</code> Resource(<code>id/branch/tier/prereq[]/effect_key/value</code>). 트리 전체를 <code>.tres</code> 배열로. 효과는 기존 <code>Player</code> 런타임 보너스 변수 패턴 재사용(런마다 리셋).</li>
+          <li><b>2. minor 9종 = 기존 카드 재배선</b> — <code>UpgradeSystem</code> 효과를 노드 <code>effect_key</code>로 옮긴다. 가장 저위험, 즉시 가치.</li>
+          <li><b>3. notable 능동/조건 효과</b> — 레드존·관통·반격의 호흡·受け熱 등. <code>Player</code>에 조건 훅(열≥80%, 퍼펙트닷지 직후 등) 추가.</li>
+          <li><b>4. keystone 7종 + 대가 처리</b> — 강한 이득 + 패널티(평타 봉인·i-frame 제거·무재생). 빌드 정체성. 밸런스 비용이 가장 큼 → 후순위.</li>
+          <li><b>5. 트리 UI</b> — 본 HTML의 SVG 배치/할당 로직을 Godot <code>Control</code>로 이식. 메타 화면(OutGame)에 영구 트리, 인게임은 레벨업 시 인접 노드만 제안하는 축약형도 가능.</li>
+        </ol>
+        <p class="muted" style="font-size:12px;margin-top:6px"><b style="color:var(--txt2)">VS 하이브리드 안:</b> 인게임은 지금처럼 카드 3택을 유지하되, 뽑히는 카드 풀을 "메타에서 해금한 노드"로 한정 → 트리 = 영구 진행, 카드 = 런 내 픽. 두 시스템을 충돌 없이 합칠 수 있다.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer kr">일섬뱀서 (ProjectFBDC) · 3안 전투 메커니즘 스킬트리 · 인터랙티브 기획 시안 · 단일 HTML / 외부 의존 0</div>
+</div>
+
+<script>
+/* ============================================================
+   브랜치 + 노드 데이터
+   각 노드: id, label(짧게), tier(minor/notable/keystone), cost, prereq[]
+   angle = 브랜치 방사각, ring = 코어로부터 거리 단계(0=core)
+   ============================================================ */
+const BR = [
+  {key:"heat",  name:"熱 폭주", gj:"熱", ax:"열기 — 과열을 화력으로", color:"#FF5A1F",
+   concept:"열기는 위험이 아니라 연료. 일섬을 연타해 레드존까지 밀어넣을수록 베기가 매워지고, 회피해야 할 탈진을 역으로 광역 폭발로 터뜨린다. 식히는 빌드의 정반대 — 끓일수록 강하다.",
+   nodes:[
+     {id:"h1",t:"minor",n:"불씨 (가속 발열)",e:"일섬 1회당 누적 열 +15%. 레드존에 빨리 도달해 상위 노드 발동 빈도↑. 진입 노드."},
+     {id:"h2",t:"minor",n:"달군 칼날 (열 비례 피해)",e:"현재 열에 비례 일섬·스윙 피해 +최대 25%(0%→+0, 100%→+25% 선형). 열=딜 스케일러."},
+     {id:"h3",t:"minor",n:"인내의 도신 (탈진 단축)",e:"탈진(이동50%↓·발사봉인) 지속 −20%. 레드존 운용의 패널티 창 완화."},
+     {id:"h4",t:"minor",n:"잔불 유지 (감쇠 저항)",e:"탈진 외 열 지수감소 속도 −30%(식는 유예 +1s). 콤보 윈도우 유지."},
+     {id:"h5",t:"notable",n:"레드존 (과열 직전 폭화)",e:"열 80%↑ 동안 일섬 사거리 +15%·돌진속도 +20%·피해 +30%. '레드존에 머무는' 운용 강제."},
+     {id:"h6",t:"notable",n:"방열 일섬 (열→광역)",e:"일섬 적중 시 열 일부 소모→착지점 화염 파동(광역+경직). 열 높을수록 반경↑. 능동 배출 밸브."},
+     {id:"h7",t:"notable",n:"증폭 결정 (콤보 관대)",e:"콤보 판정창 +0.4s & 콤보 배수 ×1.5→×1.7. 느긋한 텀에도 7발 풀히트까지 안정."},
+     {id:"hK",t:"keystone",n:"임계 폭발 (臨界爆發)",e:"열 100% 탈진 진입 순간 자기 중심 대형 화염 폭발(광역 고피해+강넉백+경직). 위력=직전 콤보 발수 비례(7발=최대). 대가: 탈진창 동안 이동·발사 완전 봉인 + i-frame 없음 = 무방비.",
+       play:"일부러 7발 연타로 100%를 찍어 군집 한복판에서 자폭하듯 터뜨리고, 폭발 넉백·경직으로 벌린 틈에 회피로 탈진창을 흘린다. 끓이다 터뜨리는 하이리스크 광역 클리어.",
+       syn:"受流/回避와 결합 시 폭발 직후 무방비를 패리·퍼펙트닷지로 메워 상쇄(최강 보완). 禪과는 폭발 경직 틈에 풀폭 버스트. 居合의 발도확장/참격강화는 레드존 보너스에 곱연산."}
+   ]},
+
+  {key:"iai",  name:"居合 一擊", gj:"居", ax:"일섬 — 풀차지 단일 일격", color:"#C9A227",
+   concept:"한 호흡으로 모든 것을 벤다. 평타·DPS를 버리고 풀차지 일섬 한 방에 사거리·관통·치명·처형을 몰아넣는다. 화면을 가로질러 줄 세운 적을 꿰뚫고, 잡몹은 즉사·보스는 도려낸다. 느린 호흡, 큰 한 방.",
+   nodes:[
+     {id:"i1",t:"minor",n:"발도 (拔刀)",e:"풀차지 일섬 사거리 +6%(3중첩). 거합 한 줄의 '간격'을 확보하는 진입 노드."},
+     {id:"i2",t:"minor",n:"심도 (深度)",e:"일섬 박스 전방 길이 +0.4m, 폭은 그대로. '점이 아닌 선'으로 베는 정체성 강화."},
+     {id:"i3",t:"minor",n:"예기 (銳氣)",e:"풀차지(perfect≥0.9) 발사 일섬 피해 +12%. 미만이면 보너스 없음 — 끝까지 당겨 쏘게."},
+     {id:"i4",t:"notable",n:"관통 (貫通)",e:"일섬이 경로상 적을 전부 관통(첫 적에서 소멸 안 함). 잡몹 한 줄 쓸기, 보스 관통당 풀데미지."},
+     {id:"i5",t:"notable",n:"단공 (斷孔)",e:"풀차지 명중 치명 35% / 치명 ×2.0. 관통과 곱해지면 한 줄 전체 동시 크리."},
+     {id:"i6",t:"notable",n:"처형 (處刑)",e:"풀차지 적중한 적 HP 30%↓면 즉사(보스는 12%). 단공으로 깎고 다음 거합으로 도려내는 2단."},
+     {id:"iK",t:"keystone",n:"일격필살 (一刀兩斷)",e:"풀차지 일섬 기본 피해 ×3.0 + 관통·치명·처형 유지, 보스 처형 12%→18%. 대가: 차징 속도 −45%(풀차지 ~2.5s) + 근접 부채 스윙(LB) 영구 봉인 = 평타 소멸, 차징 중 무방비.",
+       play:"극단적 저격수. 평타를 포기하고 한 호흡에 모든 걸 건다. 적을 일렬로 유인→풀차지→한 줄 통째로 도려내고 즉시 회피 이탈. ~2.5s 무방비라 '쏠 자리'를 먼저 만드는 동선·회피 설계가 곧 생존.",
+       syn:"禪: 풀폭 버스트(×3폭·범위×1.5)와 一刀兩斷의 ×3.0·관통이 곱해져 화면 폭 전체가 처형선이 되는 '궁극의 한 칼'. 回避: ~2.5s 무방비를 퍼펙트닷지 불릿타임으로 메움. 熱: 단발이라 열 누적 느려 탈진 리스크 거의 없음."}
+   ]},
+
+  {key:"flurry",name:"疾風 연참", gj:"疾", ax:"스윙·충전 속도 — 다타", color:"#46E3C8",
+   concept:"공속·충전속도·연속 타격으로 부채 스윙(LB)과 일섬(RB)을 끊김 없이 난사하는 속도 브랜치. 한 방이 아니라 초당 히트 수로 갈아넣는다. 도트/스택/흡혈처럼 '맞힌 횟수'로 누적되는 효과와 폭발적으로 맞물린다.",
+   nodes:[
+     {id:"f1",t:"minor",n:"속결 (速結)",e:"근접 부채 스윙 쿨다운 −6%. 첫 진입 노드 — 손맛의 토대."},
+     {id:"f2",t:"minor",n:"예열 (豫熱)",e:"일섬 충전 속도 +8%."},
+     {id:"f3",t:"minor",n:"경수 (輕手)",e:"스윙 쿨다운 추가 −5% + 부채 각도 +6%. 다단히트 적중 폭 확보."},
+     {id:"f4",t:"notable",n:"연격 (連擊·추가타)",e:"스윙 적중 12% 확률 1프레임 뒤 추가 1타(0.6배). '맞힌 횟수' 효과를 한 스윙에 두 번 적립."},
+     {id:"f5",t:"notable",n:"선풍 충전 (旋風)",e:"일섬 적중마다 다음 일섬 충전속도 +20%(3중첩, 4s 미적중 소멸). 점점 빨리 차오르는 리듬 가속."},
+     {id:"f6",t:"notable",n:"냉정한 손 (冷靜手)",e:"일섬 발사 시 누적 열 +25% 감소(열 폭주 완화). 단 일섬 피해 −10%. 지속력 보험."},
+     {id:"fK",t:"keystone",n:"질풍난무 (疾風亂舞)",e:"적중 누적으로 '난무' 스택(최대 10) → 스택당 공속·충전속도 +6%(최대 +60%). 대가: 스택 보유 중 일섬 열 +35%(탈진 가속), 0.8s 미적중 시 전 스택 즉시 소멸.",
+       play:"잡몹 밀집 지대를 끊임없이 휘저으며 적중을 끊기지 않게 유지 → 풀스택에서 스윙+일섬 초고속 난사. 열을 늘 주시하며 탈진 직전 잡몹으로 식히는 리듬 운영. 보스 단독전엔 약해지는 군집 학살 글래스캐넌.",
+       syn:"熱·吸血와 폭발적 — 풀스택 다타가 흡혈 '적중당 회복'을 초당 여러 번 적립해 생존, 냉각/발열억제가 키스톤 +35% 열 페널티를 상쇄. 도트/스택과는 '맞힌 횟수=적립 횟수'로 직결."}
+   ]},
+
+  {key:"evade", name:"回避 카운터", gj:"回", ax:"회피 — 퍼펙트닷지 카운터", color:"#3FE0C8",
+   concept:"회피(SPACE 2스택+i-frame)와 퍼펙트 닷지를 자원이자 무기로 바꾼다. minor로 스택·i-frame을 다지고, notable로 회피마다 보복(반격·넉백·열 환급)을 붙이며, keystone에서 퍼펙트 창·불릿타임을 극대화하되 일반 회피의 안전망을 깎아 '아슬아슬하게 비켜 베는' 카운터를 강제한다.",
+   nodes:[
+     {id:"e1",t:"minor",n:"보법 단련",e:"회피 거리 +12% / i-frame +0.05s. 진입 노드."},
+     {id:"e2",t:"minor",n:"잔심",e:"회피 스택 리필 시간 −15%. 비었던 두 칸이 더 빨리 돌아온다."},
+     {id:"e3",t:"minor",n:"여유",e:"회피 최대 스택 +1(2→3). 연속 비켜내기 여유."},
+     {id:"e4",t:"minor",n:"예민한 감각",e:"퍼펙트닷지 판정창 +0.04s(0.12→0.16). 저스트 회피가 너그러워짐."},
+     {id:"e5",t:"notable",n:"반격의 호흡",e:"퍼펙트닷지 성공 시 일섬게이지/열 환급 +50% 증폭 + 회피 한 칸 즉시 재충전. 받아낸 직후 되받아칠 자원."},
+     {id:"e6",t:"notable",n:"스쳐 베기",e:"회피로 적을 통과(i-frame 중 겹침)할 때 약한 자동 슬래시 1히트 + 경직 누적. 동선 자체가 공격."},
+     {id:"e7",t:"notable",n:"유수 연환",e:"퍼펙트닷지 불릿타임 지속 +60% & 그동안 이속 +25%. 슬로우 안에서 더 길게·빠르게 카운터 각."},
+     {id:"eK",t:"keystone",n:"명경지수 (明鏡止水)",e:"퍼펙트닷지 판정창 2배 + 성공 시 불릿타임 대폭↑ & 직후 첫 일섬은 열 0 + 풀폭 버스트(젠 +1 즉시). 대가: 일반(미스) 회피 i-frame −40% & 최대 스택 −1 = 대충 굴리는 회피는 안전망 거의 없음.",
+       play:"인왕풍 텔레그래프를 끝까지 끌어 명경 판정창에 맞춰 퍼펙트닷지 → 즉발 풀폭 일섬 카운터 → 불릿타임 동안 다음 윈드업까지 읽어 연쇄 회피·반격. 안전한 굴림이 봉인되어 '읽고 받아치는' 디펜시브 카운터로 수렴.",
+       syn:"禪: 퍼펙트닷지마다 젠 +1 즉시 → '받아내기→젠 충전→풀폭 일섬' 루프 완성. 受流와는 발사체=패리/근접=회피 분업. 居合: 열 0 풀폭 일섬이 시그니처 한 방을 무료로. 熱: 반격의 호흡 열 환급으로 탈진 상쇄."}
+   ]},
+
+  {key:"parry", name:"受流 패리", gj:"受", ax:"패리 — 받아치기 반격", color:"#3FA7C4",
+   concept:"RB 패리(쳐냄)를 공격의 시작점으로. 패리 윈도우를 넓혀 안정적으로 받아넘기고, 성공 패리 1회를 곧장 자원(열·젠·게이지)과 딜(반사·확정 카운터)로 전환. 막는 게 손해가 아니라 가장 빠른 공격 개시.",
+   nodes:[
+     {id:"p1",t:"minor",n:"見切り (간파 I·II·III)",e:"패리 윈도우 +0.04s씩 3단(0.2→0.32s). 받아넘기는 타이밍 여유 확보."},
+     {id:"p2",t:"minor",n:"心眼 (심안)",e:"패리 쿨다운 −20%. 궁수 동시사격(25%)에 연달아 대응."},
+     {id:"p3",t:"minor",n:"弾き返し (튕겨내기)",e:"패리 성공 시 쳐낸 발사체가 가장 가까운 적에게 1 피해 반사. 군중 미세 딜."},
+     {id:"p4",t:"notable",n:"受け熱 (수열)",e:"패리 성공마다 열기 10% 즉시 환급. 패리=일섬 재장전. 탈진 직전 한 번의 패리로 봉인 해제."},
+     {id:"p5",t:"notable",n:"流し斬り (흘려베기)",e:"패리 후 0.8s 내 일섬/스윙 확정 카운터 — 피해 +60% + 아머 즉시 0(경직 관통). 받아넘긴 직후가 최대 화력 창."},
+     {id:"p6",t:"notable",n:"連受け (연수)",e:"3s 내 패리 2연속 시 젠 +2 + 다음 패리 윈도우 0.5s간 2배. 젠 버스트로 가는 최단 루트."},
+     {id:"pK",t:"keystone",n:"受流一如 (수류일여)",e:"회피 i-frame 전부 상실(회피=이동 전용). 대신 패리 윈도우 +0.1s, 패리 성공 시 0.3s 무적+넉백, 확정 카운터 +60%→+120%. 잘 받으면 무한 반격, 한 번 빗나가면 도주 i-frame이 없어 그대로 피격.",
+       play:"퍼펙트닷지를 버리고 받아치는 능동 방어로. 받아넘긴 직후 0.3s 무적 안에서 확정 카운터 일섬을 꽂고 받음의 열로 즉시 재장전해 다시 패리하는 무한 공방 루프. 텔레그래프 독해가 곧 생존.",
+       syn:"禪과 최강(連受け 젠 2배→풀폭 버스트 마무리). 熱은 受け熱이 재장전을 맡아 즉발 탈진 상쇄, 居合은 流し斬り 확정 카운터로 한 방 극대화. 反대로 回避(퍼펙트닷지)와는 키스톤이 i-frame을 버려 상호 배타 — 분기점."}
+   ]},
+
+  {key:"zen",   name:"禪 버스트", gj:"禪", ax:"젠 — 모았다 터뜨리는 궁극", color:"#7B5CD6",
+   concept:"젠 미터를 빨리 채우고(패리/퍼펙트닷지/퍼펙트차징 +1, 5면 풀폭 일섬 버스트) 그 한 방을 극대화하는 폭발 궁극 빌드. 평소엔 빌드업, 차오르면 화면을 가르는 풀폭 일섬으로 보스·군집을 한 번에 지운다. 모았다 터뜨리는 리듬.",
+   nodes:[
+     {id:"z1",t:"minor",n:"명경 (明鏡 I~III)",e:"퍼펙트 입력당 젠 획득 +1단계씩(특정 트리거 +2). 미터를 더 빨리 채워 버스트 빈도↑. 기초 패시브."},
+     {id:"z2",t:"minor",n:"부동심 (不動心 I~II)",e:"피격 시 젠 감소 완화 — drain_on_hit 반감을 랭크당 −25%. 한 대 맞아도 게이지 덜 잃음."},
+     {id:"z3",t:"minor",n:"입정 (入定)",e:"풀폭 버스트 폭 +0.5, 사거리 +0.2. 군집 일소·보스 적중 안정성↑."},
+     {id:"z4",t:"notable",n:"파사현정 (破邪顯正)",e:"버스트가 경로상 모든 적 아머 즉시 0+경직(보스 포함). 풀폭이 '리셋 버튼'이 돼 위험 텔레그래프를 강제로 끊음."},
+     {id:"z5",t:"notable",n:"무심일도 (無心一刀)",e:"버스트 발사 후 0.6s간 젠 1로 시작(0 아님) + 직후 첫 퍼펙트 입력 +3 환산. 버스트→버스트 회전을 만든다."},
+     {id:"z6",t:"notable",n:"좌선 (坐禪)",e:"젠 가득(armed) 동안 받는 피해 −30% + 이속 +15%. 폭탄을 안전 운반하다 원하는 타이밍에 터뜨림. 발사 시 소멸."},
+     {id:"zK",t:"keystone",n:"열반적정 (涅槃寂靜)",e:"젠 최대 5→8 + 가득 차면 다음 일섬이 '대버스트'(폭 ×5/사거리 ×2/보스 8뎀/처치 연쇄폭발). 대가: 8칸 미만 버스트 봉인(중간 발동 불가) + 피격 시 미터 전부 0 리셋(반감 아님).",
+       play:"공백을 무피격으로 버티며 8칸을 모아 단 한 번의 풀폭 일섬으로 보스·웨이브를 통째로 증발시키는 핵 한 방 빌드. 채우는 동안 평타·회피로 연명, 터질 때 화면이 갈라진다. 한 대만 맞아도 게이지 통째 증발하는 올인 도박.",
+       syn:"受流·回避와 직결 — 두 브랜치가 젠 충전 트리거를 공급해 '안 맞고 받아치기'가 곧 버스트 연료. 居合로 풀폭 도달거리·차징 퍼펙트 빈도↑. 熱와는 상극(버스트=차징형 vs 즉발 연타 열관리, 자원 경합) — 둘 중 하나로 특화."}
+   ]},
+
+  {key:"harvest",name:"吸血 수확", gj:"吸", ax:"생존 — 흡혈로 버틴다", color:"#C0556A",
+   concept:"딜 축이 아니라 버티는 축. 처치·베기마다 흘러나오는 피를 거둬 HP·일섬게이지·열 회복으로 환원. 군집을 헤집을수록 회복량이 불어나 VS식 화면 가득한 적이 곧 회복원(밀집 보너스). 다른 축의 엔진이 아니라 연료탱크.",
+   nodes:[
+     {id:"v1",t:"minor",n:"선혈 (鮮血)",e:"스윙·일섬 적중 시 가한 피해 일부를 HP 흡수(소량 라이프스틸). 입구 노드 — 모든 회복의 베이스."},
+     {id:"v2",t:"minor",n:"거둠 (收)",e:"EXP 젬 자석 반경 + & 젬 1개 수집 시 미량 HP 회복. 줍는 행위=유지로 전환."},
+     {id:"v3",t:"minor",n:"마름 (枯)",e:"적 처치 시 소량 고정 HP 회복(처치당 정액). 잡몹 청소가 곧 힐."},
+     {id:"v4",t:"minor",n:"응혈 (凝血)",e:"최대 HP 소폭↑ + 피격 후 일정시간 내 처치 시 추가 회복. 흡혈로 채울 그릇을 키움."},
+     {id:"v5",t:"notable",n:"도륙 수확 (屠戮)",e:"한 번의 일섬/스윙이 다수 적중 시 명중 수 비례 흡혈 가산(3마리↑부터 배수). VS식 군집 베기=최대 회복."},
+     {id:"v6",t:"notable",n:"역혈 (逆血)",e:"현재 HP가 낮을수록 흡혈 효율 가파르게↑. 빈사에서 되살아나는 컴백 라인, 저체력 운용의 핵."},
+     {id:"v7",t:"notable",n:"환류 (還流)",e:"흡혈이 HP 가득일 때 초과분을 열 냉각/일섬게이지로 환원. 흡혈을 열관리·충전과 잇는 다리."},
+     {id:"vK",t:"keystone",n:"혈식 (血食)",e:"자연 재생·시간/회피 기반 HP 회복을 전부 0으로 봉인하는 대신 흡혈/처치/수확 효율 대폭↑ + 흡혈 시마다 짧은 '흡혈 광폭화'(연쇄로 갱신). 군집 베는 동안 거의 무한 유지, 적이 비면 한 방울도 안 참.",
+       play:"항상 군중 한가운데를 파고들어 끊임없이 베며 흡혈로 버티는 공격적 생존형. 보스 단독전·텅 빈 휴지기·궁수 카이팅이 명백한 약점이라 '언제 들어가고 언제 빠지나' 라인 관리가 핵심인 하이리스크 하이리워드.",
+       syn:"疾風 이속+도륙 수확으로 군집을 가로질러 다수 적중→흡혈 극대화, 回避 퍼펙트닷지 불릿타임으로 혈식 무재생 위험구간을 안전 회복창으로, 還流→熱 냉각 환류로 거합/열 축 탈진 페널티를 흡혈로 받쳐준다."}
+   ]}
+];
+
+/* 방사 레이아웃: 7 브랜치 각도, ring 단계별 반지름 */
+const CX=460, CY=380;
+const RING=[0,92,158,222,290];   // core, minor1, minor2/notable, notable, keystone 거리 단계
+const ANG=[ -90, -38, 14, 66, 130, 180, 230 ];  // 7개 브랜치 방사각(도)
+const COST={minor:1,notable:2,keystone:3};
+
+/* 노드별 (ring,spread) 배치 패턴 — 브랜치당 노드 수 다름(7~8) */
+function layoutBranch(nodes, angDeg){
+  // ring 할당: 같은 tier가 여러개면 같은 ring 위에서 살짝 벌림(spread)
+  const out=[];
+  // tier별 그룹
+  const minors=nodes.filter(n=>n.t==="minor");
+  const notables=nodes.filter(n=>n.t==="notable");
+  const key=nodes.find(n=>n.t==="keystone");
+  const base=angDeg*Math.PI/180;
+  // minor: ring1~2 에 분포
+  const place=(arr, ringIdxs, spreadDeg)=>{
+    arr.forEach((n,i)=>{
+      const r = RING[ ringIdxs[Math.min(i,ringIdxs.length-1)] ];
+      // 같은 ring 위 여러 노드는 각도 살짝 벌림
+      const sameRing = arr.filter((m,j)=> ringIdxs[Math.min(j,ringIdxs.length-1)]===ringIdxs[Math.min(i,ringIdxs.length-1)]);
+      const idxInRing = sameRing.indexOf(n);
+      const cnt=sameRing.length;
+      const off = (cnt>1)?((idxInRing-(cnt-1)/2)*spreadDeg):0;
+      const a = base + off*Math.PI/180;
+      n._x = CX + Math.cos(a)*r;
+      n._y = CY + Math.sin(a)*r;
+      n._a = a;
+    });
+  };
+  // minors -> ring 1 (and a couple to ring2 if many)
+  if(minors.length<=3){ place(minors,[1,1,2],17); }
+  else { // 4 minors -> 2 on ring1, 2 on ring2
+    place(minors.slice(0,2),[1,1],17);
+    place(minors.slice(2),[2,2],14);
+  }
+  // notables -> ring 2 / 3
+  if(notables.length<=2){ place(notables,[3,3],14); }
+  else { place(notables.slice(0, notables.length-1),[3,3],13); place(notables.slice(-1),[3],0); }
+  if(key){ place([key],[4],0); }
+  return nodes;
+}
+
+/* prereq 자동 생성: 가장 가까운 안쪽(ring 작은) 같은 브랜치 노드 1개 */
+function buildGraph(){
+  const nodesAll=[];
+  BR.forEach((b,bi)=>{
+    layoutBranch(b.nodes, ANG[bi]);
+    b.nodes.forEach(n=>{ n._branch=b.key; n._color=b.color; n._cost=COST[n.t]; });
+    nodesAll.push(...b.nodes);
+  });
+  // prereqs: 각 노드는 같은 브랜치에서 자기보다 안쪽 ring의 최근접 노드를 선행으로
+  BR.forEach((b,bi)=>{
+    const ringOf=n=>Math.round(Math.hypot(n._x-CX,n._y-CY));
+    b.nodes.forEach(n=>{
+      const myR=Math.hypot(n._x-CX,n._y-CY);
+      let best=null,bd=1e9;
+      b.nodes.forEach(m=>{
+        if(m===n)return;
+        const mR=Math.hypot(m._x-CX,m._y-CY);
+        if(mR < myR-20){ // 안쪽
+          const d=Math.hypot(m._x-n._x,m._y-n._y);
+          if(d<bd){bd=d;best=m;}
+        }
+      });
+      n._prereq = best? [best.id] : [];  // ring1 노드는 코어가 선행(빈배열=코어)
+    });
+  });
+  return nodesAll;
+}
+const NODES=buildGraph();
+const NMAP={}; NODES.forEach(n=>NMAP[n.id]=n);
+
+/* ============ 상태 ============ */
+const taken=new Set();
+let budget=28;
+
+function costUsed(){ let s=0; taken.forEach(id=>s+=NMAP[id]._cost); return s; }
+function prereqMet(n){
+  if(!n._prereq.length) return true; // 코어 직결
+  return n._prereq.every(p=>taken.has(p));
+}
+function canTake(n){
+  if(taken.has(n)) return true;
+  if(!prereqMet(n)) return false;
+  return costUsed()+n._cost <= budget;
+}
+function dependents(id){ return NODES.filter(n=>n._prereq.includes(id)); }
+
+function toggle(n){
+  if(taken.has(n.id)){
+    // 해제 시 의존 노드도 함께 해제(연쇄)
+    const stack=[n.id];
+    while(stack.length){
+      const cur=stack.pop();
+      if(taken.has(cur)){ taken.delete(cur); dependents(cur).forEach(d=>stack.push(d.id)); }
+    }
+  } else {
+    if(!prereqMet(n)) { flash("선행 노드를 먼저 찍어야 함"); return; }
+    if(costUsed()+n._cost>budget){ flash("포인트가 부족함 — 예산을 늘리거나 다른 노드 해제"); return; }
+    taken.add(n.id);
+  }
+  render();
+}
+
+let flashT;
+function flash(msg){
+  const el=document.getElementById("pts-used");
+  el.style.color="var(--bad)";
+  clearTimeout(flashT);
+  flashT=setTimeout(()=>el.style.color="",700);
+}
+
+/* ============ 렌더 ============ */
+const SVGNS="http://www.w3.org/2000/svg";
+const edgesG=document.getElementById("edges");
+const nodesG=document.getElementById("nodes");
+
+function mk(tag,attrs){ const e=document.createElementNS(SVGNS,tag);
+  for(const k in attrs)e.setAttribute(k,attrs[k]); return e; }
+
+function buildStatic(){
+  // core
+  const coreG=mk("g",{});
+  coreG.appendChild(mk("circle",{cx:CX,cy:CY,r:38,fill:"#1a130a",stroke:"#c9a227","stroke-width":2}));
+  coreG.appendChild(mk("circle",{cx:CX,cy:CY,r:30,fill:"none",stroke:"#564636","stroke-width":1}));
+  const ct=mk("text",{x:CX,y:CY-3,"text-anchor":"middle",fill:"#e8c14a","font-size":"22","font-family":"Georgia,serif"});
+  ct.textContent="居合"; coreG.appendChild(ct);
+  const ct2=mk("text",{x:CX,y:CY+15,"text-anchor":"middle",fill:"#8a7c64","font-size":"10.5"});
+  ct2.textContent="거합 사무라이"; coreG.appendChild(ct2);
+  nodesG.appendChild(coreG);
+
+  // edges
+  NODES.forEach(n=>{
+    const from = n._prereq.length? NMAP[n._prereq[0]] : {_x:CX,_y:CY};
+    const e=mk("line",{x1:from._x,y1:from._y,x2:n._x,y2:n._y,class:"edge"});
+    e.dataset.to=n.id; edgesG.appendChild(e);
+  });
+
+  // nodes
+  NODES.forEach(n=>{
+    const g=mk("g",{class:"node",transform:`translate(${n._x},${n._y})`});
+    g.dataset.id=n.id;
+    const r = n.t==="keystone"?20 : n.t==="notable"?14 : 11;
+    const ring=mk("circle",{class:"ring",r:r+4,fill:"none",stroke:n._color,"stroke-width":2,opacity:.0});
+    const body=mk("circle",{class:"body",r:r,fill:"#161009",stroke:n._color,"stroke-width":2});
+    g.appendChild(ring); g.appendChild(body);
+    if(n.t==="keystone"){
+      const t=mk("text",{"text-anchor":"middle",y:5,"font-family":"Georgia,serif","font-size":"15",fill:n._color});
+      t.textContent=BR.find(b=>b.key===n._branch).gj; g.appendChild(t);
+    } else if(n.t==="notable"){
+      const t=mk("text",{"text-anchor":"middle",y:4,"font-size":"11",fill:n._color}); t.textContent="◆"; g.appendChild(t);
+    }
+    g.addEventListener("click",()=>toggle(n));
+    g.addEventListener("mouseenter",ev=>showTip(n,g));
+    g.addEventListener("mousemove",ev=>moveTip(ev));
+    g.addEventListener("mouseleave",hideTip);
+    nodesG.appendChild(g);
+  });
+}
+
+function render(){
+  document.getElementById("pts-used").textContent=costUsed();
+  document.getElementById("pts-max").textContent=budget;
+  // nodes
+  nodesG.querySelectorAll(".node").forEach(g=>{
+    const n=NMAP[g.dataset.id];
+    const on=taken.has(n.id);
+    const avail=prereqMet(n);
+    const body=g.querySelector(".body");
+    const ring=g.querySelector(".ring");
+    g.classList.toggle("locked", !avail && !on);
+    if(on){
+      body.setAttribute("fill", n._color);
+      body.setAttribute("stroke", "#fff7e0");
+      ring.setAttribute("opacity", n.t==="keystone"?.95:.55);
+      ring.setAttribute("stroke-width", n.t==="keystone"?3:2);
+      // keystone pulse highlight
+      const txt=g.querySelector("text");
+      if(txt) txt.setAttribute("fill", n.t==="keystone"?"#1c1206":"#1c1206");
+    } else {
+      body.setAttribute("fill","#161009");
+      body.setAttribute("stroke", avail? n._color : "#4a4036");
+      ring.setAttribute("opacity",0);
+      const txt=g.querySelector("text");
+      if(txt) txt.setAttribute("fill", avail? n._color : "#5a4f40");
+    }
+  });
+  // edges
+  edgesG.querySelectorAll(".edge").forEach(e=>{
+    const n=NMAP[e.dataset.to];
+    const from = n._prereq.length? NMAP[n._prereq[0]] : null;
+    const litFrom = from? taken.has(from.id) : true; // core always lit
+    const active = taken.has(n.id) && litFrom;
+    e.setAttribute("stroke", active? n._color : "#2b2218");
+    e.setAttribute("opacity", active? .9 : (prereqMet(n)?.45:.18));
+  });
+}
+
+/* tooltip */
+const tip=document.getElementById("tip");
+const stage=document.getElementById("tree-stage");
+function showTip(n,g){
+  const b=BR.find(x=>x.key===n._branch);
+  const tierKr = n.t==="keystone"?"키스톤 · 비용 3":n.t==="notable"?"노터블 · 비용 2":"마이너 · 비용 1";
+  const pre = n._prereq.length? `선행: ${NMAP[n._prereq[0]].n}` : "선행: 코어(즉시)";
+  tip.className = "show"+(n.t==="keystone"?" key":"");
+  tip.innerHTML=`<div class="tier" style="color:${b.color}">${b.name} · ${tierKr}</div>
+    <div class="tt">${n.n}</div><div>${n.e}</div>
+    <div style="margin-top:6px;color:var(--txtdim);font-size:11px">${pre} · ${taken.has(n.id)?"✓ 할당됨 (클릭=해제)":(prereqMet(n)?"클릭=할당":"잠김")}</div>`;
+}
+function moveTip(ev){
+  const r=stage.getBoundingClientRect();
+  let x=ev.clientX-r.left+14, y=ev.clientY-r.top+12;
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  if(x+tw>r.width) x=ev.clientX-r.left-tw-14;
+  if(y+th>r.height) y=r.height-th-6;
+  tip.style.left=x+"px"; tip.style.top=Math.max(4,y)+"px";
+}
+function hideTip(){ tip.className=""; }
+
+/* legend */
+function buildLegend(){
+  const L=document.getElementById("legend");
+  BR.forEach(b=>{
+    const s=document.createElement("span");
+    s.innerHTML=`<i style="background:${b.color}"></i>${b.gj} ${b.name}`;
+    L.appendChild(s);
+  });
+  const sep=document.createElement("span");
+  sep.innerHTML=`<span style="color:var(--txtdim)">●작음=마이너 · ◆=노터블 · ⬣큼=키스톤</span>`;
+  L.appendChild(sep);
+}
+
+/* ============ 컨트롤 ============ */
+document.getElementById("budget").addEventListener("input",e=>{
+  budget=+e.target.value;
+  // 예산 줄이면 초과분 자동 해제(가장 비싼 keystone부터)
+  while(costUsed()>budget){
+    const arr=[...taken].map(id=>NMAP[id]).sort((a,b)=>b._cost-a._cost);
+    if(!arr.length)break;
+    // 의존성 고려: leaf(아무도 선행 안하는) 우선 해제
+    let leaf=arr.find(n=>dependents(n.id).every(d=>!taken.has(d.id)));
+    leaf=leaf||arr[0];
+    toggle(leaf); // toggle handles cascade + render
+    return;
+  }
+  render();
+});
+document.getElementById("btn-reset").addEventListener("click",()=>{ taken.clear(); render(); });
+
+/* ============ 브랜치 패널 ============ */
+function buildBranchPanels(){
+  const host=document.getElementById("branch-panels");
+  BR.forEach(b=>{
+    const tiers={minor:[],notable:[],keystone:[]};
+    b.nodes.forEach(n=>tiers[n.t].push(n));
+    const tierHtml=(label,arr)=>arr.length?`<div class="tierband">${label}</div>`+arr.map(n=>
+      `<div class="nrow"><span class="dot"></span><div class="nx"><b>${n.n}</b> — <span>${n.e}</span></div></div>`).join(""):"";
+    const k=tiers.keystone[0];
+    const card=document.createElement("div");
+    card.className="br-card"; card.style.setProperty("--bc",b.color);
+    card.innerHTML=`
+      <div class="br-head">
+        <div class="nm"><span class="gj" style="color:${b.color}">${b.gj}</span>${b.name}</div>
+        <div class="ax">${b.ax}</div>
+      </div>
+      <div class="br-body">
+        <div class="br-concept">${b.concept}</div>
+        ${tierHtml("Minor",tiers.minor)}
+        ${tierHtml("Notable",tiers.notable)}
+        <div class="key-box">
+          <div class="kl">Keystone — 브랜치 정체성</div>
+          <div class="kn">${k.n}</div>
+          <div class="ke">${k.e}</div>
+          <div class="kp"><b style="color:var(--txt2)">플레이:</b> ${k.play}</div>
+          <div class="kp"><b style="color:var(--txt2)">시너지:</b> ${k.syn}</div>
+        </div>
+      </div>`;
+    host.appendChild(card);
+  });
+}
+
+/* ============ 추천 빌드 ============ */
+const BUILDS=[
+  {n:"과열 일격 (熱+居合)",tags:["heat","iai"],
+   d:"열을 끝까지 끌어올려 레드존 보너스를 일격필살에 곱연산으로 얹는다. 끓는 한 방 + 임계 폭발 광역.",
+   keys:["임계 폭발","일격필살"],
+   nodes:["h1","h2","h5","h6","hK","i1","i3","i4","iK"]},
+  {n:"패리 젠 버스트 (受流+禪)",tags:["parry","zen"],
+   d:"패리로 안 맞고 받아치며 젠을 폭발적으로 충전, 連受け→풀폭 버스트로 마무리하는 카운터 궁극.",
+   keys:["受流一如","열반적정"],
+   nodes:["p1","p2","p4","p5","p6","pK","z1","z2","z5","zK"]},
+  {n:"무한 생존 (回避+吸血)",tags:["evade","harvest"],
+   d:"퍼펙트닷지 불릿타임으로 혈식의 무재생 구간을 안전 회복창으로. 군중 한가운데서 끝없이 흡혈하며 버틴다.",
+   keys:["명경지수","혈식"],
+   nodes:["e1","e2","e5","e7","eK","v1","v3","v5","v7","vK"]},
+  {n:"연참 폭주 (疾風+熱)",tags:["flurry","heat"],
+   d:"질풍난무 풀스택으로 초고속 난사, 냉각·발열억제로 +35% 열 페널티를 상쇄해 탈진 없이 폭주 지속.",
+   keys:["질풍난무"],
+   nodes:["f1","f2","f3","f5","fK","h3","h4","h7"]},
+  {n:"거합 저격수 (居合+回避)",tags:["iai","evade"],
+   d:"평타를 버린 一刀兩斷. 퍼펙트닷지 불릿타임으로 ~2.5s 무방비 풀차지를 안전하게 완성→한 줄 처형.",
+   keys:["일격필살","명경지수"],
+   nodes:["i1","i2","i4","i5","i6","iK","e1","e4","e7","eK"]},
+  {n:"흡혈 난무 (吸血+疾風+回避)",tags:["harvest","flurry","evade"],
+   d:"도륙 수확 다타로 흡혈 극대화, 질풍 이속으로 군집을 가로지르고 회피로 빈사를 메우는 하이브리드 생존딜.",
+   keys:["혈식"],
+   nodes:["v1","v2","v5","v6","vK","f1","f3","f4","e1","e2"]}
+];
+function buildBuildCards(){
+  const host=document.getElementById("build-cards");
+  BUILDS.forEach((bd,i)=>{
+    const tagHtml=bd.tags.map(t=>{const b=BR.find(x=>x.key===t);
+      return `<span class="bt" style="background:${b.color}22;color:${b.color};border:1px solid ${b.color}55">${b.gj} ${b.name}</span>`;}).join("");
+    const c=document.createElement("div"); c.className="bd-card";
+    c.innerHTML=`<div class="bn">${bd.n}</div>
+      <div class="bd-tags">${tagHtml}</div>
+      <div class="bdesc">${bd.d}</div>
+      <div class="bd-keys">키스톤 · <b>${bd.keys.join(" + ")}</b></div>
+      <button class="btn gold" data-bi="${i}">트리에 적용 →</button>`;
+    host.appendChild(c);
+  });
+  host.addEventListener("click",e=>{
+    const btn=e.target.closest("button[data-bi]"); if(!btn)return;
+    applyBuild(BUILDS[+btn.dataset.bi]);
+  });
+}
+function applyBuild(bd){
+  // 필요한 모든 선행 포함 셋 구성
+  const want=new Set();
+  const addWithPre=id=>{
+    if(want.has(id))return; want.add(id);
+    const n=NMAP[id]; n._prereq.forEach(addWithPre);
+  };
+  bd.nodes.forEach(addWithPre);
+  // 비용 합 만큼 예산 확보
+  let cost=0; want.forEach(id=>cost+=NMAP[id]._cost);
+  if(cost>budget){ budget=Math.min(48,Math.max(cost,budget));
+    document.getElementById("budget").value=Math.min(48,budget); }
+  taken.clear(); want.forEach(id=>taken.add(id));
+  render();
+  document.getElementById("s-tree").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+/* ============ init ============ */
+buildStatic();
+buildLegend();
+buildBranchPanels();
+buildBuildCards();
+render();
+</script>
+</body>
+</html>

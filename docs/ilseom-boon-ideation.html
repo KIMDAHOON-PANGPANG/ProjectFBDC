@@ -1,0 +1,566 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>일섬뱀서 — 1안 '피의 마검을 다루는 굶주린 검사' 스킬빌드 아이데이션</title>
+<style>
+  :root{
+    --bg:#0c0608; --bg2:#140a0d; --bg3:#1c0e12; --panel:#1a0c10; --panel2:#220f14;
+    --line:#3a1820; --line2:#52222c; --line3:#6e2c38;
+    --txt:#f3e2e4; --txt2:#c79aa1; --txt3:#8f656c;
+    --acc:#c8202f; --acc2:#e23b2a; --acc-d:#7a0e12; --acc-dd:#4a0a0e;
+    --gold:#d99a2b; --teal:#2a9d8f; --vio:#7a4fd6; --bone:#cdbfae;
+    --r:10px; --r-l:14px;
+    --sig:#e23b2a; --core:#c8202f; --sup:#8a4fd6; --duo:#d99a2b; --arch:#2a9d8f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(120% 90% at 50% -10%, #1c0d11 0%, var(--bg) 60%);
+    color:var(--txt); font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+    line-height:1.62; -webkit-font-smoothing:antialiased; letter-spacing:-0.01em;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 18px 80px;}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+
+  /* HERO */
+  header.hero{padding:48px 0 26px; border-bottom:1px solid var(--line); position:relative;}
+  .hero .kicker{font-size:12.5px; letter-spacing:0.32em; color:var(--acc2); text-transform:uppercase; font-weight:700; margin-bottom:14px;}
+  .hero h1{font-size:34px; line-height:1.2; margin:0 0 10px; font-weight:800; letter-spacing:-0.02em;}
+  .hero h1 .blood{color:var(--acc2);}
+  .hero .sub{font-size:15px; color:var(--txt2); max-width:760px; margin:0;}
+  .hero .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:18px;}
+  .chip{font-size:12px; padding:5px 11px; border:1px solid var(--line2); border-radius:20px; color:var(--txt2); background:var(--bg2);}
+  .chip b{color:var(--acc2); font-weight:700;}
+
+  /* TABS */
+  nav.tabs{position:sticky; top:0; z-index:30; display:flex; flex-wrap:wrap; gap:6px;
+    padding:12px 0; margin-bottom:8px; background:linear-gradient(var(--bg) 70%, rgba(12,6,8,0)); backdrop-filter:blur(4px);}
+  .tab{font-size:13px; padding:8px 14px; border:1px solid var(--line2); border-radius:8px; cursor:pointer;
+    background:var(--bg2); color:var(--txt2); user-select:none; transition:all .12s; white-space:nowrap; font-weight:500;}
+  .tab:hover{border-color:var(--line3); color:var(--txt);}
+  .tab.on{background:var(--acc-d); border-color:var(--acc); color:#fff;}
+  .tab .n{opacity:.6; font-size:11px; margin-right:5px;}
+
+  section.panel{display:none; animation:fade .25s ease;}
+  section.panel.on{display:block;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+
+  h2.sec{font-size:22px; font-weight:700; margin:26px 0 6px; display:flex; align-items:center; gap:10px;}
+  h2.sec .bar{width:5px; height:24px; background:var(--acc); border-radius:3px;}
+  .lead{font-size:14.5px; color:var(--txt2); max-width:840px; margin:0 0 18px;}
+
+  /* generic card */
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-l); padding:18px 20px;}
+  .grid{display:grid; gap:14px;}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr));}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));}
+
+  /* slot tiles */
+  .slot{background:var(--bg2); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; border-left:4px solid var(--acc);}
+  .slot h4{margin:0 0 4px; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .slot .key{font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; background:var(--acc-dd); color:#ffb3b3; letter-spacing:.05em;}
+  .slot p{margin:6px 0 0; font-size:13px; color:var(--txt2);}
+  .slot .res{margin-top:8px; font-size:11.5px; color:var(--gold);}
+
+  /* legend */
+  .legend{display:flex; flex-wrap:wrap; gap:14px; margin:10px 0 20px; font-size:12.5px; color:var(--txt2);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .dot{width:11px; height:11px; border-radius:3px; display:inline-block;}
+
+  /* god cards */
+  .gods{display:grid; gap:18px; grid-template-columns:repeat(auto-fit,minmax(330px,1fr));}
+  .god{border:1px solid var(--line2); border-radius:var(--r-l); overflow:hidden; background:var(--panel); display:flex; flex-direction:column;
+    transition:transform .14s, box-shadow .14s, border-color .14s;}
+  .god:hover{transform:translateY(-3px); box-shadow:0 8px 30px rgba(180,18,38,.18); border-color:var(--line3);}
+  .god .top{padding:16px 18px 14px; border-bottom:1px solid var(--line); position:relative;}
+  .god .top::after{content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--gc,var(--acc));}
+  .god .hanja{font-size:30px; font-weight:800; line-height:1; color:var(--gc,var(--acc)); float:right; opacity:.85;}
+  .god .name{font-size:18px; font-weight:800; margin:0 0 4px;}
+  .god .role{font-size:11.5px; color:var(--txt3); letter-spacing:.04em;}
+  .god .body{padding:14px 18px 6px; flex:1;}
+  .god .theme{font-size:12.5px; color:var(--txt2); margin:0 0 12px; line-height:1.6;}
+  .god .blk{margin:0 0 11px;}
+  .god .blk .lab{font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; margin-bottom:3px; display:inline-block; padding:2px 7px; border-radius:5px;}
+  .lab.sig{background:rgba(226,59,42,.16); color:#ff8a7a;}
+  .lab.core{background:rgba(200,32,47,.14); color:#ff9b9b;}
+  .lab.sup{background:rgba(138,79,214,.18); color:#c4a9f6;}
+  .lab.duo{background:rgba(217,154,43,.16); color:#f0c775;}
+  .lab.arch{background:rgba(42,157,143,.18); color:#7fd9c9;}
+  .god .blk .t{font-size:13px; font-weight:700; margin:2px 0;}
+  .god .blk .d{font-size:12px; color:var(--txt2); line-height:1.55;}
+  .god details{margin:0 0 9px; border:1px solid var(--line); border-radius:8px; background:var(--bg2);}
+  .god details summary{cursor:pointer; font-size:12.5px; font-weight:600; padding:8px 11px; list-style:none; color:var(--txt); display:flex; justify-content:space-between; align-items:center;}
+  .god details summary::-webkit-details-marker{display:none;}
+  .god details summary .arr{color:var(--txt3); font-size:11px;}
+  .god details[open] summary .arr{transform:rotate(90deg);}
+  .god details .inner{padding:0 11px 11px; font-size:12px; color:var(--txt2);}
+  .god details .inner ul{margin:6px 0 0; padding-left:16px;}
+  .god details .inner li{margin-bottom:6px;}
+  .god .foot{padding:11px 18px 16px; border-top:1px solid var(--line); background:var(--bg2);}
+  .god .foot .arch-name{font-size:13px; font-weight:700; color:var(--arch); margin:0 0 5px;}
+  .god .foot .arch-play{font-size:11.5px; color:var(--txt2); line-height:1.55;}
+
+  /* tier pill */
+  .tier{font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:20px; letter-spacing:.04em;}
+  .tS{background:#5a0f16; color:#ffd0d0; border:1px solid #c8202f;}
+  .tA{background:#4a2a08; color:#ffe0a8; border:1px solid #d99a2b;}
+  .tB{background:#0c3a34; color:#a8eedf; border:1px solid #2a9d8f;}
+
+  /* compare table (sec 4) */
+  .cmp{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px;}
+  .cmp th,.cmp td{border:1px solid var(--line); padding:9px 11px; text-align:left; vertical-align:top;}
+  .cmp th{background:var(--bg3); color:var(--txt); font-weight:700; font-size:12px;}
+  .cmp td{color:var(--txt2);}
+  .cmp tr:nth-child(even) td{background:rgba(255,255,255,.012);}
+  .cmp .gn{color:var(--txt); font-weight:700;}
+
+  /* matrix */
+  .matrix-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  table.mx{border-collapse:collapse; font-size:12px; min-width:640px; margin-top:6px;}
+  table.mx th,table.mx td{border:1px solid var(--line); padding:8px 9px; text-align:center;}
+  table.mx th{background:var(--bg3); color:var(--txt); font-weight:700; font-size:11.5px;}
+  table.mx th.row{text-align:left; min-width:120px;}
+  table.mx td{color:var(--txt2);}
+  table.mx td.self{background:var(--acc-dd); color:var(--txt3);}
+  .syn{cursor:default; font-weight:700; border-radius:6px; padding:3px 6px; display:inline-block; font-size:11px;}
+  .syn-h{background:#5a0f16; color:#ffd0d0;}
+  .syn-m{background:#4a2a08; color:#ffe0a8;}
+  .syn-l{background:#243038; color:#9fb6c4;}
+
+  /* apply list */
+  .apply{counter-reset:ap;}
+  .apply .item{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px 18px 14px 52px; position:relative; margin-bottom:12px;}
+  .apply .item::before{counter-increment:ap; content:counter(ap); position:absolute; left:14px; top:13px; width:26px; height:26px;
+    border-radius:50%; background:var(--acc-d); color:#fff; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center;}
+  .apply .item h4{margin:0 0 4px; font-size:14.5px; font-weight:700;}
+  .apply .item p{margin:0; font-size:13px; color:var(--txt2);}
+  .apply .item code{font-family:var(--font-mono,monospace); font-size:11.5px; background:var(--bg3); padding:1px 5px; border-radius:4px; color:#ffb0a8;}
+
+  .note{font-size:12px; color:var(--txt3); margin-top:10px; font-style:italic;}
+  .hr{height:1px; background:var(--line); border:0; margin:24px 0;}
+
+  @media(max-width:600px){
+    .hero h1{font-size:26px;}
+    nav.tabs{position:static;}
+    .god .hanja{font-size:24px;}
+  }
+</style>
+
+<h2 class="sr">일섬뱀서 1안 '피의 마검을 다루는 굶주린 검사' 스킬빌드 아이데이션 — 코어 슬롯, 신 5종 카드, 빌드 아키타입, 시너지 매트릭스, 적용 제안을 탭으로 탐색하는 인터랙티브 문서.</h2>
+
+<div class="wrap">
+<header class="hero">
+  <div class="kicker">ProjectFBDC · 1안 아이데이션</div>
+  <h1>피의 마검을 다루는 <span class="blood">굶주린 검사</span></h1>
+  <p class="sub">마검이 피를 갈구하고, 검사는 베어 먹여 강해진다. 굶주리면 쇠한다 — 열관리(Heat)를 '피갈증'으로 번안한 고위험·고보상 거합 빌드 5신(神) 아이데이션. 코어 슬롯 매핑 → 신 카드 → 빌드 아키타입 비교 → 시너지 → 일섬뱀서 적용 제안.</p>
+  <div class="meta">
+    <span class="chip">HD-2D 거합 사무라이</span>
+    <span class="chip">인왕풍 텔레그래프 × <b>VS</b> 메타</span>
+    <span class="chip">코어 슬롯 5: <b>일섬·스윙·회피·패리·젠</b></span>
+    <span class="chip">자원 = <b>허기(Heat)</b></span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <div class="tab on" data-t="0"><span class="n">1</span>개요</div>
+  <div class="tab" data-t="1"><span class="n">2</span>코어 슬롯</div>
+  <div class="tab" data-t="2"><span class="n">3</span>신 5종</div>
+  <div class="tab" data-t="3"><span class="n">4</span>빌드 아키타입</div>
+  <div class="tab" data-t="4"><span class="n">5</span>시너지 매트릭스</div>
+  <div class="tab" data-t="5"><span class="n">6</span>적용 제안</div>
+</nav>
+
+<!-- ============ SEC 1 OVERVIEW ============ -->
+<section class="panel on" data-p="0">
+  <h2 class="sec"><span class="bar"></span>내러티브 · 시스템 개요</h2>
+  <p class="lead">검사는 검을 '쥔' 게 아니라 '먹여 키우는' 중이다. 베면 마검이 포만하며 힘을 빌려주고, 굶기면 칼날이 식어 검사 자신의 피까지 빤다. 이 한 줄을 다섯 신(파트너)으로 분기해, 각자 일섬뱀서의 코어 슬롯과 Heat/젠 경제에 다르게 물린다.</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:16px;">카드 구조 — 신 1체 = 4카드</h3>
+      <div class="legend" style="margin:0 0 12px;">
+        <span><i class="dot" style="background:var(--sig)"></i>시그니처 — 정체성 한 줄</span>
+        <span><i class="dot" style="background:var(--core)"></i>코어 — 5슬롯 변조</span>
+        <span><i class="dot" style="background:var(--sup)"></i>보조(서포트) — 패시브</span>
+        <span><i class="dot" style="background:var(--duo)"></i>듀오 — 신 조합 시너지</span>
+      </div>
+      <p style="font-size:13px;color:var(--txt2);margin:0;">한 신을 고르면 <b style="color:var(--txt)">시그니처</b>(빌드 축) + <b style="color:var(--txt)">코어 변조</b>(일섬/스윙/회피/패리/젠 5슬롯이 그 신의 색으로 물듦) + <b style="color:var(--txt)">보조 패시브</b> 2종이 같이 붙는다. 두 신을 함께 쥐면 <b style="color:var(--txt)">듀오</b> 시너지가 열린다.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:16px;">허기 자원 (= Heat 번안)</h3>
+      <p style="font-size:13px;color:var(--txt2);margin:0 0 10px;">기존 열관리(일섬마다 +10%, 7s 콤보창 ×1.5, 100%→탈진→지수감소)를 <b style="color:var(--acc2)">마검의 허기 게이지</b>로 재라벨. 코드 변경 최소, 서사 직결.</p>
+      <table class="cmp" style="margin-top:0;">
+        <tr><th style="width:34%">상태</th><th>의미</th><th>효과 방향</th></tr>
+        <tr><td class="gn" style="color:#ffb0a8">과식 / 가열</td><td>연속 포식</td><td>흡혈·출혈·공격 ↑ (폭주 압박)</td></tr>
+        <tr><td class="gn" style="color:#ffe0a8">균형 / 중</td><td>적당히 게걸</td><td>안정 회전</td></tr>
+        <tr><td class="gn" style="color:#9fb6c4">굶주림 / 아사</td><td>못 벤 지 오래</td><td>자해 도트 · 회복 정지 (쇠퇴)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <h3 style="font-size:16px;margin:0 0 10px;">5신 한눈 — 같은 서사, 다섯 갈래</h3>
+  <div class="grid g3" id="overview-gods"></div>
+  <p class="note">탭 ③에서 각 신의 전체 카드(시그니처·코어 5슬롯·보조·듀오·아키타입)를, 탭 ④에서 빌드를 '같이 검토' 비교한다.</p>
+</section>
+
+<!-- ============ SEC 2 CORE SLOTS ============ -->
+<section class="panel" data-p="1">
+  <h2 class="sec"><span class="bar"></span>코어 슬롯 매핑</h2>
+  <p class="lead">PC의 다섯 능력 = 신이 변조하는 슬롯. 신을 고르기 전, 슬롯 자체가 무엇이고 어떤 자원에 물리는지부터. (신별 변조는 탭 ③ 코어 블록 참조.)</p>
+  <div class="grid g2">
+    <div class="slot" style="border-left-color:var(--acc2)">
+      <h4><span class="key">RB</span>일섬 (거합) <span class="tier tS" style="margin-left:auto">시그니처</span></h4>
+      <p>충전→돌진 베기. 자원 = 열관리(Heat) 또는 쿨다운. 조준 차징 / 즉발 두 모드. 거합 루프의 코어 출구 — 5신 모두 여기에 자기 시그니처를 가장 깊게 싣는다.</p>
+      <div class="res">물리는 자원: Heat(피갈증) · slash_hit_extents · slash_dash_speed</div>
+    </div>
+    <div class="slot">
+      <h4><span class="key">LB</span>근접 부채 스윙</h4>
+      <p>전방 부채꼴. 직접 피해는 낮고 회전이 빠르다 — 군중을 '밑작업'하는 살포기 슬롯. 처치·적중으로 허기를 소량 유지하는 입구.</p>
+      <div class="res">물리는 자원: melee_cooldown · 허기 소량 충전</div>
+    </div>
+    <div class="slot">
+      <h4><span class="key">SPACE</span>회피 (2스택 i-frame)</h4>
+      <p>2스택 무적 대시. 퍼펙트닷지(≤0.12s)→불릿타임. 굶주림(자해)을 멈추거나 공세 시동으로 전환하는 안전판 슬롯.</p>
+      <div class="res">물리는 자원: 퍼펙트닷지 → 불릿타임 · 신별 보상</div>
+    </div>
+    <div class="slot">
+      <h4><span class="key">RB·즉발</span>패리</h4>
+      <p>즉발 모드의 발사체 쳐냄 + 보상. HP를 깎지 않고 허기/흡혈을 채우는 '안전한 흡혈' 슬롯. 궁수·주술사 탄막 대응의 핵심.</p>
+      <div class="res">물리는 자원: 허기 게인 · on_projectile_parried / on_parry_success 훅</div>
+    </div>
+    <div class="slot" style="border-left-color:var(--arch)">
+      <h4><span class="key">젠 5</span>젠 미터 — 풀폭 일섬 버스트 (궁극)</h4>
+      <p>패리·퍼펙트 +1, 5스택에 풀폭 일섬 버스트(width×3, range×1.5). 화면 단위 정산·대량 회복·과식 폭주 진입 — 신별 클라이맥스 무브의 자리.</p>
+      <div class="res">물리는 자원: ZenSystem.consume_burst 분기 (신별 보정만 추가)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SEC 3 GODS ============ -->
+<section class="panel" data-p="2">
+  <h2 class="sec"><span class="bar"></span>신(파트너) 5종 — 풀 카드</h2>
+  <p class="lead">각 신 = 시그니처 + 코어 5슬롯 변조(접기) + 보조 패시브 + 듀오 아이디어(접기) + 빌드 아키타입. 카드 호버, 접힌 블록은 클릭.</p>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--sig)"></i>시그니처</span>
+    <span><i class="dot" style="background:var(--core)"></i>코어 5슬롯</span>
+    <span><i class="dot" style="background:var(--sup)"></i>보조</span>
+    <span><i class="dot" style="background:var(--duo)"></i>듀오</span>
+    <span><i class="dot" style="background:var(--arch)"></i>아키타입</span>
+  </div>
+  <div class="gods" id="gods"></div>
+</section>
+
+<!-- ============ SEC 4 ARCHETYPES ============ -->
+<section class="panel" data-p="3">
+  <h2 class="sec"><span class="bar"></span>빌드 아키타입 — 5신 '같이 검토'</h2>
+  <p class="lead">다섯 신이 곧 다섯 아키타입. 정렬·필터로 나란히 비교하고, 강·약·기존 카드/열/젠 연동을 한 표에서 본다.</p>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;">
+    <span style="font-size:12.5px;color:var(--txt2);">필터:</span>
+    <button class="tab on af" data-f="all" style="font-size:12px;">전체</button>
+    <button class="tab af" data-f="흡혈" style="font-size:12px;">흡혈/지속</button>
+    <button class="tab af" data-f="군집" style="font-size:12px;">군집/연쇄</button>
+    <button class="tab af" data-f="폭주" style="font-size:12px;">폭주/저체력</button>
+    <button class="tab af" data-f="처형" style="font-size:12px;">처형/스노볼</button>
+    <span style="margin-left:auto;font-size:12px;color:var(--txt2);">정렬:</span>
+    <select id="sort" style="background:var(--bg2);color:var(--txt);border:1px solid var(--line2);border-radius:7px;padding:6px 10px;font-size:12px;">
+      <option value="tier">티어순</option>
+      <option value="risk">리스크 높은순</option>
+      <option value="name">이름순</option>
+    </select>
+  </div>
+
+  <div id="arch-cards" class="grid" style="grid-template-columns:1fr;gap:12px;"></div>
+</section>
+
+<!-- ============ SEC 5 MATRIX ============ -->
+<section class="panel" data-p="4">
+  <h2 class="sec"><span class="bar"></span>시너지 매트릭스</h2>
+  <p class="lead">신×신 듀오 궁합과, 신×(기존 카드/Heat/젠) 연동 강도. 셀에 마우스를 올리면 근거.</p>
+
+  <h3 style="font-size:15px;margin:10px 0 4px;">신 × 신 (듀오)</h3>
+  <div class="matrix-wrap">
+    <table class="mx" id="mx-gods"></table>
+  </div>
+  <div class="legend" style="margin-top:10px;">
+    <span><i class="syn syn-h">강</i>핵심 듀오 — 자원 공명</span>
+    <span><i class="syn syn-m">중</i>조건부 시너지</span>
+    <span><i class="syn syn-l">약</i>상충/중복</span>
+  </div>
+
+  <h3 style="font-size:15px;margin:24px 0 4px;">신 × 시스템 (기존 카드 · Heat · 젠)</h3>
+  <div class="matrix-wrap">
+    <table class="mx" id="mx-sys"></table>
+  </div>
+  <p class="note">기존 카드: 질풍(이속)·강건(HP)·발도확장(일섬사거리)·속발(충전)·회피·냉각/발열억제(열)·참격강화·보법·경험치자석.</p>
+</section>
+
+<!-- ============ SEC 6 APPLY ============ -->
+<section class="panel" data-p="5">
+  <h2 class="sec"><span class="bar"></span>일섬뱀서 적용 제안</h2>
+  <p class="lead">코드 변경 최소 · 기존 시스템 재활용 우선. CLAUDE.md 규칙(런타임 보너스 변수, .tres 직접 변형 금지) 준수 가정.</p>
+  <div class="apply" id="apply"></div>
+</section>
+
+</div>
+
+<script>
+const GODS = [
+  {
+    name:"血盟 (혈맹)", hanja:"血", role:"출혈 누적 → 흡혈 거둠", gc:"#c8202f",
+    one:"베어 출혈 → 다시 베어 흡혈. Heat을 깎으며 일섬을 멈추지 않는 생명선.",
+    risk:3, tier:"A", tags:["흡혈"],
+    theme:"피의 마검과 맺은 계약. 출혈(Bleed)을 누적해 흡혈(Lifesteal)로 거둔다. 처치할수록 과식 보너스, 안 베면 굶주려 스스로를 깎는다.",
+    sig:{t:"혈음일섬 (血飮一閃)", d:"일섬 명중 시 출혈 스택 부착. 출혈 적을 다시 베면 잔여 도트를 '터뜨려' 폭발 결산 + 일부를 HP로 흡혈. 즉발=흡혈만큼 Heat↓(연타 지속), 충전=충전율 비례 출혈 상한↑(깊은 한 방)."},
+    core:[
+      ["일섬","명중 시 출혈 부착. 재타격으로 결산(폭발)+흡혈. 즉발 Heat↓ / 충전 출혈상한↑."],
+      ["스윙","출혈 살포기 — 직접 피해 낮추고 부채 전체에 얕은 출혈 1스택. 적중 시 허기 소량 충전."],
+      ["회피","잔상 자리에 혈안개 → 안의 적에 1스택 출혈(피해 0). 퍼펙트닷지 시 그 적 출혈 +1 심화."],
+      ["패리","발사체를 '피로 빨아' HP 소량 회복. 퍼펙트 패리 직후 다음 일섬 흡혈량 크게 증폭."],
+      ["젠","화면 내 전 출혈 동시 결산(광역 핏보라)+총합 일부 일괄 흡혈. 처치 1체당 잠깐 흡혈률 ↑(과식)."]
+    ],
+    sup:["과식·허기(飽飢) — 처치/흡혈로 차오르면 '과식'(흡혈·출혈 도트 ↑). 못 베면 '굶주림'으로 떨어져 초당 자해 도트.",
+      "혈괴(血塊) — 초과 회복분을 '핏방울 보호막'으로 임시 저장(상한·시간감소). 흡혈 잉여를 버리지 않게."],
+    duo:["잔향·반사·시간지연 류 — 잔향이 출혈을 한 박자 뒤 복제 타격해 스택 2배, 혈맹이 결산·흡혈. 묶어두는 사이 도트 만개 → 결산 흡혈 폭증.",
+      "낙인·취약·증폭 류 — 낙인이 받는 피해 증폭 → 출혈 1틱·결산·흡혈 환산 동반 상승. 낙인 처치 시 허기 추가 충전으로 '과식' 상시 유지."],
+    arch:{n:"혈식 거합 — Bloodfeast Iaido", p:"스윙·회피혈안개로 군중에 얕은 출혈 광역 도포 → 일섬으로 핵심을 깊게 베어 쌓고, 재타격 결산·흡혈로 Heat을 식혀 일섬을 멈추지 않는다. 패리/퍼펙트닷지로 흡혈 증폭을 켜 굶주림을 흑자로, 화면이 출혈로 찼을 때 젠 풀폭으로 전 화면 동시 결산 → 대량 흡혈+과식 폭주. 카드=참격강화(출혈량)·속발/냉각(회전율)·강건(혈괴 상한)·경험치자석(처치 유지)."}
+  },
+  {
+    name:"飢餓 (기아) — 아귀(餓鬼)", hanja:"飢", role:"흡명 포식 → 폭주 연료", gc:"#e23b2a",
+    one:"베어 포식해 허기를 채우고, 폭주를 '벌'이 아니라 젠 궁극의 연료로 쓴다.",
+    risk:4, tier:"S", tags:["폭주","흡혈"],
+    theme:"피를 갈구하는 마검의 의지. Heat을 '허기 게이지'로 직역 — 가열=포식, 과열=폭주, 탈진=아사. 항상 적당히 게걸스럽게 베어야 한다.",
+    sig:{t:"흡명일섬 (吸命一閃)", d:"일섬 적중 시 허기(=Heat) 즉시 채움 + 처치 시 한 칸 더 포식. 허기가 높을수록 일섬 데미지·돌진범위(slash_hit_extents) 단계 상승. 가득 차면 폭주 압박."},
+    core:[
+      ["일섬","마검의 주둥이 — 적중·처치로 포식. 굶주린 하단 발사 시 돌진거리 +20% / 데미지 -10%(빨리 먹이라는 신호)."],
+      ["스윙","한 입 — 적중 시 허기 1/3만 채움. 폭주 직전 히트스탑 짧아져(안달) 손맛으로 상태 체감."],
+      ["회피","피냄새 잃는 순간 — 회피 중 허기 감소 정지(아사 카운트다운 멈춤). 퍼펙트닷지 시 한 칸 공짜 포식."],
+      ["패리","적 무기를 '깨문다' — 성공 시 허기 반 칸. 굶주린 하단 패리는 포식량 2배(궁지 하이리스크)."],
+      ["젠","'아귀강림' — 현재 허기 전량 소모해 단계 비례 추가 데미지. 폭주 상태에서 쓰면 무손실 해소 + 초대형 일섬."]
+    ],
+    sup:["허기 단계 정산기 — 상/중/하 3단계 → 런타임 보너스. 상=공격·돌진↑(과식 위험), 하=이속만↑(굶주린 짐승). 냉각 카드 = '단식(斷食)'으로 재라벨.",
+      "아사 유예 / 혈식 회복 — 허기 비면 '아사 위험'(비네팅 적색, 게이지 회복 정지). 상단 유지+처치 시 소량 HP 흡혈(Vampire 훅 재사용)."],
+    duo:["飢餓 × 渴(갈) — '굶주림과 목마름'. 일섬으로 메인을 크게 먹고, 갈증이 잔챙이를 광역으로 핥는 풀-피드. 허기 게이지 공유로 회전 무중단.",
+      "飢餓 × 怒(노)·광폭 — 폭주를 '의도적 트리거'로. 일부러 과식→폭주→怒로 폭주 데미지 증폭→젠으로 안전 해소의 하이리스크 라인."],
+    arch:{n:"포식 거합사 — Feast Iaido", p:"잡몹은 스윙으로 핥아 허기 유지, 무리·엘리트엔 흡명일섬으로 크게 포식해 상단으로. 상단 버프로 일섬을 굵게 돌리되 폭주 직전 회피로 아사 멈추거나 패리로 한 입 더. 젠 5스택이 차면 폭주 상태에서 아귀강림으로 무손실 해소+화면 정리. 카드=혈식(흡혈)·발도확장(사거리)·속발(연속 포식). 굶으면 죽고 과식하면 폭주 — 항상 적당히 게걸스럽게."}
+  },
+  {
+    name:"呪怨 (주원)", hanja:"呪", role:"저주 낙인 → 연쇄 기폭", gc:"#7A0E1E",
+    one:"베인 적에 저주 낙인을 쌓아 터뜨리고, 폭발이 인접에 전이돼 군집을 들불처럼.",
+    risk:3, tier:"A", tags:["군집"],
+    theme:"마검에 깃든 원귀. 베면 저주가 무르익고 굶주리면 식는다. '느린 사형선고' — Heat 높을수록 폭발이 크고 탈진 중엔 낙인이 식어 사라진다.",
+    sig:{t:"저주 낙인 (呪 · Hex Brand)", d:"일섬·스윙 적중 시 낙인 1중첩(보스/엘리트는 느림). max(3) 또는 2.5s 경과 시 폭발 — 도트 일괄 정산 + 인접에 1중첩 전이. 폭발/전이 반경은 Heat에 비례, overheat 중엔 더 안 쌓임."},
+    core:[
+      ["일섬","경로상 모든 적에 낙인 2중첩(한 칼이 사형선고). 젠 버스트 일섬은 낙인 즉시 max로 채워 연쇄 개시."],
+      ["스윙","적중 시 1중첩. 이미 낙인된 적 재타격 시 폭발 타이머 0.6s 단축('재촉')."],
+      ["회피","퍼펙트닷지 순간 가해자에게 낙인 1중첩 역부여. 불릿타임 동안 폭발 타이머도 느려져 연쇄 타이밍 수동 조정."],
+      ["패리","쳐낸 발사체가 가장 가까운 낙인 적에 날아가 타이머 즉시 만료(강제 기폭). '되받아치는 저주'."],
+      ["젠","화면 내 전 낙인 동시 기폭 + 모든 적 1중첩 일괄 부여 — 굶주림 정점의 대정산."]
+    ],
+    sup:["식탐(貪) — 저주 폭발 처치마다 Heat 회복 유예 단축 + 소량 즉시 충전. 폭발=피 먹임의 양의 피드백(overheat 가속 리스크).",
+      "역병(疫) — 전이 반경 +폭, 전이 시 1→2중첩. 낙인이 군중을 들불처럼 번지게 하는 군집 특화."],
+    duo:["혈식(血食) 흡혈 신 — 저주 폭발 처치 수에 비례해 흡혈 회복·피갈증 충전 증폭. 마검이 먹이고 흡혈이 되돌리는 굶주림↔포만 순환.",
+      "거합 강화형 신 — 일섬 사거리/폭↑ → 낙인 범위 동반 확대. 한 칼에 더 넓은 군집을 물들여 연쇄를 한 번에 점화하는 '대낫(大鎌)'."],
+    arch:{n:"역병 사신(疫病 死神) — 연쇄 기폭", p:"일섬으로 군집에 낙인을 넓게 흩뿌리고(2중첩), Heat을 일부러 높게 유지해 폭발 위력을 키운 뒤 첫 폭발의 전이로 무리 전체를 휩쓴다. '식탐'으로 폭발 처치마다 Heat 되채워 연쇄 무중단, 위기엔 젠으로 화면 전체 동시 기폭. 핵심 긴장=Heat — 너무 태우면 overheat로 낙인이 식어 연쇄가 죽고, 적절히 먹이면 폭발이 폭발을 부른다. 카드=발도확장·참격강화(살포 범위)·냉각(overheat 안전선)."}
+  },
+  {
+    name:"狂亂 — 굶주린 광검", hanja:"狂", role:"저체력 = 고화력", gc:"#B11226",
+    one:"HP가 낮을수록 공격·공속·이속이 치솟는다. 죽음의 한 칸 위에서 가장 빛난다.",
+    risk:5, tier:"S", tags:["폭주"],
+    theme:"안전을 거래로 내건 버서크. 잃은 HP 비율에 비례한 '혈광' 스케일 — 풀피=보너스 0, 1칸=최대. 풀피로 도는 플레이어엔 거의 보너스 없고 칼끝에서 춤추는 자에게 폭발적 보답.",
+    sig:{t:"혈광(血狂) — 갈증의 저울", d:"잃은 HP 비율(missing_hp_frac) × {공격 +0~80%, 공속 +0~50%, 이속 +0~25%}. HP 10칸이라 칸마다 또렷한 스텝. 선형 대신 ease-in(frac²) 권장 — '진짜 위험할 때만' 폭발하게."},
+    core:[
+      ["일섬","혈광이 가장 크게 실리는 핵심 출구 — 저체력일수록 데미지·돌진속도↑, 핏빛 트레일 진해짐. '아사경' 활성 시 1칸에서 처형 마진."],
+      ["스윙","공속 보너스 체감처 — 저체력 쿨다운 단축으로 난도질. 처치 시 소량 Heat 환급(먹이 사슬 입구)."],
+      ["회피","도박의 핵심 — 퍼펙트닷지 시 불릿타임 + 혈광 한 단계 증폭('광혈 각성'). 끌고 가서 흘리는 플레이가 화력 직결."],
+      ["패리","HP 안 깎고 갈증 채우는 '안전한 흡혈' — Heat 소량 충전 + 짧은 무적. 저체력 중엔 광혈 각성 트리거 가능."],
+      ["젠","혈광을 그대로 싣고 발사 → 저체력에서 핏빛 대참격. 직후 짧게 혈광 최대치 강제 고정('광혈 폭주') — 한순간 대가 없이 최강."]
+    ],
+    sup:["아사경(餓死境) — HP 1칸 시 받는 피해 -1 완충(연속 즉사 방지) + 처형 마진. '극한에서 가장 사납고 가장 잘 버틴다'를 데이터로.",
+      "흡혈갈증(吸血渴) — 처치 시 확률/N킬마다 HP 1칸 + Heat 환급. 단 회복하면 혈광이 줄어드는 트레이드오프 내장 — 매 처치 저울질."],
+    duo:["(A) 절제·평정 계열 — '狂×靜' 음양. 젠/패리로 '靜'을 쌓아 임계 도달 시 '저체력 아니어도' 혈광 부분 개방. 안전 플레이어도 듀오로 광란의 맛.",
+      "(B) 흡혈·생명력 계열 — '갈증' 공명. 회복 직후 짧은 시간 혈광 유지(grace) 부여 → '먹고 강해지되 곧바로 굶주림으로 안 돌아가는' 지속형 폭주."],
+    arch:{n:"칼끝의 광검 — Edge Dominator", p:"HP를 의도적으로 1~2칸에 묶어두고(회복 절제/아사경 완충) 혈광을 최대로 굴리는 하이리스크 캐리. ①스윙으로 무리 베어 Heat 채우고 환급으로 광란 유지 → ②위험 순간 퍼펙트닷지/패리로 흘려 불릿타임·광혈 각성으로 화력 스파이크 → ③모인 젠을 저체력에서 풀폭으로 화면 정리. 카드=발도확장+속발(처형 빈도↑)·참격강화(곱연산)·회피. 냉각/강건은 상충 — 의도적으로 덜. 안티시너지: 강건으로 최대 HP만 키우면 풀피 구간이 길어져 보너스가 묽어짐."}
+  },
+  {
+    name:"冥府 — 명부의 사신", hanja:"冥", role:"저승 낙인 → 처형 수확", gc:"#6E2233",
+    one:"약해진 적(처형선 아래)을 거두는 마지막 한 칼이 가장 달다. 혼을 수확해 굶주림을 달랜다.",
+    risk:3, tier:"A", tags:["처형","군집"],
+    theme:"죽음 보상(Death Reward). 마검의 '베어 먹임'을 사신이 '저승길 안내'로 대행 — 처형 임계선 아래 적에 낙인이 켜지고 다음 타격이 즉사하며 혼을 토한다. 처형 부재가 길면 마검이 PC 체력을 갉는다.",
+    sig:{t:"저승 낙인 — Reaper's Mark (死印)", d:"적 HP가 처형선(기본 max 30%) 이하면 낙인 점등(붉은 낫). 다음 타격이 즉시 처형 + 큰 혼 결정(EXP+명부 게이지). 즉사 면역(보스/엘리트)은 낙인 중 받는 피해 +35%(집행) + 마무리 시 대량 드랍·짧은 불릿타임. 미집행 시 꺼져 '깎고→거두는' 2박자 강제."},
+    core:[
+      ["일섬","돌진 경로의 처형선 이하 적을 자동으로 거두며 지나감(한 번에 다수 처형=컷신감). 처형 1킬마다 허기 소량 환급. 풀차지/즉발 모두 처형 우선."],
+      ["스윙","낙인 적 우선 처형 + 낫 잔상이 인접 처형선 한 번 더 낮춤(연쇄 거둠). 약한 놈부터 솎는 통로 — 일섬 자원 아끼며 혼 적립."],
+      ["회피","종료 직후 통과/스친 적의 처형선 일시 상승(거두기 쉬움). 퍼펙트닷지 시 주변에 낙인 광역 점등 — '죽음을 피한 대가로 죽음을 흩뿌린다'."],
+      ["패리","성공 시 궤도 끝 적(또는 시전자)에 낙인 즉시 부여 + 혼 소량 즉시 수확. 패리 성공만큼 굶주림 타이머 잠시 멈춤."],
+      ["젠","경로 전 적을 처형선 무관 즉시 처형(보스/엘리트는 집행 게이지 대량+데미지 스파이크). 수확 혼 전부 헌납 → 굶주림 0 + 짧은 시간 처형선 대폭 상승(대학살)."]
+    ],
+    sup:["혼 계약(魂契) — 수확 혼이 명부 게이지에 누적, 만탱 시 1회 자동 발동 → 허기 즉시 청산 + 짧은 처형선 상향. 굶주림 직결 자가 회복(자원만).",
+      "굶주린 칼날(飢刃) — 일정 시간 처형 없으면 받는 피해 +X% & 이속 소폭↓. 처형/집행/패리 수확으로 즉시 해소 — 무뇌 도망 억제, 공격적 루프 유도."],
+    duo:["피의 마검(혈맹) 동기화 — '갈망과 거둠'. 마검=욕망 엔진, 명부=공급 라인. 처형 1회당 굶주림 더 크게 달램, 임계 넘으면 마검 폭주(일섬 급증+처형선 자동 상향).",
+      "집행자형 보스 사신 — '심판의 천칭'. 한쪽이 낙인(冥府), 파트너가 낙인 수만큼 광역 집행(처형 폭발)으로 군집 일괄 거둠 — 마킹 빌드 × 페이오프."],
+    arch:{n:"수확형 처형 — Reaper / Execute-Snowball", p:"강한 적을 일섬·스윙·패리로 처형선까지 '깎고', 낙인이 켜진 순간 일섬 돌진으로 무리를 한 번에 거두는 2박자가 핵심. 혼을 빠르게 수확해 명부 게이지를 돌리면 허기가 자가 순환. 후반 웨이브가 두꺼울수록 처형당 수확이 눈덩이처럼 불어 '한 번 거둘 때마다 더 거두기 쉬운' 스노볼이 절정 → 젠으로 임계 무시 대학살. 카드=발도확장(거둠 범위)·참격강화(깎는 속도)·회피/패리(낙인 광역·허기 유예). 약점: 처형 부재 시 굶주림 페널티 — 도망/지연 플레이에 약함."}
+  }
+];
+
+const sysRows = [
+  {n:"참격강화", k:["S","S","A","S","A"], why:["출혈량 직증","포식·일섬 데미지","낙인 살포 화력","혈광 곱연산 증폭","처형선까지 깎는 속도"]},
+  {n:"발도확장(사거리)", k:["A","S","S","A","S"], why:["출혈 도포 범위","포식 사거리","낙인 범위↑→연쇄","처형 빈도↑","거둠 범위↑"]},
+  {n:"속발(충전)", k:["S","S","A","S","A"], why:["결산 회전율","연속 포식 회전","-","일섬 회전↑","-"]},
+  {n:"냉각/발열억제", k:["A","B","S","B","A"], why:["결산 회전 안정","'단식'으로 재라벨(폭주 지연)","overheat 안전선=연쇄 생존","상충(갈증 식음)","처형 환급과 무난"]},
+  {n:"강건(HP)", k:["A","B","B","B","A"], why:["혈괴 보호막 상한","-","-","안티시너지(풀피 길어짐)","아사경 바닥 보강"]},
+  {n:"질풍(이속)", k:["B","A","B","A","B"], why:["혈안개 도포 기동","굶주림 하단 기동","-","칼춤 회피 기동","수확 동선"]},
+  {n:"경험치자석", k:["S","A","S","A","A"], why:["처치 유지=허기 충전","처치 유지","연쇄 처치 회수","처치 환급 회수","혼 수확 회수"]},
+  {n:"회피", k:["A","A","A","S","A"], why:["퍼펙트닷지 출혈 심화","아사 멈춤·공짜 포식","낙인 역부여","광혈 각성 도박","낙인 광역"]},
+  {n:"Heat(허기) 의존", k:["S","S","S","A","A"], why:["흡혈이 Heat 직접 깎음","Heat=허기 본체","폭발 위력이 Heat 비례","Heat 환급으로 광란 유지","처형 환급으로 순환"]},
+  {n:"젠 궁극 연계", k:["S","S","S","S","S"], why:["전 화면 출혈 결산","아귀강림(폭주 무손실)","전 낙인 동시 기폭","혈광 대참격+고정","임계 무시 대학살"]}
+];
+
+const applyList = [
+  ["허기 = Heat 재라벨", "기존 Heat 시스템(일섬 +10%, 7s ×1.5, 100%→탈진→지수감소)을 그대로 쓰고 라벨/연출만 '허기 게이지'로. <code>PlayerData</code> Heat 그룹 수치를 만족도 곡선으로 재라벨링 → 코드 변경 거의 0. HUD <code>HeatBar3D</code>/<code>PlayerHud</code> 열기 스택을 허기 단계 색(주황→빨강→회색)에 맞춤."],
+  ["신 코어 변조 = Player 런타임 보너스", "혈광·허기 단계 버프는 전부 <code>Player</code> 런타임 변수(slash_size_mult / move_speed_mult / 공격·공속 보너스)로만. <code>PlayerData.tres</code> 직접 변형 금지(런 간 누적 버그). 매 프레임 <code>get_hp/get_max_hp</code>로 혈광 갱신."],
+  ["출혈/낙인 = take_hit 부착 + 2단계 연출 재활용", "출혈·저주·저승 낙인은 적 <code>take_hit</code> 훅에서 스택 부착. 연출은 <code>SorcererZone</code>의 precursor→active 2단계 패턴을 차용(점등→폭발/결산). 머리 위 작은 핏빛 인장 = <code>HpBar3D</code> 옆 아이콘으로."],
+  ["흡혈·회복 = HealthComponent.heal + Vampire 훅", "혈식/흡혈갈증/혈괴는 기존 Vampire 카드 훅(<code>_try_vampire_heal</code> / <code>HealthComponent.heal</code>) 위에 얹어 구현. 초과분 → 핏방울 보호막은 <code>shield_charges</code> 패턴(엘리트4 보호막) 재사용 검토."],
+  ["젠 궁극 분기에 신 보정만 추가", "<code>ZenSystem.consume_burst</code> 분기에 신별 보정(아귀강림 무손실 해소 / 전 출혈·낙인 동시 결산 / 혈광 고정 / 처형선 무시)만 끼워넣음. 풀폭 일섬 자체는 공유."],
+  ["패리·퍼펙트닷지 보상 훅 재사용", "허기 게인·낙인 광역·흡혈 증폭은 <code>on_projectile_parried</code> / <code>on_parry_success</code> / 퍼펙트닷지(불릿타임) 기존 시그널에 게인만 추가. 슬롯 동작 자체는 안 건드림."],
+  ["밸런스 툴 노출", "신별 신규 수치(출혈 도트/스택상한, 낙인 max·전이반경, 혈광 곡선, 처형선%, 허기 단계 임계)는 <code>addons/balance_tool</code> PC_FIELDS에 섹션 마커로 추가해 라이브 튜닝. CLAUDE.md 동기화 규칙 준수."],
+  ["Main / Testplay 미러", "신 시스템을 <code>Main.gd</code>에 배선하면 <code>Testplay.gd</code>에도 미러(밸런싱 아레나에서 신 선택 토글 권장). 공유 로직은 서비스(EliteEffectService 패턴)로 추출 후보."]
+];
+
+const tierClass = {S:"tS",A:"tA",B:"tB"};
+
+/* ---- tabs ---- */
+const tabs=[...document.querySelectorAll('.tab[data-t]')];
+const panels=[...document.querySelectorAll('.panel')];
+tabs.forEach(t=>t.addEventListener('click',()=>{
+  tabs.forEach(x=>x.classList.remove('on')); t.classList.add('on');
+  const i=+t.dataset.t;
+  panels.forEach(p=>p.classList.toggle('on',+p.dataset.p===i));
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
+
+/* ---- overview mini ---- */
+document.getElementById('overview-gods').innerHTML = GODS.map(g=>`
+  <div class="card" style="border-left:4px solid ${g.gc};padding:14px 16px;cursor:pointer" onclick="goGod()">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <span style="font-size:20px;font-weight:800;color:${g.gc}">${g.hanja}</span>
+      <span style="font-size:14px;font-weight:700">${g.name}</span>
+      <span class="tier ${tierClass[g.tier]}" style="margin-left:auto">${g.tier}</span>
+    </div>
+    <div style="font-size:11px;color:var(--txt3);letter-spacing:.04em;margin-bottom:6px">${g.role}</div>
+    <div style="font-size:12.5px;color:var(--txt2);line-height:1.5">${g.one}</div>
+  </div>`).join('');
+function goGod(){ document.querySelector('.tab[data-t="2"]').click(); }
+
+/* ---- god full cards ---- */
+document.getElementById('gods').innerHTML = GODS.map(g=>`
+  <article class="god" style="--gc:${g.gc}">
+    <div class="top">
+      <span class="hanja">${g.hanja}</span>
+      <div class="name">${g.name}</div>
+      <div class="role">${g.role} · 리스크 ${'●'.repeat(g.risk)}${'○'.repeat(5-g.risk)} · 티어 ${g.tier}</div>
+    </div>
+    <div class="body">
+      <p class="theme">${g.theme}</p>
+      <div class="blk"><span class="lab sig">시그니처</span>
+        <div class="t">${g.sig.t}</div><div class="d">${g.sig.d}</div></div>
+      <details><summary><span><span class="lab core" style="margin-right:6px">코어 5슬롯</span>일섬·스윙·회피·패리·젠</span><span class="arr">▶</span></summary>
+        <div class="inner"><ul>${g.core.map(c=>`<li><b style="color:var(--txt)">${c[0]}</b> — ${c[1]}</li>`).join('')}</ul></div></details>
+      <div class="blk"><span class="lab sup">보조</span>
+        <div class="d" style="margin-top:4px">${g.sup.map(s=>`<div style="margin-bottom:5px">• ${s}</div>`).join('')}</div></div>
+      <details><summary><span><span class="lab duo" style="margin-right:6px">듀오</span>신 조합 시너지</span><span class="arr">▶</span></summary>
+        <div class="inner"><ul>${g.duo.map(d=>`<li>${d}</li>`).join('')}</ul></div></details>
+    </div>
+    <div class="foot">
+      <div class="arch-name"><span class="lab arch" style="margin-right:6px">아키타입</span>${g.arch.n}</div>
+      <div class="arch-play">${g.arch.p}</div>
+    </div>
+  </article>`).join('');
+
+/* ---- archetype compare cards (sec4) ---- */
+const archCards=document.getElementById('arch-cards');
+let curFilter='all', curSort='tier';
+const tierOrder={S:0,A:1,B:2};
+function renderArch(){
+  let list=GODS.filter(g=>curFilter==='all'||g.tags.includes(curFilter));
+  if(curSort==='tier') list.sort((a,b)=>tierOrder[a.tier]-tierOrder[b.tier]||b.risk-a.risk);
+  if(curSort==='risk') list.sort((a,b)=>b.risk-a.risk);
+  if(curSort==='name') list.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  archCards.innerHTML=list.map(g=>`
+    <div class="card" style="border-left:4px solid ${g.gc};display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px;align-items:start;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:18px;font-weight:800;color:${g.gc}">${g.hanja}</span>
+          <span style="font-size:15px;font-weight:700">${g.name}</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--arch);margin-bottom:6px">${g.arch.n}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <span class="tier ${tierClass[g.tier]}">티어 ${g.tier}</span>
+          <span class="tier tA" style="background:#2a1208;border-color:var(--line3)">리스크 ${g.risk}/5</span>
+          ${g.tags.map(t=>`<span style="font-size:10.5px;padding:2px 8px;border:1px solid var(--line2);border-radius:20px;color:var(--txt2)">${t}</span>`).join('')}
+        </div>
+        <div style="font-size:11.5px;color:var(--txt3);line-height:1.5"><b style="color:#ff8a7a">시그니처</b> ${g.sig.t}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt3);margin-bottom:4px">플레이 패턴</div>
+        <div style="font-size:12.5px;color:var(--txt2);line-height:1.55;margin-bottom:8px">${g.arch.p}</div>
+      </div>
+    </div>`).join('');
+}
+document.querySelectorAll('.af').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.af').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  curFilter=b.dataset.f; renderArch();
+}));
+document.getElementById('sort').addEventListener('change',e=>{curSort=e.target.value; renderArch();});
+renderArch();
+
+/* ---- god x god matrix (sec5) ---- */
+const duoData={
+  "혈맹|기아":["h","흡혈×포식 — 허기 게이지 자원 공명, 회전 무중단"],
+  "혈맹|주원":["h","낙인 폭발 처치→흡혈·피갈증 증폭. 마검 먹이고 흡혈 되돌림"],
+  "혈맹|광란":["m","흡혈 회복이 혈광을 약화 — 회복 grace 듀오로 보정해야 성립"],
+  "혈맹|명부":["h","갈망×거둠 — 마검=욕망엔진, 명부=공급라인. 처형이 흡혈 환산"],
+  "기아|주원":["m","둘 다 Heat 적극 소진 — overheat 가속 동반, 폭주↔연쇄 라인"],
+  "기아|광란":["h","과식→폭주를 의도적 트리거로, 怒/혈광이 폭주 데미지 증폭"],
+  "기아|명부":["h","처형 환급이 허기 순환을 채움 — 굶주림 리스크 상호 상쇄"],
+  "주원|광란":["m","낙인 폭발 화력 × 저체력 혈광 — 둘 다 위력형, 생존 보강 필요"],
+  "주원|명부":["h","낙인×낙인 — 마킹 누적 후 광역 집행/연쇄 기폭, 군집 일소"],
+  "광란|명부":["m","처형 회복이 혈광 약화 트레이드 — 아사경+처형선으로 칼끝 운용"]
+};
+function duoKey(a,b){return [GODS[a].name.split(' ')[0].replace(/[^一-龥가-힣]/g,''),GODS[b].name.split(' ')[0].replace(/[^一-龥가-힣]/g,'')];}
+const short=["혈맹","기아","주원","광란","명부"];
+function lookupDuo(i,j){
+  const a=short[i],b=short[j];
+  return duoData[a+"|"+b]||duoData[b+"|"+a];
+}
+const synMap={h:["syn-h","강"],m:["syn-m","중"],l:["syn-l","약"]};
+let html='<tr><th class="row">신 ＼ 신</th>'+short.map((s,i)=>`<th style="color:${GODS[i].gc}">${s}</th>`).join('')+'</tr>';
+for(let i=0;i<5;i++){
+  html+=`<tr><th class="row" style="color:${GODS[i].gc}">${short[i]} <span style="color:var(--txt3);font-weight:400">${GODS[i].hanja}</span></th>`;
+  for(let j=0;j<5;j++){
+    if(i===j){html+='<td class="self">—</td>';continue;}
+    const d=lookupDuo(i,j); const sm=synMap[d[0]];
+    html+=`<td><span class="syn ${sm[0]}" title="${d[1]}">${sm[1]}</span></td>`;
+  }
+  html+='</tr>';
+}
+document.getElementById('mx-gods').innerHTML=html;
+
+/* ---- god x system matrix ---- */
+let sh='<tr><th class="row">시스템 ＼ 신</th>'+short.map((s,i)=>`<th style="color:${GODS[i].gc}">${s}</th>`).join('')+'</tr>';
+sysRows.forEach(r=>{
+  sh+=`<tr><th class="row">${r.n}</th>`;
+  r.k.forEach((k,i)=>{
+    const cls=k==='S'?'syn-h':k==='A'?'syn-m':'syn-l';
+    sh+=`<td><span class="syn ${cls}" title="${r.why[i]}">${k}</span></td>`;
+  });
+  sh+='</tr>';
+});
+document.getElementById('mx-sys').innerHTML=sh;
+
+/* ---- apply ---- */
+document.getElementById('apply').innerHTML=applyList.map(a=>`
+  <div class="item"><h4>${a[0]}</h4><p>${a[1]}</p></div>`).join('');
+</script>
