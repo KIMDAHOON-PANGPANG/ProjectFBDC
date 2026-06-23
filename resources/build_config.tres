@@ -7,6 +7,7 @@ script = ExtResource("1_lem0h")
 game_mode = 1
 slash_resource_mode = 0
 slash_aim_mode = 1
+overheat_move_slow = false
 contact_damage = false
 charge_zoom = true
 play_logging = true
