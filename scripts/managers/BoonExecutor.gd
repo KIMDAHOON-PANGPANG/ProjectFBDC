@@ -20,12 +20,14 @@ func setup(player: Node) -> void:
 		return
 	_tb.call("subscribe", _TriggerBusScript.ON_SLASH_HIT, Callable(self, "_on_slash_hit"))
 	_tb.call("subscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, Callable(self, "_on_kill_via_slash"))
+	_tb.call("subscribe", _TriggerBusScript.ON_DASH_PASS_ENEMY, Callable(self, "_on_dash_pass_enemy"))
 
 
 func _exit_tree() -> void:
 	if _tb != null:
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_HIT, Callable(self, "_on_slash_hit"))
 		_tb.call("unsubscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, Callable(self, "_on_kill_via_slash"))
+		_tb.call("unsubscribe", _TriggerBusScript.ON_DASH_PASS_ENEMY, Callable(self, "_on_dash_pass_enemy"))
 
 
 func _on_slash_hit(ctx: Dictionary) -> void:
@@ -76,6 +78,31 @@ func _on_kill_via_slash(ctx: Dictionary) -> void:
 			match comp.get("effect", ""):
 				"LIFESTEAL":
 					_lifesteal(ctx, boon.get("params", {}))
+
+
+func _on_dash_pass_enemy(ctx: Dictionary) -> void:
+	if not is_inside_tree():
+		return
+	if _player == null:
+		return
+	var boons = _player.get("active_boons")
+	if not (boons is Array) or boons.is_empty():
+		return
+	for i in range(boons.size()):
+		var boon = boons[i]
+		if not (boon is Dictionary):
+			continue
+		var comps = boon.get("components", [])
+		if not (comps is Array):
+			continue
+		for comp in comps:
+			if not (comp is Dictionary):
+				continue
+			if comp.get("trigger", "") != _TriggerBusScript.ON_DASH_PASS_ENEMY:
+				continue
+			match comp.get("effect", ""):
+				"APPLY_MARK":
+					_apply_mark(i, ctx, boon.get("params", {}))
 
 
 func _apply_mark(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:

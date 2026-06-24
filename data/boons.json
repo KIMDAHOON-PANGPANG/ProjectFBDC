@@ -39,6 +39,26 @@
           }
         }
       ]
+    },
+    {
+      "id": "gumiho_dash_mark",
+      "yokai": "GUMIHO",
+      "skill_type": "질주",
+      "name": "구미회랑",
+      "desc": "회피로 스친 적에 표식을 살포",
+      "components": [
+        {
+          "trigger": "On_Dash_Pass_Enemy",
+          "effect": "APPLY_MARK",
+          "params_by_rarity": {
+            "chosim":  { "per_hits": 1, "mark_add": 1, "cap": 99 },
+            "rare":    { "per_hits": 1, "mark_add": 1, "cap": 99 },
+            "uniq":    { "per_hits": 1, "mark_add": 2, "cap": 99 },
+            "legend":  { "per_hits": 1, "mark_add": 2, "cap": 99 },
+            "master":  { "per_hits": 1, "mark_add": 3, "cap": 99 }
+          }
+        }
+      ]
     }
   ]
 }

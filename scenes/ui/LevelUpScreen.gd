@@ -54,16 +54,17 @@ func show_cards(cards: Array) -> void:
 
 func _build_card_button(card_dict: Dictionary, index: int) -> Button:
 	var btn := Button.new()
-	var is_rare := String(card_dict.get("rarity", "normal")) == "rare"
+	var rar := String(card_dict.get("rarity", ""))
+	var is_rare := rar in ["uniq", "legend", "master"]
 	btn.custom_minimum_size = card_size
 	btn.size = card_size
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	# Multi-line label text → name on top, blank, then desc.
-	var title := String(card_dict.get("name", "?"))
-	if is_rare:
-		title = "레어\n" + title
-	btn.text = "%s\n\n%s" % [title, card_dict.get("desc", "")]
+	var name_str := String(card_dict.get("name", "?"))
+	var rarity_label := String(card_dict.get("rarity_label", ""))
+	var yokai := String(card_dict.get("yokai", ""))
+	var desc_str := String(card_dict.get("desc", ""))
+	btn.text = "%s\n[%s · %s]\n\n%s" % [name_str, rarity_label, yokai, desc_str]
 	btn.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	btn.add_theme_color_override("font_color_hover", Color(1, 1, 1, 1))
 	btn.add_theme_font_size_override("font_size", 16)

@@ -64,6 +64,7 @@ const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd
 # identical elite-payload + bullet-time code instead of mirrored copies.
 const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectService.gd")
 const _BulletTimeServiceScript := preload("res://scripts/managers/BulletTimeService.gd")
+const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
 
 var _player: Node
 var _camera: HD2DCamera
@@ -80,6 +81,8 @@ var _bullet_time_service: Node
 var _skill_viewer: CanvasLayer
 ## 현재 런에서 선택한 카드 목록 [{id, name}, ...].
 var _selected_cards: Array = []
+## 레벨업 시 뽑힌 권속 카드 목록 — _on_upgrade_card_selected 에서 rarity 조회용.
+var _pending_boon_cards: Array = []
 var _arena_start_msec: int = 0
 
 func _ready() -> void:
@@ -315,11 +318,16 @@ func _on_leveled_up(_new_level: int) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
-	# Draw cards first — if the pool is empty, skip the overlay entirely
+	# Draw boon cards — if the pool is empty, skip the overlay entirely
 	# (tree stays unpaused, level already incremented by ExpSystem).
-	var cards: Array = _UpgradeSystemScript.draw(3, _arena_elapsed_seconds(), _player)
+	var owned: Array = []
+	if _player != null and is_instance_valid(_player):
+		for b in _player.get("active_boons"):
+			owned.append(b.get("id", ""))
+	var cards: Array = _BoonSystemScript.draw_boons(3, _new_level, owned)
 	if cards.is_empty():
 		return
+	_pending_boon_cards = cards
 	tree.paused = true
 	var screen := level_up_screen_scene.instantiate() as CanvasLayer
 	if screen == null:
@@ -332,7 +340,14 @@ func _on_leveled_up(_new_level: int) -> void:
 		screen.card_selected.connect(_on_upgrade_card_selected, CONNECT_ONE_SHOT)
 
 func _on_upgrade_card_selected(card_id: String) -> void:
-	_UpgradeSystemScript.apply(card_id, _player, _exp_system)
+	# 선택된 권속 카드의 rarity 조회 후 add_boon 호출.
+	var card: Dictionary = {}
+	for c in _pending_boon_cards:
+		if c.get("id", "") == card_id:
+			card = c
+			break
+	if not card.is_empty() and _player != null and is_instance_valid(_player):
+		_player.call("add_boon", card_id, String(card.get("rarity", "chosim")))
 	var tree := get_tree()
 	if tree != null:
 		tree.paused = false
@@ -340,8 +355,7 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 	if _player != null and is_instance_valid(_player) and _player.has_method("levelup_pushback"):
 		_player.call("levelup_pushback")
 	# 카드 기록 — Main 미러.
-	var card_data = _UpgradeSystemScript.card_by_id(card_id)
-	var card_name: String = (String(card_data.get("name", card_id)) if card_data != null else card_id)
+	var card_name: String = (String(card.get("name", card_id)) if not card.is_empty() else card_id)
 	_selected_cards.append({"id": card_id, "name": card_name})
 	if _skill_viewer != null and _skill_viewer.has_method("refresh"):
 		_skill_viewer.call("refresh", _selected_cards)

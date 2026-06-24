@@ -122,3 +122,139 @@ static func params_for(id: String, rarity: String, component_index: int = 0) -> 
 	if not (params is Dictionary):
 		return {}
 	return params
+
+
+# TODO: 귀신 풀이 4종 이상이면 런 시작 시 2~3 랜덤 선택 적용. 현재(구미호만)는 전부 사용.
+static func run_yokai_pool() -> Array:
+	_ensure_loaded()
+	var keys = _by_yokai.keys()
+	var result: Array = []
+	for k in keys:
+		result.append(k)
+	return result
+
+
+static func rarity_for_level(level: int) -> String:
+	var weights: Dictionary
+	if level <= 4:
+		weights = {"chosim": 70, "rare": 25, "uniq": 5}
+	elif level <= 7:
+		weights = {"chosim": 35, "rare": 40, "uniq": 20, "legend": 5}
+	elif level <= 10:
+		weights = {"chosim": 10, "rare": 30, "uniq": 35, "legend": 20, "master": 5}
+	else:
+		weights = {"rare": 15, "uniq": 30, "legend": 35, "master": 20}
+
+	var order := ["chosim", "rare", "uniq", "legend", "master"]
+	var total := 0
+	for r in order:
+		if weights.has(r):
+			total += int(weights[r])
+
+	var roll := randi_range(1, total)
+	var accum := 0
+	for r in order:
+		if not weights.has(r):
+			continue
+		accum += int(weights[r])
+		if roll <= accum:
+			return r
+	return "chosim"
+
+
+static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
+	_ensure_loaded()
+	var pool := run_yokai_pool()
+
+	var candidates: Array = []
+	for yokai in pool:
+		var boons_for_yokai = _by_yokai.get(yokai, [])
+		for b in boons_for_yokai:
+			if b is Dictionary:
+				candidates.append(b)
+
+	if candidates.is_empty():
+		return []
+
+	var rarity_labels := {
+		"chosim": "초심", "rare": "레어", "uniq": "유일",
+		"legend": "전설", "master": "마스터"
+	}
+
+	var result: Array = []
+	var used_slots: Array = []
+
+	# 미보유 후보, 보유 후보 분리
+	var unowned: Array = []
+	var owned_list: Array = []
+	for b in candidates:
+		var bid: String = String(b.get("id", ""))
+		if bid in owned_ids:
+			owned_list.append(b)
+		else:
+			unowned.append(b)
+
+	# 먼저 미보유 후보에서 1장 보장 (slot 중복 회피)
+	unowned.shuffle()
+	for b in unowned:
+		if result.size() >= count:
+			break
+		var slot: String = String(b.get("skill_type", ""))
+		if slot != "" and slot in used_slots:
+			continue
+		var rar := rarity_for_level(level)
+		result.append({
+			"id": String(b.get("id", "")),
+			"name": String(b.get("name", "")),
+			"desc": String(b.get("desc", "")),
+			"yokai": String(b.get("yokai", "")),
+			"skill_type": slot,
+			"rarity": rar,
+			"rarity_label": String(rarity_labels.get(rar, rar))
+		})
+		if slot != "":
+			used_slots.append(slot)
+
+	# 나머지는 전체 후보(미보유+보유)에서 채움
+	if result.size() < count:
+		var remaining: Array = []
+		for b in unowned:
+			var bid: String = String(b.get("id", ""))
+			var already := false
+			for r in result:
+				if r.get("id", "") == bid:
+					already = true
+					break
+			if not already:
+				remaining.append(b)
+		for b in owned_list:
+			remaining.append(b)
+		remaining.shuffle()
+		for b in remaining:
+			if result.size() >= count:
+				break
+			var slot: String = String(b.get("skill_type", ""))
+			if slot != "" and slot in used_slots:
+				continue
+			var bid: String = String(b.get("id", ""))
+			var already := false
+			for r in result:
+				if r.get("id", "") == bid:
+					already = true
+					break
+			if already:
+				continue
+			var rar := rarity_for_level(level)
+			result.append({
+				"id": bid,
+				"name": String(b.get("name", "")),
+				"desc": String(b.get("desc", "")),
+				"yokai": String(b.get("yokai", "")),
+				"skill_type": slot,
+				"rarity": rar,
+				"rarity_label": String(rarity_labels.get(rar, rar))
+			})
+			if slot != "":
+				used_slots.append(slot)
+
+	return result
