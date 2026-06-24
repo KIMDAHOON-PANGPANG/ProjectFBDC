@@ -259,14 +259,6 @@ func _spawn_player() -> void:
 	# loses the signal (it shouldn't, but defensive wiring is cheap).
 	if _player.has_signal("died"):
 		_player.died.connect(_on_player_died)
-	# Echo card — listen for every completed slash; if the PC owns the
-	# card, drop a CircularSlash at their foot 0.3s later. Main owns
-	# the effect scene reference so we wire here rather than from
-	# inside Player.gd.
-	if _player.has_signal("slash_finished"):
-		_player.slash_finished.connect(_on_player_slash_finished)
-	if _player.has_signal("rare_circular_slash_requested"):
-		_player.rare_circular_slash_requested.connect(_on_player_rare_circular_slash_requested)
 	# ⏱ Perfect dodge → short self-bullet-time (M3 후속). The service
 	# isn't built until _build_chapter_systems, so we route through a
 	# handler that defers to it (the PC can't dodge before then anyway).
@@ -616,9 +608,6 @@ func award_exp_for_kill(enemy: Node) -> void:
 	# 주워야 들어온다 — 적을 죽이는 것만으로는 레벨이 거의 안 오른다.
 	_exp_system.add_exp(EXP_INSTANT_ON_KILL)
 	_drop_exp_gem(enemy, base)
-	# Vampire card — roll on every kill (boss/elite/mob alike). Heal is
-	# bounded by max_hp inside HealthComponent.heal.
-	_try_vampire_heal()
 	# 4안 — 처치 시 일섬 게이지 충전.
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
 		_player.call("gain_gauge_on_kill")
@@ -671,49 +660,6 @@ func collect_exp_gem(value: int) -> void:
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_gem"):
 		_player.call("gain_gauge_on_gem")
 
-
-## Vampire card hook — `has_vampire` + `vampire_chance` live on the PC.
-## We read them via duck-typed `in` checks so cards stay self-contained
-## (no exhaustive type imports in Main).
-func _try_vampire_heal() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not ("has_vampire" in _player) or not _player.has_vampire:
-		return
-	var chance: float = 0.15
-	if "vampire_chance" in _player:
-		chance = _player.vampire_chance
-	if randf() >= chance:
-		return
-	var hp_comp := _player.get_node_or_null("HealthComponent") as HealthComponent
-	if hp_comp != null:
-		hp_comp.heal(1)
-
-
-## Echo card hook — every Player.slash_finished fires this. We queue a
-## CircularSlash 0.3s later at the PC's current foot position if the
-## card was picked.
-func _on_player_slash_finished() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not ("has_echo" in _player) or not _player.has_echo:
-		return
-	get_tree().create_timer(0.3).timeout.connect(_spawn_echo_circular_at_player)
-
-
-func _spawn_echo_circular_at_player() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not is_inside_tree():
-		return
-	if _elite_effect_service != null:
-		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
-
-
-func _on_player_rare_circular_slash_requested(pos: Vector3, radius: float, attack_power: int) -> void:
-	if _elite_effect_service == null:
-		return
-	_elite_effect_service.spawn_circular_slash(pos, radius, attack_power, Color(0.72, 0.32, 1.0, 0.82))
 
 func _build_chapter_systems() -> void:
 	# EXP system as a child node so its lifetime tracks the scene.

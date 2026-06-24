@@ -210,14 +210,6 @@ func _ready() -> void:
 	if _cs != null and _cs.shape is BoxShape3D:
 		_boss_half_xz = (_cs.shape as BoxShape3D).size.x * 0.5 * scale.x
 
-	# Parry Master card was picked BEFORE this boss spawned — pick up
-	# the boosted window + counter damage here so per-chapter boss
-	# rolls inherit the player's accumulated upgrades.
-	if _player != null and "has_parry_master" in _player and _player.has_parry_master:
-		parry_window_pre_sweep += 0.05
-		parry_window_post_sweep += 0.05
-		parry_boost_dmg += 1
-
 
 func _physics_process(delta: float) -> void:
 	if _dead:

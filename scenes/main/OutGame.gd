@@ -13,7 +13,6 @@ const _BuildConfigScript := preload("res://scripts/resources/BuildConfig.gd")
 const _BUILD_CONFIG := "res://resources/build_config.tres"
 const _MAIN_PATH := "res://scenes/main/Main.tscn"
 const _META_MENU_PATH := "res://scenes/ui/MetaMenu.tscn"
-const _CARD_UNLOCK_PATH := "res://scenes/ui/CardUnlock.tscn"
 const _SettingsPanelScene := preload("res://scenes/ui/SettingsPanel.tscn")
 
 var _souls_label: Label
@@ -97,7 +96,6 @@ func _build() -> void:
 		center.add_child(_make_button("게임 시작", _on_start2_pressed))
 		center.add_child(_make_button("밸런싱 아레나 (F1 패널)", _on_arena_pressed))
 		center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
-		center.add_child(_make_button("카드 해금", _on_card_unlock_pressed))
 		center.add_child(_make_button("설정", _on_settings_pressed))
 		center.add_child(_make_button("종료", _on_quit_pressed))
 
@@ -184,10 +182,6 @@ func _on_arena_pressed() -> void:
 
 func _on_meta_pressed() -> void:
 	_goto(_META_MENU_PATH)
-
-
-func _on_card_unlock_pressed() -> void:
-	_goto(_CARD_UNLOCK_PATH)
 
 
 ## 씬 전환 — SceneTransition 자동로드가 있으면 셰이더 연출, 없으면 즉시 전환(폴백).

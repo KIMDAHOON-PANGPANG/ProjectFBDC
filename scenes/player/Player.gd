@@ -8,7 +8,6 @@ extends CharacterBody3D
 
 signal slash_started
 signal slash_finished
-signal rare_circular_slash_requested(pos: Vector3, radius: float, attack_power: int)
 ## Emitted when the PC's HP hits 0 — Main listens to trigger the
 ## GameOverScreen + SaveSystem.record_death. Fires BEFORE the sprite-rig
 ## death animation removes the node, so listeners can still read the
@@ -19,7 +18,7 @@ signal died
 ## BulletTimeService.start(short) for a self-bullet-time reward.
 signal perfect_dodge
 
-enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING, RECOVERING }
+enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING }
 
 ## 데이터 관리 로더 — pc_combat.json 값을 PlayerData 에 적용. class_name 캐시
 ## 미스를 피하려 preload + 정적 호출(헤드리스 안전).
@@ -79,17 +78,12 @@ var _slash_grace_t: float = 0.0
 # 저스트 패리(RMB). _parry_t > 0 동안 패리 윈도우(발사체 쳐냄). _parry_cd 는 재사용 대기.
 var _parry_t: float = 0.0
 var _parry_cd: float = 0.0
-# 회피율(레벨업) — take_hit 에서 이 확률로 피해 회피. 0~1.
-var dodge_chance: float = 0.0
-# 레벨업 효과 런타임 보너스(데이터 .tres 를 안 건드려 런 리셋 안전).
-var slash_size_mult: float = 1.0    # 기본 공격(일섬) 범위 배수
-## 기본 공격력(레벨업 "참격 강화" 카드). 슬래시/스윙이 다중타 적·보스에 주는 데미지.
+## 기본 공격력(중립 base 스탯 — 레벨업 카드가 더는 올리지 않음, 기본 1). 슬래시/스윙이
+## 다중타 적·보스에 주는 데미지. SlashAttack/EliteEffectService/CircularSlash/balance_sim/
+## ArenaDebug 가 읽으므로 변수는 보존(중립 값으로 효과 중립화).
 var attack_power: int = 1
-## 회피 스택 충전 시간 배수(레벨업 "보법" 카드, ×(1-N)). 작을수록 빨리 충전. 0.4 바닥.
+## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
-var charge_speed_bonus: float = 0.0 # 충전 속도 가산(높을수록 빨리 참)
-var overheat_dur_reduce: float = 0.0 # 탈진 지속 감소(초)
-var heat_delay_reduce: float = 0.0   # 열 감소 시작 유예 감소(초)
 ## 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속. _zone_slow_t > 0 이면 _handle_move 적용.
 var _zone_slow_t: float = 0.0
 var _zone_slow_mult: float = 1.0
@@ -165,45 +159,10 @@ var shield_charges: int = 0
 var _zen_system: Node
 var has_zen_burst: bool = false
 
-# --- M3 card flags ---
-# All cards are single-pick: re-rolling the same one is a no-op until
-# M5's unlock system removes already-owned cards from the draw pool.
-
-## Multistrike — every slash auto-fires a smaller followup hit-trail
-## 0.18s later (no second dash, just an extra SlashAttack volume).
-var has_multistrike: bool = false
-## Internal guard — set TRUE while the multistrike followup is spawning
-## so the followup itself doesn't recursively schedule another one.
-var _is_multistrike_followup: bool = false
-
-## Echo — Main listens for slash_finished and spawns a CircularSlash at
-## the PC's foot 0.3s after every slash. Cheap & visual, no PC state.
-var has_echo: bool = false
-
-## Rare card — after an iaijutsu dash lands, fire a wider CircularSlash
-## before player control is released.
-var has_rare_circular_slash: bool = false
-var rare_circular_slash_radius: float = 4.6
-var rare_circular_slash_recovery: float = 0.18
-var _post_slash_recovery_t: float = 0.0
-
-## Vampire — Main's award_exp_for_kill rolls vampire_chance on every
-## kill and heals 1 HP on success.
-var has_vampire: bool = false
-var vampire_chance: float = 0.0
-
-## Phoenix — one free revive from HP 0 → full HP + 2s i-frame.
-var has_phoenix: bool = false
-var _phoenix_used: bool = false
-
-## ⏱ Counter Step — Boss.on_parry_success() stamps `counter_step_until_msec`;
-## while now <= stamp, move speed multiplier is +50%.
-var has_counter_step: bool = false
-var counter_step_until_msec: int = 0
-
-## ⏱ Parry Master — informational flag (UpgradeSystem mutates Boss
-## export values directly on pick + Boss._ready picks up future bosses).
-var has_parry_master: bool = false
+# --- M3 card flags 제거됨 (M8 S1) ---
+# Multistrike/Echo/Vampire/Phoenix/Counter Step/Parry Master/월영 원무 등
+# 레거시 스킬 빌드 효과는 전면 철거. 패리 코어·젠·회피·일섬 게이지·shield_charges·
+# parry_boost 같은 카드 무관 전투 시스템은 보존(아래에 그대로 남아 있음).
 
 func _ready() -> void:
 	if data == null:
@@ -315,8 +274,6 @@ func _physics_process(delta: float) -> void:
 				_set_state(State.IDLE)
 		State.EVADING:
 			_update_evade(delta)
-		State.RECOVERING:
-			_update_post_slash_recovery(delta)
 
 func _handle_move(delta: float) -> void:
 	var input := Vector2(
@@ -326,11 +283,7 @@ func _handle_move(delta: float) -> void:
 	var dir := Vector3(input.x, 0.0, input.y)
 	if dir.length() > 1.0:
 		dir = dir.normalized()
-	# ⏱ Counter Step — +50% speed window after a successful parry.
-	# Natural expiry, no clear path needed.
 	var speed_mult: float = 1.0
-	if has_counter_step and Time.get_ticks_msec() <= counter_step_until_msec:
-		speed_mult = 1.5
 	# 열관리 — 탈진(오버히트) 중 이동 감속(토글). 기본 패널티는 발사 봉인만이며,
 	# 이동 감속은 GameConfig.overheat_move_slow_enabled 가 켜진 경우에만 적용.
 	if _overheated and _GameConfigScript.overheat_move_slow_enabled:
@@ -339,8 +292,8 @@ func _handle_move(delta: float) -> void:
 	if _zone_slow_t > 0.0:
 		speed_mult *= _zone_slow_mult
 	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
-	velocity.x = dir.x * data.move_speed * move_speed_mult * speed_mult
-	velocity.z = dir.z * data.move_speed * move_speed_mult * speed_mult
+	velocity.x = dir.x * data.move_speed * speed_mult
+	velocity.z = dir.z * data.move_speed * speed_mult
 	# 가드백 — 패리 직후 에임 반대로 밀린다. 남은 시간 비례 감쇠(부드럽게 멈춤).
 	if _guardback_t > 0.0:
 		_guardback_t -= delta
@@ -625,7 +578,7 @@ func _update_heat(delta: float) -> void:
 	if _heat <= 0.0:
 		return
 	var since: float = float(Time.get_ticks_msec() - _heat_last_msec) / 1000.0
-	if since > max(0.0, data.heat_decay_delay - heat_delay_reduce):
+	if since > max(0.0, data.heat_decay_delay):
 		# 지수 감소 — dH/dt = -k·H → H *= e^(-k·dt). 커브로 부드럽게 식음.
 		_heat *= exp(-data.heat_decay_rate * delta)
 		if _heat < 0.5:
@@ -660,7 +613,7 @@ func _add_heat() -> void:
 ## 발사 봉인(_check_instant_slash). 진입 연출은 빨강 플래시 + 카메라 쉐이크.
 func _enter_overheat() -> void:
 	_overheated = true
-	_overheat_t = max(0.5, data.heat_overheat_duration - overheat_dur_reduce)
+	_overheat_t = max(0.5, data.heat_overheat_duration)
 	_overheat_dur = _overheat_t
 	_heat = data.heat_overheat_threshold
 	if _sprite_rig != null and _sprite_rig.has_method("flash"):
@@ -709,7 +662,7 @@ func _check_attack_release() -> void:
 
 func _update_aim(delta: float) -> void:
 	# 충전 속도 배수 — charge_speed_mult(기본 0.5)만큼 천천히 차오른다(데이터 제어).
-	_charge_t = min(_charge_t + delta * (data.charge_speed_mult + charge_speed_bonus), data.max_charge_time)
+	_charge_t = min(_charge_t + delta * data.charge_speed_mult, data.max_charge_time)
 	# 최대 차지 도달 후 오버차지 누적.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
@@ -782,8 +735,6 @@ func _fire_slash() -> void:
 		slash_range = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
 	# 범위(Vector3) — 젠 버스트면 폭(x)만 배수로 키운다.
 	var ext: Vector3 = data.slash_hit_extents
-	# 레벨업 "기본 공격 범위" — 일섬 판정 박스 폭/길이가산을 배수.
-	ext = Vector3(ext.x * slash_size_mult, ext.y, ext.z * slash_size_mult)
 	if burst_active:
 		ext = Vector3(ext.x * data.zen_burst_width_mult, ext.y, ext.z)
 		if _zen_system != null and _zen_system.has_method("consume_burst"):
@@ -840,34 +791,13 @@ func _update_dash(delta: float) -> void:
 	if t >= 1.0:
 		# 착지 회복 유예 — 도착 지점에서 적 충돌/탄에 즉시 피격되는 불쾌감 방지.
 		_slash_grace_t = max(_slash_grace_t, data.slash_post_grace)
-		if has_rare_circular_slash:
-			rare_circular_slash_requested.emit(global_position, rare_circular_slash_radius, attack_power)
-			_post_slash_recovery_t = maxf(rare_circular_slash_recovery, 0.01)
-			_set_state(State.RECOVERING)
-		else:
-			_complete_slash_action()
-
-
-func _update_post_slash_recovery(delta: float) -> void:
-	_post_slash_recovery_t -= delta
-	velocity = Vector3.ZERO
-	move_and_slide()
-	if _dust_emitter != null:
-		_dust_emitter.emitting = false
-	if _post_slash_recovery_t <= 0.0:
 		_complete_slash_action()
 
 
 func _complete_slash_action() -> void:
-	_post_slash_recovery_t = 0.0
 	_cooldown_t = data.slash_cooldown
 	slash_finished.emit()
 	_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
-	# Multistrike — schedule a second hit-trail along the same line,
-	# 0.18s after the slash action completes. Followup spawns the trail
-	# only (no dash, no charging) so it reads as a quick echo strike.
-	if has_multistrike and not _is_multistrike_followup:
-		get_tree().create_timer(0.18).timeout.connect(_fire_multistrike_followup)
 
 func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO, burst: bool = false) -> void:
 	var attack: SlashAttack
@@ -892,19 +822,6 @@ func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector
 		# Visual polish — gold + emission so the burst reads as special.
 		if attack.has_method("set_burst_visual"):
 			attack.call("set_burst_visual")
-
-
-## Multistrike followup — spawn a shorter trail along the last aim
-## direction, no dash. Guarded by `_is_multistrike_followup` so the
-## extra trail can't itself trigger another followup recursively.
-func _fire_multistrike_followup() -> void:
-	if not is_inside_tree():
-		return
-	_is_multistrike_followup = true
-	var start: Vector3 = global_position
-	var end: Vector3 = global_position + _aim_dir.normalized() * (data.max_slash_range * 0.7)
-	_spawn_slash_attack(start, end)
-	_is_multistrike_followup = false
 
 func _set_state(s: int) -> void:
 	_state = s
@@ -948,12 +865,6 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 	# damage landed.
 	if is_invincible():
 		return
-	# 회피율(레벨업) — 무적과 별개로 확률 회피. 성공 시 피해 없이 흘린다.
-	if dodge_chance > 0.0 and randf() < dodge_chance:
-		if _sprite_rig != null and _sprite_rig.has_method("flash"):
-			_sprite_rig.call("flash", 0.12)
-		_play_sfx("dodge")
-		return
 	# Shield absorb — yellow elite charges. Consume one charge, skip
 	# damage, still trigger i-frame + a softer shake so the absorb reads
 	# as a defensive "ting" instead of a free pass.
@@ -992,10 +903,8 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 
 ## 밸런싱 아레나 무적 토글(ArenaDebug 패널) — 켜면 절대 안 죽는다(관찰용).
 var god_mode: bool = false
-## 레벨업 "경험치 자석" 카드 — ExpGem 자석 반경 배수(런마다 1.0 리셋).
+## 경험치 자석 반경 배수(중립 base 스탯, 기본 1.0). ExpGem 이 읽으므로 변수는 보존.
 var exp_magnet_mult: float = 1.0
-## 레벨업 "질풍" 카드 — 이동속도 배수(런타임, 런마다 1.0 리셋 — 공유 PlayerData 변형 방지).
-var move_speed_mult: float = 1.0
 
 func is_invincible() -> bool:
 	return god_mode or _state == State.DASHING or _state == State.EVADING or _iframe_t > 0.0 or _slash_grace_t > 0.0
@@ -1090,20 +999,6 @@ func revive() -> void:
 
 
 func _on_died() -> void:
-	# Phoenix — one-shot revival: full HP, 2s of i-frame, skip the
-	# death.emit / sprite tween entirely. _phoenix_used latches so a
-	# second death plays out normally.
-	if has_phoenix and not _phoenix_used:
-		_phoenix_used = true
-		if _health != null:
-			_health.hp = _health.max_hp
-			# damaged(0) repaints the HpBar3D without going through
-			# take_damage (which would no-op on hp==0 path).
-			_health.damaged.emit(0)
-		_iframe_t = 2.0
-		if _sprite_rig != null and _sprite_rig.has_method("start_iframe_blink"):
-			_sprite_rig.call("start_iframe_blink", 2.0)
-		return
 	# Tell Main FIRST so GameOverScreen + SaveSystem fire with the PC
 	# node still alive (Main reads kill count / level off live state).
 	# The 0.5s death tween runs in parallel — the screen pops up while
@@ -1119,8 +1014,6 @@ func _on_died() -> void:
 ## parry-triggered card effects (Counter Step today; Zen meter feeds
 ## off the same hook).
 func on_parry_success() -> void:
-	if has_counter_step:
-		counter_step_until_msec = Time.get_ticks_msec() + 1000
 	if _zen_system != null and _zen_system.has_method("add"):
 		_zen_system.call("add", 1)
 	_heat = 0.0  # 패리 성공 → 열기 즉시 0%
@@ -1150,9 +1043,9 @@ func _update_melee(delta: float) -> void:
 		return
 	if _melee_cd > 0.0:
 		_melee_cd -= delta
-	# 차징(일섬)/대시/후속베기/회피 중엔 기본 공격 억제.
+	# 차징(일섬)/대시/회피 중엔 기본 공격 억제.
 	if _state == State.AIMING or _state == State.DASHING \
-			or _state == State.RECOVERING or _state == State.EVADING:
+			or _state == State.EVADING:
 		return
 	if Input.is_action_pressed("fire") and _melee_cd <= 0.0:
 		if _is_pointer_over_ui():

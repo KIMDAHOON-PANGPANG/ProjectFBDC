@@ -175,12 +175,6 @@ func _spawn_player() -> void:
 	# the production death flow.)
 	if _player.has_signal("died"):
 		_player.died.connect(_on_player_died_testplay)
-	# Echo card mirror (same as Main) — keeps testplay reaching feature
-	# parity for card testing.
-	if _player.has_signal("slash_finished"):
-		_player.slash_finished.connect(_on_player_slash_finished)
-	if _player.has_signal("rare_circular_slash_requested"):
-		_player.rare_circular_slash_requested.connect(_on_player_rare_circular_slash_requested)
 	# ⏱ Perfect dodge → self-bullet-time (mirror of Main).
 	if _player.has_signal("perfect_dodge"):
 		_player.perfect_dodge.connect(_on_player_perfect_dodge)
@@ -286,8 +280,6 @@ func award_exp_for_kill(enemy: Node) -> void:
 	# Mirror of Main — 처치 즉시 EXP 0(젬을 주워야 EXP). add_exp(0)은 no-op.
 	_exp_system.add_exp(0)
 	_drop_exp_gem(enemy, base)
-	# Vampire card mirror — Testplay supports card testing too.
-	_try_vampire_heal()
 	# 4안 — 처치 시 일섬 게이지 (mirror).
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
 		_player.call("gain_gauge_on_kill")
@@ -323,44 +315,6 @@ func collect_exp_gem(value: int) -> void:
 	# 4안 — 젬 획득 시 일섬 게이지 (mirror).
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_gem"):
 		_player.call("gain_gauge_on_gem")
-
-
-func _try_vampire_heal() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not ("has_vampire" in _player) or not _player.has_vampire:
-		return
-	var chance: float = 0.15
-	if "vampire_chance" in _player:
-		chance = _player.vampire_chance
-	if randf() >= chance:
-		return
-	var hp_comp := _player.get_node_or_null("HealthComponent") as HealthComponent
-	if hp_comp != null:
-		hp_comp.heal(1)
-
-
-func _on_player_slash_finished() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not ("has_echo" in _player) or not _player.has_echo:
-		return
-	get_tree().create_timer(0.3).timeout.connect(_spawn_echo_circular_at_player)
-
-
-func _spawn_echo_circular_at_player() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not is_inside_tree():
-		return
-	if _elite_effect_service != null:
-		_elite_effect_service.spawn_circular_slash((_player as Node3D).global_position)
-
-
-func _on_player_rare_circular_slash_requested(pos: Vector3, radius: float, attack_power: int) -> void:
-	if _elite_effect_service == null:
-		return
-	_elite_effect_service.spawn_circular_slash(pos, radius, attack_power, Color(0.72, 0.32, 1.0, 0.82))
 
 
 func _arena_elapsed_seconds() -> float:

@@ -6,20 +6,12 @@ extends RefCounted
 ##   CSV: 1행 헤더 / 2행 한글주석(스킵) / 3행~ 데이터.
 ##   컬럼: id, name, desc, value, initial(1=항상 풀), unlock_cost
 ##
-## 효과(비도 삭제, 이동속도·최대HP 유지 + 신규):
-##   move_speed       이동 속도 +value(배)
-##   max_hp           최대 HP +value(칸)
-##   slash_range      기본 공격(일섬) 범위 ×(1+...) — Player.slash_size_mult
-##   charge_speed     기본 공격 충전 속도 + — Player.charge_speed_bonus
-##   dodge            회피율 +value — Player.dodge_chance
-##   overheat_reduce  탈진 시간 -value(초) — Player.overheat_dur_reduce
-##   heat_delay_reduce 열 감소 시작 -value(초) — Player.heat_delay_reduce
-##
-## ⚠ 데이터 .tres 영구 변형은 런 너머 누적되므로, 열/충전/회피/범위는 Player 런타임
-## 보너스 필드에 적용(런마다 리셋). move_speed/max_hp 만 직접(pc.csv·인스턴스 리셋).
+## ⚠ M8 S1 — 기존 스킬 빌드(레벨업 카드 효과) 전면 철거. apply() 는 no-op 으로
+## 비활성(권속 은혜 시스템으로 교체 예정). draw/3택 골격·시그니처(draw/card_by_id/
+## value_for/all_cards/_load_csv)는 LevelUpScreen/CardUnlock/Main/Testplay 가 계속
+## 호출하므로 그대로 유지한다. upgrades.csv 카드 로우는 비워 풀이 비어 있다(카드 0장).
 
 const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
-const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 const _CSV := "res://data/upgrades.csv"
 
 ## 로드된 카드 목록(CSV). CardUnlock 등 외부는 all_cards() 로 접근(자동 로드).
@@ -127,9 +119,6 @@ static func _is_available(c: Dictionary, elapsed_sec: float = 0.0, player: Node 
 	var id := String(c.get("id", ""))
 	if id.is_empty():
 		return false
-	# 즉발 일섬 모드 — 차징 단계가 없어 '속발(charge_speed)' 카드는 효과가 없다 → 카드 풀에서 제외.
-	if id == "charge_speed" and _GameConfigScript.instant_slash_mode and _GameConfigScript.slash_aim_mode == 1:
-		return false
 	if bool(c.get("unique", false)) and player != null:
 		var owned_prop := "has_%s" % id
 		if owned_prop in player and bool(player.get(owned_prop)):
@@ -176,53 +165,11 @@ static func value_for(id: String) -> float:
 	return float(c.get("value", 0.0))
 
 
-## 카드 효과를 라이브 PC 에 적용. 효과 수치는 CSV value 컬럼.
-static func apply(card_id: String, player: Node, _exp_system: Node) -> void:
+## 카드 효과를 라이브 PC 에 적용. ── M8 S1: 기존 스킬 빌드 철거로 no-op ──
+## 권속 은혜 시스템 교체 전까지 어떤 카드 효과도 적용하지 않는다(풀도 비어 있어
+## 실제로는 호출돼도 card_id 가 없음). 시그니처는 Main/Testplay/ArenaDebug 가
+## 계속 호출하므로 유지. 로드 보장 + null 가드만 남긴다.
+static func apply(_card_id: String, _player: Node, _exp_system: Node) -> void:
 	_ensure_loaded()
-	if player == null:
-		return
-	var v := value_for(card_id)
-	match card_id:
-		"move_speed":
-			# 런타임 배수 — 공유 PlayerData.tres 직접 변형 금지(런마다 이속 누적 버그 방지).
-			if "move_speed_mult" in player:
-				player.move_speed_mult *= (1.0 + v)
-		"max_hp":
-			var hp: Node = player.get_node_or_null("HealthComponent")
-			if hp != null:
-				hp.max_hp += int(v)
-				hp.hp += int(v)
-		"slash_range":
-			if "slash_size_mult" in player:
-				player.slash_size_mult += v
-		"charge_speed":
-			if "charge_speed_bonus" in player:
-				player.charge_speed_bonus += v
-		"dodge":
-			if "dodge_chance" in player:
-				player.dodge_chance = clamp(player.dodge_chance + v, 0.0, 0.9)
-		"overheat_reduce":
-			if "overheat_dur_reduce" in player:
-				player.overheat_dur_reduce += v
-		"heat_delay_reduce":
-			if "heat_delay_reduce" in player:
-				player.heat_delay_reduce += v
-		"attack_power":
-			# 기본 공격력 +value — 다중타 적/보스 데미지 + 근접 스윙 데미지에 반영.
-			if "attack_power" in player:
-				player.attack_power += int(v)
-		"evade_refill":
-			# 회피 충전 시간 ×(1-value) — 0.4 바닥(보스전에서 너무 빨리 회피 못 쓰게).
-			if "evade_refill_mult" in player:
-				player.evade_refill_mult = maxf(0.4, player.evade_refill_mult * (1.0 - v))
-		"exp_range":
-			# 경험치 자석 반경 +value(픽당) — ExpGem 이 player.exp_magnet_mult 로 읽음.
-			if "exp_magnet_mult" in player:
-				player.exp_magnet_mult += v
-		"rare_circular_slash":
-			if "has_rare_circular_slash" in player:
-				player.has_rare_circular_slash = true
-			if "rare_circular_slash_radius" in player:
-				player.rare_circular_slash_radius = maxf(v, 0.5)
-		_:
-			push_warning("UpgradeSystem: unknown card id '%s'" % card_id)
+	# 의도적으로 아무 효과도 적용하지 않음(레거시 카드 효과 전면 비활성).
+	return

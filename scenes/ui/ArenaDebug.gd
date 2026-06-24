@@ -5,7 +5,6 @@ extends CanvasLayer
 ## process_mode = ALWAYS — 배속/일시정지와 무관하게 항상 동작.
 ## 스탯 주입/라이브 튜닝은 검은 카드 화면 없이 즉시 적용 — 게임 화면 유지한 채 수치만 바꾼다.
 
-const _UpgradeScript := preload("res://scripts/managers/UpgradeSystem.gd")
 const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 
 var _player: Node
@@ -137,21 +136,14 @@ func _refresh_stats() -> void:
 		if "instant_slash_distance" in d:
 			lines.append("일섬 사거리  %.1f" % d.instant_slash_distance)
 		if "slash_width" in d:
-			var sm: float = (p.slash_size_mult if "slash_size_mult" in p else 1.0)
-			lines.append("일섬 폭  %.2f (×%.2f)" % [d.slash_width * sm, sm])
+			lines.append("일섬 폭  %.2f" % d.slash_width)
 		if "evade_max_stacks" in d and p.has_method("get_evade_stacks"):
 			lines.append("회피 스택  %d / %d" % [int(p.call("get_evade_stacks")), d.evade_max_stacks])
 		if "evade_refill_time" in d:
 			var rm: float = (p.evade_refill_mult if "evade_refill_mult" in p else 1.0)
 			lines.append("회피충전  %.2fs (×%.2f)" % [d.evade_refill_time * rm, rm])
-	if "charge_speed_bonus" in p and float(p.charge_speed_bonus) != 0.0:
-		lines.append("차징속도 보너스  +%.2f" % p.charge_speed_bonus)
-	if "dodge_chance" in p and float(p.dodge_chance) > 0.0:
-		lines.append("회피 확률  %.0f%%" % (p.dodge_chance * 100.0))
 	if "shield_charges" in p and int(p.shield_charges) > 0:
 		lines.append("보호막  %d" % int(p.shield_charges))
-	if "has_phoenix" in p and bool(p.has_phoenix):
-		lines.append("불사조  O")
 	_stats_label.text = "\n".join(lines)
 
 
@@ -230,10 +222,6 @@ func _level_up_direct() -> void:
 func _attack_up() -> void:
 	if _player != null and "attack_power" in _player:
 		_player.attack_power += 1
-
-func _apply_card(id: String) -> void:
-	if _player != null and is_instance_valid(_player):
-		_UpgradeScript.apply(id, _player, _exp)
 
 func _refill_evade() -> void:
 	if _player != null and is_instance_valid(_player) and _player.has_method("refill_evade"):
@@ -317,12 +305,8 @@ func _build() -> void:
 	t_stat.add_child(_btn("레벨 +1 (몬스터 강화)", _level_up_direct))
 	t_stat.add_child(_btn("공격력 +1", _attack_up))
 	t_stat.add_child(_btn("회피 가득", _refill_evade))
-	t_stat.add_child(HSeparator.new())
-	t_stat.add_child(_title("카드 즉시 부여"))
-	t_stat.add_child(_btn("참격 강화 (공격력+1)", func(): _apply_card("attack_power")))
-	t_stat.add_child(_btn("보법 (회피충전 +12%)", func(): _apply_card("evade_refill")))
 
-	# 현재 스탯 탭 — 읽기 전용(카드/튜닝 반영된 최종 적용값)
+	# 현재 스탯 탭 — 읽기 전용(튜닝 반영된 최종 적용값)
 	var t_cur := _tab("현재")
 	tabs.add_child(t_cur)
 	t_cur.add_child(_title("PC 현재 적용 스탯"))
