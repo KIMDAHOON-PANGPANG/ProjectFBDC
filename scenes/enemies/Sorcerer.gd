@@ -36,6 +36,10 @@ const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
 const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 const _ZoneScript := preload("res://scenes/effects/SorcererZone.gd")
+## 머리 위 상태(버프/디버프) 아이콘 스트립(공용 — 표식 등 폴링 표시).
+const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
+const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
+const _HOLRIM_CAP := 8.0
 
 const _TINT := Color(0.62, 0.32, 1.0)  # 보라 — 마법사
 
@@ -50,6 +54,8 @@ var _teleport_cd: float = 0.0
 var _phasing: bool = false
 var _phase_target: Vector3 = Vector3.ZERO
 var _kb = _KnockbackScript.new()
+## 머리 위 상태 아이콘 스트립(표식/버프 폴링 표시). _ready 에서 인스턴스.
+var _status_strip: Node = null
 ## 카메라 rig(시야 게이트) — _ready 에서 lookup. 없으면 폴백 true(시야 안 취급).
 var _cam: Node
 ## 진행 중 트윈 핸들 — 사망 시 명시 kill(사망 페이드 알파 경합 제거).
@@ -80,6 +86,13 @@ func _ready() -> void:
 		add_child(bar)
 		if bar.has_method("attach_health"):
 			bar.call("attach_health", _health)
+
+	# 머리 위 상태 아이콘 스트립 — HP 바(1.7) 위.
+	var strip := _StatusStripScript.new()
+	if "follow_offset" in strip:
+		strip.follow_offset = Vector3(0, 2.25, 0)
+	add_child(strip)
+	_status_strip = strip
 
 	_label = get_node_or_null(number_label_path) as Label3D
 	if _label != null:
@@ -118,9 +131,26 @@ func _is_defensive() -> bool:
 	return float(_health.hp) <= float(max_hp) * 0.3
 
 
+## 머리 위 상태 아이콘 폴링 — 적 meta(holrim_marks 등)를 매 프레임 읽어 스트립 갱신.
+func _poll_status() -> void:
+	if _status_strip == null or not is_instance_valid(_status_strip):
+		return
+	var marks := int(get_meta("holrim_marks", 0))
+	if marks > 0:
+		_status_strip.call("set_status", "holrim", {
+			"value": clampf(float(marks) / _HOLRIM_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _HOLRIM_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "holrim")
+
+
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
+	_poll_status()
 	delta *= time_scale_mult
 	if _cast_cd > 0.0:
 		_cast_cd -= delta

@@ -26,6 +26,10 @@ const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
 const _FIRE_FRACTION: float = 0.25
 ## 머리 위 HP 바(모든 몬스터 공통 — 코드 인스턴스).
 const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
+## 머리 위 상태(버프/디버프) 아이콘 스트립(공용 — 표식 등 폴링 표시).
+const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
+const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
+const _HOLRIM_CAP := 8.0
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -41,6 +45,8 @@ var _attack_cd: float = 1.0
 var _dead: bool = false
 ## 스무스 넉백 상태(피격/피탄 시 밀림).
 var _kb = _KnockbackScript.new()
+## 머리 위 상태 아이콘 스트립(표식/버프 폴링 표시). _ready 에서 인스턴스.
+var _status_strip: Node = null
 
 func _ready() -> void:
 	if data == null:
@@ -75,11 +81,34 @@ func _ready() -> void:
 		if bar.has_method("attach_health"):
 			bar.call("attach_health", _health)
 
+	# 머리 위 상태 아이콘 스트립 — HP 바(1.55) 위.
+	var strip := _StatusStripScript.new()
+	if "follow_offset" in strip:
+		strip.follow_offset = Vector3(0, 2.1, 0)
+	add_child(strip)
+	_status_strip = strip
+
 	_player = get_tree().get_first_node_in_group("player")
+
+## 머리 위 상태 아이콘 폴링 — 적 meta(holrim_marks 등)를 매 프레임 읽어 스트립 갱신.
+func _poll_status() -> void:
+	if _status_strip == null or not is_instance_valid(_status_strip):
+		return
+	var marks := int(get_meta("holrim_marks", 0))
+	if marks > 0:
+		_status_strip.call("set_status", "holrim", {
+			"value": clampf(float(marks) / _HOLRIM_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _HOLRIM_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "holrim")
 
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
+	_poll_status()
 	# Bullet-time slows enemies but not the player. Apply to delta + velocity.
 	delta *= time_scale_mult
 	# 스무스 넉백 — 피탄/피격 시 부드럽게 밀고 감쇠.

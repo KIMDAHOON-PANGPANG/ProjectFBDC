@@ -22,6 +22,11 @@ const _PANEL := Color(0.07, 0.07, 0.09, 0.86)
 const _HP_X := 106.0
 const _HP_W := 372.0
 
+## 공용 상태 아이콘(2D) — 적 머리 스트립과 같은 radial 셰이더 데이터 모델 공유.
+const _StatusIcon2DScript := preload("res://scenes/ui/StatusIcon2D.gd")
+## 버프/디버프 스트립 아이콘 간격(px).
+const _STATUS_SPACING := 34.0
+
 ## Main/Testplay 가 주입 — 레벨 뱃지용(ExpSystem 노드, .level).
 var exp_system: Node = null
 
@@ -32,6 +37,11 @@ var _heat_pips: Array = []
 var _dodge_pips: Array = []
 var _dodge_fills: Array = []
 var _level_label: Label
+## PC 버프/디버프 스트립(2D) — 빈 컨테이너 스캐폴드. set_status/clear_status 로 채운다.
+## 현재 PC 지속버프 없음 → 빈 상태로도 패널이 깨지지 않게 컨테이너만 존재.
+var _status_strip_2d: Control = null
+## key(String) -> StatusIcon2D(Control)
+var _status_icons_2d: Dictionary = {}
 
 
 func _ready() -> void:
@@ -172,6 +182,50 @@ func _build() -> void:
 		add_child(fill)
 		_dodge_fills.append(fill)
 
+	# --- 버프/디버프 상태 스트립(스캐폴드) ---
+	# 패널 위쪽(HP 바 상단 바깥)에 좌→우 배치되는 빈 컨테이너. PC 지속버프가 생기면
+	# set_status(key, {...}) 로 즉시 아이콘이 뜨도록 공용 StatusIcon2D 를 재활용한다.
+	# 현재 버프 없음 → 아이콘 0개라 보이지 않지만 컨테이너는 항상 존재(레이아웃 안전).
+	_status_strip_2d = Control.new()
+	_status_strip_2d.position = Vector2(_HP_X, -34.0)
+	_status_strip_2d.size = Vector2(_HP_W, 30.0)
+	_status_strip_2d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_status_strip_2d)
+
+
+## PC 상태 아이콘을 만들거나 갱신한다(공용 데이터 모델). d = {value, mode, color, icon}.
+## 향후 PC 지속버프/디버프가 생기면 이 메서드로 즉시 표시된다(스캐폴드 노출).
+func set_status(key: String, d: Dictionary) -> void:
+	if _status_strip_2d == null:
+		return
+	var icon = _status_icons_2d.get(key, null)
+	if icon == null or not is_instance_valid(icon):
+		icon = _StatusIcon2DScript.new()
+		_status_strip_2d.add_child(icon)
+		_status_icons_2d[key] = icon
+		_relayout_status()
+	icon.call("set_data", d)
+
+
+## key 상태 아이콘 제거.
+func clear_status(key: String) -> void:
+	var icon = _status_icons_2d.get(key, null)
+	if icon != null and is_instance_valid(icon):
+		icon.queue_free()
+	if _status_icons_2d.has(key):
+		_status_icons_2d.erase(key)
+		_relayout_status()
+
+
+## 살아있는 아이콘을 좌→우 가로 배치.
+func _relayout_status() -> void:
+	var i := 0
+	for k in _status_icons_2d.keys():
+		var ic = _status_icons_2d[k]
+		if ic != null and is_instance_valid(ic):
+			(ic as Control).position = Vector2(float(i) * _STATUS_SPACING, 0.0)
+			i += 1
+
 
 func _process(_delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
@@ -218,6 +272,15 @@ func _process(_delta: float) -> void:
 	# 레벨 뱃지
 	if _level_label != null and exp_system != null and is_instance_valid(exp_system) and "level" in exp_system:
 		_level_label.text = str(exp_system.level)
+	# 버프/디버프 스트립 폴링(스캐폴드) — 현재 PC 지속버프 없음이라 set_status 미호출.
+	# PC 표식/버프가 생기면 여기서 _player meta 등을 읽어 set_status 로 채운다.
+	_poll_status_2d()
+
+
+## PC 버프/디버프 폴링(스캐폴드). 현재는 표시할 PC 지속버프가 없어 비어 있다.
+## 향후 PC 상태(meta/플래그)가 생기면 여기서 읽어 set_status("key", {...}) 로 표시.
+func _poll_status_2d() -> void:
+	pass
 
 
 ## 열기(모드2) 또는 일섬 게이지(모드1) — 같은 자원이라 한 스택으로 표현.

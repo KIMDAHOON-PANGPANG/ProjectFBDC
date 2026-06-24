@@ -15,6 +15,10 @@ enum BState { CHASE, WINDUP, CHARGE, RECOVER }
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 ## 머리 위 HP+아머 바(코드 인스턴스 — .tscn 수정 불필요).
 const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
+## 머리 위 상태(버프/디버프) 아이콘 스트립(공용 — 표식 등 폴링 표시).
+const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
+const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
+const _HOLRIM_CAP := 8.0
 
 ## 보스 변형 식별자 (1=Boss / 2=Boss2 / 3=Boss3). 각 .tscn 에서 지정.
 ## CombatData 가 enemy_combat.json 의 "보스_<id>" 섹션을 적용하는 키.
@@ -103,6 +107,8 @@ var _charge_t: float = 0.0
 var _charge_start: Vector3 = Vector3.ZERO
 var _charge_hit_done: bool = false
 var _charge_decal: Node3D = null
+## 머리 위 상태 아이콘 스트립(표식/버프 폴링 표시). _ready 에서 인스턴스.
+var _status_strip: Node = null
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -135,6 +141,13 @@ func _ready() -> void:
 		if bar.has_method("attach_health"):
 			bar.call("attach_health", _health)
 
+	# 머리 위 상태 아이콘 스트립 — HP 바(2.7) 위.
+	var strip := _StatusStripScript.new()
+	if "follow_offset" in strip:
+		strip.follow_offset = Vector3(0, 3.3, 0)
+	add_child(strip)
+	_status_strip = strip
+
 	_label = get_node_or_null(number_label_path) as Label3D
 	if _label != null:
 		_label.text = str(max_hp)
@@ -158,9 +171,25 @@ func _ready() -> void:
 		_boss_half_xz = (_cs.shape as BoxShape3D).size.x * 0.5 * scale.x
 
 
+## 머리 위 상태 아이콘 폴링 — 보스 meta(holrim_marks 등)를 매 프레임 읽어 스트립 갱신.
+func _poll_status() -> void:
+	if _status_strip == null or not is_instance_valid(_status_strip):
+		return
+	var marks := int(get_meta("holrim_marks", 0))
+	if marks > 0:
+		_status_strip.call("set_status", "holrim", {
+			"value": clampf(float(marks) / _HOLRIM_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _HOLRIM_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "holrim")
+
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
+	_poll_status()
 	delta *= time_scale_mult
 	if _attack_cd > 0.0:
 		_attack_cd -= delta
