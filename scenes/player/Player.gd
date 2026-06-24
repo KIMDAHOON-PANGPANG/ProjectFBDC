@@ -48,6 +48,8 @@ var _dash_end: Vector3
 var _dash_elapsed: float = 0.0
 ## 돌진 시간(초) — _fire_slash 에서 거리 ÷ slash_dash_speed 로 매번 갱신.
 var _dash_dur: float = 0.12
+## 일섬 대시 종료 후 복원할 collision_layer 기본값(_ready 에서 모드별로 캐시).
+var _collision_layer_default: int = 1 << 1
 var _aim_arrow: AimArrow
 # 적은 SpriteRig, PC 는 PlayerSprite(둘 다 동일 API). 타입 고정 없이 덕타이핑.
 var _sprite_rig
@@ -185,6 +187,8 @@ func _ready() -> void:
 	# 빠져나가므로, PC 가 군중을 헤집고 지나가면 몬스터가 밀려난다. 한 방향
 	# 디펜트레이션이라 예전의 상호 "쭉 밀림" 끼임 버그는 재발하지 않는다.
 	collision_mask = (1 << 0)  # World only (몬스터에 안 막힘 = PC 불가침)
+	# 대시 종료/사망 시 복원할 기본 레이어를 캐시(모드1=Player레이어 / 모드2=0).
+	_collision_layer_default = collision_layer
 
 	_aim_arrow = get_node_or_null(aim_arrow_path) as AimArrow
 	_sprite_rig = get_node_or_null(sprite_rig_path)
@@ -626,6 +630,9 @@ func _fire_slash() -> void:
 	_dash_elapsed = 0.0
 	# 돌진 속도(m/s) → 동적 대시 시간 = 거리 ÷ 속도(거리가 멀어도 체감 일정).
 	_dash_dur = max(slash_range / max(data.slash_dash_speed, 0.01), 0.02)
+	# 일섬 대시 중 적 관통 — PC 를 Player 레이어에서 빼 적의 디펜트레이션 솔버가
+	# 대시를 막지 못하게(종료 시 _complete_slash_action 에서 복원).
+	collision_layer = 0
 	_set_state(State.DASHING)
 	# 일섬 대시 동안 카메라가 PC 에 바짝 붙어 "함께 이동"하도록 추적 속도를 끌어올린다
 	# (공격 후 따라붙는 랙이 아니라, 공격 중 같이 움직이는 이동감).
@@ -678,6 +685,8 @@ func _update_dash(delta: float) -> void:
 
 
 func _complete_slash_action() -> void:
+	# 대시 종료 — 콜리전 레이어 복원(모드1=Player 레이어 / 모드2=0).
+	collision_layer = _collision_layer_default
 	_cooldown_t = data.slash_cooldown
 	slash_finished.emit()
 	var _tb_end := _trigger_bus()
@@ -894,6 +903,8 @@ func revive() -> void:
 
 
 func _on_died() -> void:
+	# 안전망 — 만약 대시 도중 사망 경로로 빠지면 레이어가 0 으로 남지 않게 복원.
+	collision_layer = _collision_layer_default
 	# Tell Main FIRST so GameOverScreen + SaveSystem fire with the PC
 	# node still alive (Main reads kill count / level off live state).
 	# The 0.5s death tween runs in parallel — the screen pops up while
