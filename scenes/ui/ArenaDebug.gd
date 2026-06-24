@@ -300,6 +300,7 @@ func _build() -> void:
 	t_spawn.add_child(_spawn_btn("슬래머", "slammer"))
 	t_spawn.add_child(_spawn_btn("궁수 (원거리)", "ranged"))
 	t_spawn.add_child(_spawn_btn("주술사", "sorcerer"))
+	t_spawn.add_child(_spawn_btn("★엘리트 (원거리)", "star_elite"))
 	t_spawn.add_child(_spawn_btn("엘리트 1 (폭발)", "elite1"))
 	t_spawn.add_child(_spawn_btn("엘리트 2 (보너스)", "elite2"))
 	t_spawn.add_child(_spawn_btn("엘리트 3 (불릿타임)", "elite3"))

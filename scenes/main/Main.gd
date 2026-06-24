@@ -617,6 +617,10 @@ func award_exp_for_kill(enemy: Node) -> void:
 	var is_minor: bool = not (enemy.is_in_group("elites") or enemy.is_in_group("boss"))
 	if is_minor and _player != null and is_instance_valid(_player) and _player.has_method("add_heat"):
 		_player.call("add_heat", -5.0)
+	# ★엘리트 처치 보상 — PC 레벨 1 상승(다음 임계까지 즉시 부여).
+	if ("is_star_elite" in enemy and enemy.is_star_elite) and _exp_system != null:
+		var need: int = max(1, _exp_system.threshold - _exp_system.current_exp)
+		_exp_system.add_exp(need)
 
 
 ## 처치 즉시 EXP — 0(사용자 밸런스). 적을 죽이는 것만으로는 거의 차지 않고,
@@ -981,9 +985,17 @@ func _seed_initial_mobs() -> void:
 			(inst as Node3D).global_position = _edge_spawn_forward()
 		_wire_enemy_lifecycle(inst)
 
-## One-shot at elite_time — disabled (S2: death-effect elites removed; ★ ranged-based elite arrives S9).
+## One-shot at elite_time — ★ 원거리 기반 엘리트 1마리 스폰(S9).
 func _chapter_spawn_elites() -> void:
-	pass
+	var scene: PackedScene = load("res://scenes/enemies/RangedEnemy.tscn")
+	var inst := scene.instantiate()
+	if "is_star_elite" in inst:
+		inst.is_star_elite = true
+	_inherit_bullettime(inst)
+	_enemies_root.add_child(inst)
+	if inst is Node3D:
+		(inst as Node3D).global_position = _pick_offscreen_spawn(10.0, 14.0)
+	_wire_enemy_lifecycle(inst)
 
 ## One-shot at curve.boss_time — boss spawns off-screen so it stomps in
 ## visibly. Picks the chapter-specific boss from `boss_scenes` first,

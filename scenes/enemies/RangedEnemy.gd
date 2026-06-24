@@ -16,6 +16,10 @@ extends CharacterBody3D
 ## ── 군집 분리 (Boid) ── 원거리끼리 겹치지 않게 PC 링 둘레로 360° 분산.
 @export var separation_radius: float = 2.5
 @export var separation_weight: float = 1.5
+## ★엘리트 — 원거리 기반 변형. 일섬 10방(20HP)·처치 시 PC 레벨 1업. Main elite_time 비트/Testplay 버튼이 set.
+@export var is_star_elite: bool = false
+## ★엘리트 전용 HP — 인스턴스 HealthComponent 에 주입(공유 .tres 불변). 일섬 base 데미지 2 × 10방 ≈ 20.
+@export var star_hp: int = 20
 
 const DEFAULT_VISUALS: CharacterVisuals = preload("res://resources/enemies/ranged_visuals.tres")
 ## 데이터 관리 로더 (preload + 정적 호출 — 헤드리스 class_name 캐시 안전).
@@ -71,6 +75,10 @@ func _ready() -> void:
 	_health = get_node_or_null("HealthComponent") as HealthComponent
 	if _health != null:
 		_health.setup(data.max_hp)
+		if is_star_elite:
+			_health.setup(star_hp)
+			add_to_group("elites")
+			add_to_group("star_elites")
 		_health.setup_armor(armor_max, stagger_duration)
 		_health.died.connect(_on_died)
 		# 머리 위 HP 바 — 모든 몬스터 공통(원거리). 코드 인스턴스.
@@ -87,6 +95,19 @@ func _ready() -> void:
 		strip.follow_offset = Vector3(0, 2.1, 0)
 	add_child(strip)
 	_status_strip = strip
+
+	if is_star_elite:
+		var star := Label3D.new()
+		star.text = "★"
+		star.modulate = Color(1.0, 0.85, 0.2)
+		star.font_size = 64
+		star.pixel_size = 0.012
+		star.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		star.no_depth_test = true
+		star.position = Vector3(0, 2.5, 0)
+		add_child(star)
+		if _sprite_rig != null:
+			_sprite_rig.fallback_color = Color(1.0, 0.85, 0.2)
 
 	_player = get_tree().get_first_node_in_group("player")
 
