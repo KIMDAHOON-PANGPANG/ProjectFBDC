@@ -27,6 +27,10 @@ const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
 ## 은혜=트리거×컴포넌트 이벤트 키 참조.
 const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
+## 권속 은혜 데이터 조회(by_id/params_for 정적 호출).
+const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
+## 권속 은혜 효과 실행기 — _ready 에서 코드 인스턴스로 add_child.
+const _BoonExecutorScript := preload("res://scripts/managers/BoonExecutor.gd")
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
@@ -82,6 +86,11 @@ var _slash_grace_t: float = 0.0
 ## 다중타 적·보스에 주는 데미지. SlashAttack/EliteEffectService/CircularSlash/balance_sim/
 ## ArenaDebug 가 읽으므로 변수는 보존(중립 값으로 효과 중립화).
 var attack_power: int = 1
+
+## 권속 은혜 장착 목록(런타임 — 런마다 _ready 에서 리셋). 각 원소 = {id, rarity, components, params}.
+var active_boons: Array = []
+## 권속 은혜 효과 실행기 노드 참조.
+var _boon_executor: Node = null
 ## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
 ## 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속. _zone_slow_t > 0 이면 _handle_move 적용.
@@ -200,6 +209,12 @@ func _ready() -> void:
 			_b.visible = false
 
 	_build_dust_emitter()
+
+	active_boons.clear()
+	_boon_executor = _BoonExecutorScript.new()
+	_boon_executor.name = "BoonExecutor"
+	add_child(_boon_executor)
+	_boon_executor.call("setup", self)
 
 func _physics_process(delta: float) -> void:
 	# 근접 기본 공격 — state 무관 매 프레임(이동 중에도 휘두름). 내부에서 차징/
@@ -1141,3 +1156,13 @@ func _build_dust_emitter() -> void:
 	# than from the PC's pivot (which is at root height ~0).
 	_dust_emitter.position = Vector3(0, 0.08, 0)
 	add_child(_dust_emitter)
+
+
+## 권속 은혜 장착 — BoonSystem 조회 + 등급 params 해석해 active_boons 등록. BoonExecutor 가 구독 콜백에서 읽음.
+func add_boon(id: String, rarity: String) -> void:
+	var b = _BoonSystemScript.by_id(id)
+	if b == null:
+		return
+	var comps = b.get("components", [])
+	var params: Dictionary = _BoonSystemScript.params_for(id, rarity, 0)
+	active_boons.append({"id": id, "rarity": rarity, "components": comps, "params": params})

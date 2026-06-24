@@ -431,6 +431,8 @@ func _build_button_panel() -> void:
 		{"label": "일반 몹 10마리", "cb": Callable(self, "_on_spawn_regular_10")},
 		{"label": "내려찍기 슬래머", "cb": Callable(self, "_on_spawn_slammer")},
 		{"label": "주술사 (마법사)", "cb": Callable(self, "_on_spawn_sorcerer")},
+		{"label": "은혜:구미호 표식(유니크)", "cb": Callable(self, "_on_boon_gumiho_mark")},
+		{"label": "은혜:구미호 흡혈(유니크)", "cb": Callable(self, "_on_boon_gumiho_lifesteal")},
 		{"label": "보스 1 (Ch1)", "cb": Callable(self, "_on_spawn_boss")},
 	]
 	# Bosses 2/3 only show if their scenes are wired — keeps the panel
@@ -642,3 +644,17 @@ func _on_spawn_boss_2() -> void:
 
 func _on_spawn_boss_3() -> void:
 	_spawn_boss_3()
+
+
+func _on_boon_gumiho_mark() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_mark", "uniq")
+
+
+func _on_boon_gumiho_lifesteal() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_lifesteal", "uniq")
