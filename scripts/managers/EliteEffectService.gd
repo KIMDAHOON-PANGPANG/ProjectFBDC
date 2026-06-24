@@ -29,17 +29,8 @@ func setup(player: Node, bullet_time_service: Node) -> void:
 	_bullet_time_service = bullet_time_service
 
 
-func trigger(effect_type: int, pos: Vector3) -> void:
-	match effect_type:
-		1:
-			_spawn_explosion(pos)
-		2:
-			_queue_circular_slash_after_slash()
-		3:
-			if _bullet_time_service != null and _bullet_time_service.has_method("start"):
-				_bullet_time_service.call("start")
-		4:
-			_give_player_shield()
+func trigger(_effect_type: int, _pos: Vector3) -> void:
+	pass  # S2: death-effect elites removed. ★ ranged-based elite arrives S9.
 
 
 func _spawn_explosion(pos: Vector3) -> void:
@@ -118,13 +109,6 @@ func _on_pending_slash_finished() -> void:
 
 func _clear_pending_circular_slash() -> void:
 	_pending_circular_slash = false
-
-
-func _give_player_shield() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if "shield_charges" in _player:
-		_player.shield_charges += 1
 
 
 ## Re-target after a chapter transition (Main._advance_chapter rebuilds

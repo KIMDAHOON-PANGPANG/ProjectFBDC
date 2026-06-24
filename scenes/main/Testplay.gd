@@ -267,15 +267,7 @@ func award_exp_for_kill(enemy: Node) -> void:
 	if _exp_system == null:
 		return
 	var base := 1
-	if enemy is EliteEnemy:
-		var t: int = enemy.effect_type
-		match t:
-			1: base = 3
-			2: base = 5
-			3: base = 10
-			4: base = 8
-			_: base = 3
-	elif "_lv" in enemy and enemy._lv >= 2:
+	if "_lv" in enemy and enemy._lv >= 2:
 		base = 2
 	# Mirror of Main — 처치 즉시 EXP 0(젬을 주워야 EXP). add_exp(0)은 no-op.
 	_exp_system.add_exp(0)
@@ -334,12 +326,16 @@ func _on_leveled_up(_new_level: int) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
+	# Draw cards first — if the pool is empty, skip the overlay entirely
+	# (tree stays unpaused, level already incremented by ExpSystem).
+	var cards: Array = _UpgradeSystemScript.draw(3, _arena_elapsed_seconds(), _player)
+	if cards.is_empty():
+		return
 	tree.paused = true
 	var screen := level_up_screen_scene.instantiate() as CanvasLayer
 	if screen == null:
 		tree.paused = false
 		return
-	var cards: Array = _UpgradeSystemScript.draw(3, _arena_elapsed_seconds(), _player)
 	add_child(screen)
 	if screen.has_method("show_cards"):
 		screen.call("show_cards", cards)
@@ -401,18 +397,6 @@ func _spawn_mob(scene: PackedScene) -> void:
 		(inst as Node3D).global_position = _pick_random_spawn()
 	_wire_enemy_lifecycle(inst)
 
-func _spawn_elite(effect_type: int) -> void:
-	if elite_enemy_scene == null:
-		return
-	var inst := elite_enemy_scene.instantiate()
-	if "effect_type" in inst:
-		inst.effect_type = effect_type
-	_inherit_bullettime(inst)
-	_enemies_root.add_child(inst)
-	if inst is Node3D:
-		(inst as Node3D).global_position = _pick_random_spawn()
-	_wire_enemy_lifecycle(inst)
-
 func _spawn_boss() -> void:
 	_spawn_boss_scene(boss_scene)
 
@@ -456,10 +440,6 @@ func _build_button_panel() -> void:
 
 	var buttons: Array = [
 		{"label": "일반 몹 10마리", "cb": Callable(self, "_on_spawn_regular_10")},
-		{"label": "엘리트 1 (폭발)", "cb": Callable(self, "_on_spawn_elite_1")},
-		{"label": "엘리트 2 (보너스 슬래시)", "cb": Callable(self, "_on_spawn_elite_2")},
-		{"label": "엘리트 3 (불릿타임)", "cb": Callable(self, "_on_spawn_elite_3")},
-		{"label": "엘리트 4 (보호막)", "cb": Callable(self, "_on_spawn_elite_4")},
 		{"label": "내려찍기 슬래머", "cb": Callable(self, "_on_spawn_slammer")},
 		{"label": "주술사 (마법사)", "cb": Callable(self, "_on_spawn_sorcerer")},
 		{"label": "보스 1 (Ch1)", "cb": Callable(self, "_on_spawn_boss")},
@@ -542,10 +522,6 @@ func arena_spawn(kind: String, count: int) -> void:
 		"sorcerer": scene = sorcerer_enemy_scene
 	for i in n:
 		match kind:
-			"elite1": _spawn_elite(1)
-			"elite2": _spawn_elite(2)
-			"elite3": _spawn_elite(3)
-			"elite4": _spawn_elite(4)
 			"boss1": _spawn_boss()
 			"boss2": _spawn_boss_2()
 			"boss3": _spawn_boss_3()
@@ -658,20 +634,6 @@ func arena_wave_info() -> String:
 func _on_spawn_regular_10() -> void:
 	for i in range(regular_mob_count):
 		_spawn_mob(melee_enemy_scene)
-
-func _on_spawn_elite_1() -> void:
-	_spawn_elite(1)
-
-func _on_spawn_elite_2() -> void:
-	_spawn_elite(2)
-
-func _on_spawn_elite_3() -> void:
-	_spawn_elite(3)
-
-
-func _on_spawn_elite_4() -> void:
-	_spawn_elite(4)
-
 
 func _on_spawn_slammer() -> void:
 	_spawn_mob(slammer_enemy_scene)

@@ -256,11 +256,6 @@ func _on_died() -> void:
 	collision_layer = 0
 	collision_mask = 0
 
-	# Notify Main to fire the special payload at this position.
-	var main := get_tree().current_scene
-	if main != null and main.has_method("trigger_elite_effect"):
-		main.call("trigger_elite_effect", effect_type, global_position)
-
 	_play_death_fade()
 
 func _play_death_fade() -> void:

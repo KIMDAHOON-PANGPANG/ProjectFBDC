@@ -287,10 +287,6 @@ func _spawn_wave() -> void:
 		_spawn_one(melee_enemy_scene, melee_spawn_min_radius, melee_spawn_max_radius)
 	for i in range(ranged_count):
 		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
-	# Elites: one of each effect type per wave (1=explode, 2=bonus, 3=bullet-time).
-	for i in range(elite_count):
-		var effect_type: int = (i % 3) + 1
-		_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, effect_type)
 
 func _spawn_one(scene: PackedScene, r_min: float, r_max: float) -> void:
 	if scene == null:
@@ -313,21 +309,6 @@ func _inherit_bullettime(inst: Node) -> void:
 		return
 	if "time_scale_mult" in inst:
 		inst.time_scale_mult = _bullet_time_service.current_slow_factor()
-
-## Spawn an elite with a pre-set effect_type. The effect_type must be
-## written BEFORE add_child so the elite's _ready() picks it up to label
-## the head-icon.
-func _spawn_one_elite(scene: PackedScene, r_min: float, r_max: float, effect_type: int) -> void:
-	if scene == null:
-		return
-	var inst := scene.instantiate()
-	if "effect_type" in inst:
-		inst.effect_type = effect_type
-	_inherit_bullettime(inst)
-	_enemies_root.add_child(inst)
-	if inst is Node3D:
-		(inst as Node3D).global_position = _pick_offscreen_spawn(r_min, r_max)
-	_wire_enemy_lifecycle(inst)
 
 ## Hook a freshly spawned enemy into the bookkeeping pipeline:
 ##   - tree_exited bumps kill count AND awards EXP.
@@ -594,15 +575,7 @@ func award_exp_for_kill(enemy: Node) -> void:
 	if _exp_system == null:
 		return
 	var base := 1  # regular LV1 melee/ranged
-	if enemy is EliteEnemy:
-		var t: int = enemy.effect_type
-		match t:
-			1: base = 3
-			2: base = 5
-			3: base = 10
-			4: base = 8
-			_: base = 3
-	elif "_lv" in enemy and enemy._lv >= 2:
+	if "_lv" in enemy and enemy._lv >= 2:
 		base = 2
 	# 처치 직접 EXP 는 거의 0(EXP_INSTANT_ON_KILL). 대부분의 EXP 는 떨어진 젬을
 	# 주워야 들어온다 — 적을 죽이는 것만으로는 레벨이 거의 안 오른다.
@@ -916,18 +889,12 @@ func _request_spawn_preset(lv: int) -> void:
 		if ranged_enemy_scene != null and r2 < _P2_RANGED:
 			_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
 			return
-		if elite_enemy_scene != null and r2 < _P2_RANGED + _P2_ELITE:
-			_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, randi_range(1, 4))
-			return
 		_spawn_melee_or_slammer(lv)
 		return
-	# 프리셋 1(근접 밀리: 근접90·원거리5·엘리트5) 또는 기타.
+	# 프리셋 1(근접 밀리: 근접90·원거리5) 또는 기타.
 	var roll: float = randf()
 	if ranged_enemy_scene != null and roll < _P1_RANGED:
 		_spawn_one(ranged_enemy_scene, ranged_spawn_min_radius, ranged_spawn_max_radius)
-		return
-	if elite_enemy_scene != null and roll < _P1_RANGED + _P1_ELITE:
-		_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, randi_range(1, 4))
 		return
 	_spawn_melee_or_slammer(lv)
 
@@ -997,11 +964,9 @@ func _seed_initial_mobs() -> void:
 			(inst as Node3D).global_position = _edge_spawn_forward()
 		_wire_enemy_lifecycle(inst)
 
-## One-shot at t=60 — three elites (types 1/2/3), reuses existing system.
+## One-shot at elite_time — disabled (S2: death-effect elites removed; ★ ranged-based elite arrives S9).
 func _chapter_spawn_elites() -> void:
-	for i in range(elite_count):
-		var effect_type: int = (i % 3) + 1
-		_spawn_one_elite(elite_enemy_scene, elite_spawn_min_radius, elite_spawn_max_radius, effect_type)
+	pass
 
 ## One-shot at curve.boss_time — boss spawns off-screen so it stomps in
 ## visibly. Picks the chapter-specific boss from `boss_scenes` first,
@@ -1256,13 +1221,16 @@ func _on_leveled_up(_new_level: int) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
+	# Draw cards first — if the pool is empty, skip the overlay entirely
+	# (tree stays unpaused, level already incremented by ExpSystem).
+	var cards: Array = _UpgradeSystemScript.draw(3, _elapsed_seconds(), _player)
+	if cards.is_empty():
+		return
 	tree.paused = true
 	var screen := level_up_screen_scene.instantiate() as CanvasLayer
 	if screen == null:
 		tree.paused = false
 		return
-	# UpgradeSystem is a RefCounted static class — call statically via preload.
-	var cards: Array = _UpgradeSystemScript.draw(3, _elapsed_seconds(), _player)
 	add_child(screen)
 	if screen.has_method("show_cards"):
 		screen.call("show_cards", cards)
