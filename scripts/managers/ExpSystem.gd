@@ -9,15 +9,7 @@ extends Node
 ##
 ##   threshold(level) = first_threshold + step * (level-1) + accel * (level-1)^2
 ##
-## Concrete values with the defaults below:
-##   Lv1 → 2:  14   (−30% vs the old linear curve)
-##   Lv2 → 3:  23   (was 30)
-##   Lv3 → 4:  36   (was 40)
-##   Lv4 → 5:  51   (was 50)
-##   Lv5 → 6:  68   (was 60)
-##   ...
-## So the player earns the first 2–3 level-ups much faster, then the
-## curve catches up and starts pulling ahead of the old linear plan.
+## 구체값은 first_threshold/step/accel 로 산출 — 30s≈Lv2, 보스(7분)≈Lv13 가안.
 ##
 ## Listeners (HUD bar, level-up screen) read `current_exp` / `threshold`
 ## and react to `exp_changed` / `leveled_up`.
@@ -26,9 +18,9 @@ signal exp_changed(current: int, threshold: int)
 signal leveled_up(new_level: int)
 
 @export var first_threshold: int = 12
-@export var threshold_step: int = 7
+@export var threshold_step: int = 8
 ## Quadratic accelerator on top of the linear step. 0.0 = pure linear.
-@export var threshold_accel: float = 1.3
+@export var threshold_accel: float = 1.5
 ## Multiplier applied to EXP gains (extended by Greed upgrade).
 var gain_multiplier: float = 1.0
 

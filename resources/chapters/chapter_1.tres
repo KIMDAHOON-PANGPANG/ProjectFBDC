@@ -4,18 +4,18 @@
 
 [resource]
 script = ExtResource("1_wc")
-curve_times = PackedFloat32Array(0, 20, 40, 70, 100, 110, 150, 175)
-curve_targets = PackedInt32Array(5, 12, 22, 32, 4, 30, 38, 6)
-curve_lvs = PackedInt32Array(1, 1, 2, 2, 2, 3, 3, 3)
-elite_time = 120.0
-boss_time = 180.0
+curve_times = PackedFloat32Array(0, 30, 60, 120, 180, 240, 300, 360, 420)
+curve_targets = PackedInt32Array(6, 10, 16, 22, 26, 32, 34, 38, 34)
+curve_lvs = PackedInt32Array(1, 1, 2, 3, 4, 5, 7, 9, 11)
+elite_time = 60.0
+boss_time = 420.0
 tick_period = 0.8
 ranged_ratio = 0.11
-ranged_start_time = 20.0
+ranged_start_time = 300.0
 slammer_ratio = 0.1
-slammer_start_time = 40.0
+slammer_start_time = 180.0
 spawn_keys = PackedStringArray("melee", "ranged", "slammer", "leaper", "sorcerer")
-spawn_start_times = PackedFloat32Array(0, 20, 40, 0, 0)
-spawn_weights = PackedFloat32Array(8, 1, 1, 0, 0.05)
+spawn_start_times = PackedFloat32Array(0, 300, 180, 0, 300)
+spawn_weights = PackedFloat32Array(8, 2, 1.5, 0, 0.06)
 spawn_enabled = PackedInt32Array(1, 1, 1, 0, 1)
-spawn_end_times = PackedFloat32Array(0, 0, 0, 0, 0)
+spawn_end_times = PackedFloat32Array(0, 0, 300, 0, 0)
