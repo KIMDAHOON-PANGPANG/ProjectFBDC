@@ -1282,23 +1282,18 @@ func _build_hud() -> void:
 	vbox.add_child(_kill_label)
 
 	_info_label = Label.new()
-	# 컨트롤 안내 — 모드별로 LB/RB 역할이 달라 GameConfig.instant_slash_mode 로 분기.
-	if _GameConfigScript.instant_slash_mode:
-		_info_label.text = "WASD: 이동   LMB(hold): 일섬 차징·발사   RMB: 패리   SPACE: 회피   R: 재시작"
-	else:
-		_info_label.text = "WASD: 이동   LMB: 근접 공격   RMB(hold): 일섬(게이지 100%)   SPACE: 회피   R: 재시작"
+	# 컨트롤 안내 — 일섬 단일(LB 롱프레스 차징·발사).
+	_info_label.text = "WASD: 이동   LMB(hold): 일섬 차징·발사   SPACE: 회피   R: 재시작"
 	_info_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_info_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_info_label.add_theme_constant_override("outline_size", 4)
 	_info_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(_info_label)
 
-	# 현재 컨트롤 모드 표시(근접 / 거합) — GameConfig.instant_slash_mode 기준. 항상 노출.
+	# 현재 웨이브 구성 표시 — 컨트롤은 일섬 단일, wave_preset 만 분기. 항상 노출.
 	var mode_label := Label.new()
-	var _ms: String = "근접 밀리 모드"
-	if _GameConfigScript.instant_slash_mode:
-		var _w: int = _GameConfigScript.wave_preset
-		_ms = "근접 몬스터 일섬" if _w == 1 else ("원거리 몬스터 일섬" if _w == 2 else "일섬 (기본 웨이브)")
+	var _w: int = _GameConfigScript.wave_preset
+	var _ms: String = "근접 몬스터 일섬" if _w == 1 else ("원거리 몬스터 일섬" if _w == 2 else "일섬 (기본 웨이브)")
 	mode_label.text = "모드: " + _ms
 	mode_label.add_theme_color_override("font_color", Color(0.55, 0.95, 1))
 	mode_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))

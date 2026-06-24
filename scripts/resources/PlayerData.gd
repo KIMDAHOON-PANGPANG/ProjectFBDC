@@ -83,22 +83,9 @@ extends Resource
 ## 스택을 전부 소진하면 가득(=max) 차기까지 걸리는 시간(초). (CSV: evade_refill_time)
 @export var evade_refill_time: float = 5.0
 
-# ── 근접 기본 공격 (Death Must Die 식 부채꼴 스윙) — 비도(원거리) 대체 ──
-@export_group("Melee (기본 공격)")
-## 스윙 사거리(유닛). (CSV: melee_range)
-@export var melee_range: float = 2.5
-## 부채꼴 각도(도) — 커서 방향 ±angle/2. (CSV: melee_angle_deg)
-@export var melee_angle_deg: float = 100.0
-## 스윙 간격(초) = 공격 속도(LB 홀드 시 이 간격으로 연속 스윙). (CSV: melee_cooldown)
-@export var melee_cooldown: float = 0.35
-## 스윙당 데미지(잡몹 HP 2 → 2면 한 방). 보스는 패리 없이 칩 데미지. (CSV: melee_damage)
-@export var melee_damage: int = 2
-## 스윙마다 카메라 미세 흔들림(타격감). amp=세기(유닛, 매우 약하게), dur=시간(초). (CSV: melee_shake_amp/dur)
-@export var melee_shake_amp: float = 0.04
-@export var melee_shake_dur: float = 0.08
-## 적 적중 시 극소량 히트스탑(역경직). scale=느려지는 배수(0~1, 작을수록 강함), dur=시간(초). (CSV: melee_hitstop_scale/dur)
-@export var melee_hitstop_scale: float = 0.05
-@export var melee_hitstop_dur: float = 0.045
+# ── M8 — 근접 기본 공격(부채꼴 스윙) 제거됨 ──
+# 컨트롤이 LB=일섬 단일로 통합되며 melee_range/angle/cooldown/damage/shake/hitstop
+# @export 와 Player 의 _do_melee_swing 경로가 전면 삭제됐다.
 
 # ── 4안 — 일섬 게이지 ──
 @export_group("Slash Gauge (일섬)")

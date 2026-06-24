@@ -74,13 +74,12 @@ func _on_main_menu() -> void:
 		get_tree().change_scene_to_file("res://scenes/main/OutGame.tscn")
 
 
-## 모드 선택 = 컨트롤(밀리/일섬) + 웨이브 구성을 GameConfig 에 저장 후 씬 리로드(재시작).
-## 리로드된 Main 이 instant_slash_mode(Player) + wave_preset(_apply_wave_preset) 적용.
-func _set_mode(instant: bool, wave: int) -> void:
-	_GameConfigScript.instant_slash_mode = instant
+## 모드 선택 = 웨이브 구성을 GameConfig 에 저장 후 씬 리로드(재시작). 컨트롤은 일섬 단일.
+## 리로드된 Main 이 wave_preset(_apply_wave_preset) 적용.
+func _set_mode(wave: int) -> void:
 	_GameConfigScript.wave_preset = wave
 	_GameConfigScript.contact_damage_enabled = false
-	_GameConfigScript.charge_zoom_enabled = instant   # 카메라 줌 — 밀리 모드만 OFF, 일섬은 ON
+	_GameConfigScript.charge_zoom_enabled = true   # 일섬 차징 카메라 줌 ON
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
@@ -146,10 +145,10 @@ func _build() -> void:
 	add_child(_tools)
 	_tools.add_child(_title("── 툴 에디터 ──"))
 	_tools.add_child(_info("현재: " + _mode_name()))
-	_tools.add_child(_info("── 모드 (선택 시 재시작) ──"))
-	_tools.add_child(_btn("근접 밀리 모드 (근90·원5·엘5)", _set_mode.bind(false, 0)))
-	_tools.add_child(_btn("근접 몬스터 일섬 모드 (근90·원5·엘5)", _set_mode.bind(true, 1)))
-	_tools.add_child(_btn("원거리 몬스터 일섬 모드 (원60·근35·엘5·총×0.2)", _set_mode.bind(true, 2)))
+	_tools.add_child(_info("── 웨이브 (선택 시 재시작) ──"))
+	_tools.add_child(_btn("기본 일섬 웨이브 (곡선)", _set_mode.bind(0)))
+	_tools.add_child(_btn("근접 몬스터 일섬 (근90·원5·엘5)", _set_mode.bind(1)))
+	_tools.add_child(_btn("원거리 몬스터 일섬 (원60·근35·엘5·총×0.2)", _set_mode.bind(2)))
 	_tools.add_child(_info("── 옵션 (토글) ──"))
 	_zoom_btn = _btn("", _on_toggle.bind("charge_zoom"))
 	_tools.add_child(_zoom_btn)
@@ -169,16 +168,14 @@ func _build() -> void:
 	add_child(_settings_panel)
 
 
-## 현재 모드 이름 — 컨트롤(밀리/일섬) + 웨이브 구성 조합.
+## 현재 모드 이름 — 컨트롤은 일섬 단일, 웨이브 구성만 분기.
 func _mode_name() -> String:
-	if not _GameConfigScript.instant_slash_mode:
-		return "근접 밀리 모드"
 	var w: int = _GameConfigScript.wave_preset
 	if w == 1:
-		return "근접 몬스터 일섬 모드"
+		return "근접 몬스터 일섬"
 	if w == 2:
-		return "원거리 몬스터 일섬 모드"
-	return "일섬 모드 (기본 웨이브)"
+		return "원거리 몬스터 일섬"
+	return "일섬 (기본 웨이브)"
 
 func _title(text: String) -> Label:
 	var l := Label.new()

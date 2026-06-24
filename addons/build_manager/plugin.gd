@@ -74,9 +74,9 @@ func _build_ui(parent: Control) -> void:
 
 	vb.add_child(_label("게임 모드"))
 	_mode_opt = OptionButton.new()
-	_mode_opt.add_item("근접 밀리", 0)
-	_mode_opt.add_item("근접 일섬", 1)
-	_mode_opt.add_item("원거리 일섬", 2)
+	_mode_opt.add_item("기본 일섬 웨이브", 0)
+	_mode_opt.add_item("근접 몹 일섬", 1)
+	_mode_opt.add_item("원거리 몹 일섬", 2)
 	vb.add_child(_mode_opt)
 
 	vb.add_child(_label("일섬 자원"))

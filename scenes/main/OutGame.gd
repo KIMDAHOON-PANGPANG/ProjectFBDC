@@ -148,11 +148,10 @@ func _make_button(label: String, cb: Callable) -> Button:
 
 
 func _on_start2_pressed() -> void:
-	# 게임 시작 — 일섬(즉발) 모드 + 기본 웨이브. 모드 전환은 인게임 ESC 툴 에디터에서.
-	_GameConfig.instant_slash_mode = true
+	# 게임 시작 — 일섬 단일 컨트롤 + 기본 웨이브. 웨이브 구성 전환은 인게임 ESC 툴에서.
 	_GameConfig.wave_preset = 0
 	_GameConfig.contact_damage_enabled = false
-	_GameConfig.charge_zoom_enabled = true   # 일섬 모드 — 카메라 줌 기본 ON(밀리만 OFF)
+	_GameConfig.charge_zoom_enabled = true   # 일섬 차징 카메라 줌 기본 ON
 	_goto(_MAIN_PATH)
 
 
@@ -165,8 +164,7 @@ func _is_release_build() -> bool:
 func _on_release_start() -> void:
 	var cfg = (load(_BUILD_CONFIG) if ResourceLoader.exists(_BUILD_CONFIG) else _BuildConfigScript.new())
 	var mode: int = (int(cfg.game_mode) if cfg != null and "game_mode" in cfg else 1)
-	_GameConfig.instant_slash_mode = (mode != 0)         # 0=밀리 / 1·2=일섬
-	_GameConfig.wave_preset = mode                        # 0/1/2 직접 매핑
+	_GameConfig.wave_preset = mode                        # 0/1/2 웨이브 프리셋 (일섬 단일)
 	_GameConfig.slash_resource_mode = (int(cfg.slash_resource_mode) if cfg != null and "slash_resource_mode" in cfg else 0)
 	_GameConfig.slash_aim_mode = (int(cfg.slash_aim_mode) if cfg != null and "slash_aim_mode" in cfg else 1)
 	_GameConfig.contact_damage_enabled = (bool(cfg.contact_damage) if cfg != null and "contact_damage" in cfg else false)

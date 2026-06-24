@@ -168,12 +168,11 @@ func _clear_enemies() -> void:
 	_tracked.clear()
 
 
-# ── 모드 선택 (GameConfig 세팅 + 씬 리로드. Player 가 _ready 에서 모드 읽음) ──
-func _set_mode(instant: bool, wave: int) -> void:
-	_GameConfigScript.instant_slash_mode = instant
+# ── 웨이브 선택 (GameConfig 세팅 + 씬 리로드. 컨트롤은 일섬 단일) ──
+func _set_mode(wave: int) -> void:
 	_GameConfigScript.wave_preset = wave
 	_GameConfigScript.contact_damage_enabled = false
-	_GameConfigScript.charge_zoom_enabled = instant
+	_GameConfigScript.charge_zoom_enabled = true
 	var tree := get_tree()
 	if tree != null:
 		tree.reload_current_scene()
@@ -181,14 +180,13 @@ func _set_mode(instant: bool, wave: int) -> void:
 func _sync_mode_label() -> void:
 	if _mode_label == null:
 		return
-	var inst: bool = _GameConfigScript.instant_slash_mode
 	var wave: int = _GameConfigScript.wave_preset
-	var nm := "근접 밀리"
-	if inst and wave == 2:
-		nm = "원거리 일섬"
-	elif inst:
-		nm = "근접 일섬"
-	_mode_label.text = "현재 모드: " + nm
+	var nm := "일섬 (기본 웨이브)"
+	if wave == 1:
+		nm = "근접 몹 일섬"
+	elif wave == 2:
+		nm = "원거리 몹 일섬"
+	_mode_label.text = "현재 웨이브: " + nm
 
 
 # ── 스폰 (수량 지정 → host.arena_spawn) ──
@@ -269,12 +267,12 @@ func _build() -> void:
 	t_env.add_child(_slider("시간 배속", 0.2, 3.0, 1.0, 0.05, func(v): _set_time_scale(v)))
 	t_env.add_child(_btn("적 전체 삭제", _clear_enemies))
 	t_env.add_child(HSeparator.new())
-	t_env.add_child(_title("게임 모드"))
+	t_env.add_child(_title("웨이브 구성"))
 	_mode_label = _info("")
 	t_env.add_child(_mode_label)
-	t_env.add_child(_btn("근접 밀리 (LB 스윙)", func(): _set_mode(false, 0)))
-	t_env.add_child(_btn("근접 몬스터 일섬", func(): _set_mode(true, 1)))
-	t_env.add_child(_btn("원거리 몬스터 일섬", func(): _set_mode(true, 2)))
+	t_env.add_child(_btn("기본 일섬 웨이브", func(): _set_mode(0)))
+	t_env.add_child(_btn("근접 몬스터 일섬", func(): _set_mode(1)))
+	t_env.add_child(_btn("원거리 몬스터 일섬", func(): _set_mode(2)))
 
 	# 스폰 탭
 	var t_spawn := _tab("스폰")

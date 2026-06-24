@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://b8plr000001"]
+[gd_scene load_steps=12 format=3 uid="uid://b8plr000001"]
 
 [ext_resource type="Script" path="res://scenes/player/Player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
@@ -7,7 +7,6 @@
 [ext_resource type="PackedScene" path="res://scenes/attack/SlashAttack.tscn" id="5_slash"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HpBar3D.tscn" id="6_hpbar"]
 [ext_resource type="Resource" path="res://resources/player/player_data.tres" id="7_pd"]
-[ext_resource type="PackedScene" path="res://scenes/attack/MeleeSwing.tscn" id="8_melee"]
 [ext_resource type="PackedScene" path="res://scenes/ui/DodgeStackBar3D.tscn" id="9_dodge"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HeatBar3D.tscn" id="10_heat"]
 
@@ -25,7 +24,6 @@ data = ExtResource("7_pd")
 aim_arrow_path = NodePath("AimArrow")
 sprite_rig_path = NodePath("SpriteRig")
 slash_attack_scene = ExtResource("5_slash")
-melee_swing_scene = ExtResource("8_melee")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)

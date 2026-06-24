@@ -7,24 +7,21 @@ extends RefCounted
 ##
 ## class_name 캐시 미스(헤드리스)를 피하려 참조 측은 preload + 정적 접근을 쓴다:
 ##   const _GC := preload("res://scripts/managers/GameConfig.gd")
-##   _GC.instant_slash_mode
+##   _GC.wave_preset
 
-## true = "게임 시작 2" (옛날 거합 컨트롤) — LB 클릭에 일섬이 차징 없이 곧바로
-## 나간다. 근접 부채꼴 스윙 + 우클릭 게이지 일섬은 비활성.
-## false = 기본(4안) — LB 근접 스윙 + RB 게이지 일섬.
-static var instant_slash_mode: bool = false
+## M8 — 컨트롤은 일섬 단일(LB 롱프레스 차징·발사). 옛 근접 밀리(LB 스윙·RB 게이지
+## 일섬) 모드는 전면 삭제됐다. instant_slash_mode 플래그는 제거 — Player 는 항상
+## 일섬 경로로 동작한다.
 
-## ESC 웨이브 에디터 프리셋 — 0=곡선(기본) · 1=근접 웨이브(근90·원5·엘5) ·
-## 2=원거리 웨이브(원90·근5·엘5 · 인원 1/10). 버튼이 이 값을 바꾸고 씬을 리로드하면
+## ESC 웨이브 에디터 프리셋 — 0=기본 일섬 웨이브(곡선) · 1=근접 몹 일섬(근90·원5·엘5) ·
+## 2=원거리 몹 일섬(원90·근5·엘5 · 인원 1/10). 버튼이 이 값을 바꾸고 씬을 리로드하면
 ## 새 Main 이 `_apply_wave_preset` 로 읽어 적용 → "초기화 후 그 프리셋으로 재세팅".
 static var wave_preset: int = 0
 
 ## ESC 옵션 토글 — 리로드 없이 즉시 반영, 씬 너머로 유지. LB 일섬 차징 동안 카메라가
-## 서서히 빠지는(줌, 최대값 cap) 효과 on/off. 기본값은 모드 시작 시 설정 — 일섬 모드 ON,
-## 근접 밀리 모드만 OFF(OutGame 시작 핸들러 + PauseOverlay._set_mode). 직접 Main 부팅=밀리=OFF.
+## 서서히 빠지는(줌, 최대값 cap) 효과 on/off. 일섬 단일이라 기본 ON(시작 핸들러가 설정).
 static var charge_zoom_enabled: bool = false
-## 몬스터 몸 충돌 시 HP 감소(접촉 피해) on/off. 기본 꺼짐 — 근접 모드(게임 시작) 기본 OFF.
-## 거합(게임 시작 2)은 OutGame 시작 핸들러가 ON 으로 설정. ESC 툴 에디터로 토글.
+## 몬스터 몸 충돌 시 HP 감소(접촉 피해) on/off. 기본 꺼짐 — 시작 핸들러 / ESC 툴로 토글.
 static var contact_damage_enabled: bool = false
 
 ## D-3 플래그(선언만 — 동작 배선은 다음 세션).

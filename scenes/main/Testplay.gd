@@ -484,7 +484,7 @@ func _make_button(label: String, cb: Callable, width: float) -> Button:
 	btn.pressed.connect(cb)
 	# MOUSE_FILTER_STOP keeps the click from reaching anything below the
 	# button in the UI tree, but it does NOT stop the global Input poll
-	# that the PC reads. The PC's `_check_attack_start` separately calls
+	# that the PC reads. The PC's `_check_instant_slash` separately calls
 	# `gui_get_hovered_control()` to swallow clicks landing on UI.
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	return btn
@@ -494,11 +494,8 @@ func _build_help_label() -> void:
 	canvas.name = "TestplayHelp"
 	add_child(canvas)
 	var label := Label.new()
-	# 컨트롤 안내 — 모드별 LB/RB 역할 분기(Main 미러).
-	if _GameConfigScript.instant_slash_mode:
-		label.text = "Testplay  |  WASD: 이동  LMB(hold): 일섬 차징·발사  RMB: 패리  SPACE: 회피  R: 재시작"
-	else:
-		label.text = "Testplay  |  WASD: 이동  LMB: 근접 공격  RMB(hold): 일섬(게이지 100%)  SPACE: 회피  R: 재시작"
+	# 컨트롤 안내 — 일섬 단일(LB 롱프레스 차징·발사). Main 미러.
+	label.text = "Testplay  |  WASD: 이동  LMB(hold): 일섬 차징·발사  SPACE: 회피  R: 재시작"
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	label.add_theme_constant_override("outline_size", 4)

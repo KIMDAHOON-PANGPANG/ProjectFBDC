@@ -34,8 +34,6 @@ const _BoonExecutorScript := preload("res://scripts/managers/BoonExecutor.gd")
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
-## 근접 스윙 VFX 씬 (기본 공격). Player.tscn 에 MeleeSwing.tscn 주입.
-@export var melee_swing_scene: PackedScene
 @export var aim_arrow_path: NodePath
 @export var sprite_rig_path: NodePath
 
@@ -99,14 +97,11 @@ var evade_refill_mult: float = 1.0
 var _zone_slow_t: float = 0.0
 var _zone_slow_mult: float = 1.0
 
-# ── 근접 기본 공격(부채꼴 스윙) 상태 ──
-## 스윙 간격 쿨다운. > 0 이면 아직 다음 스윙 불가(공격 속도).
-var _melee_cd: float = 0.0
-
-## "게임 시작 2"(즉발 일섬) 모드 여부 — _ready 에서 GameConfig 로 읽는다.
-## true 면 LB 가 차징 없는 즉발 일섬이 되고, 근접 스윙 + RB 게이지 일섬은
-## 비활성(옛날 거합 컨트롤). 회피(SPACE)는 양쪽 모드 공통.
-var _instant_slash: bool = false
+## M8 — 컨트롤은 일섬 단일로 통합됐다. 이 플래그는 항상 true 로 고정(_ready 에서
+## 세팅). 수십 개 분기·게터(is_instant_slash_mode, add_heat/add_slash_gauge 가드,
+## _is_cooldown_resource 등)가 이 변수를 읽으므로 변수 자체는 보존한다. 옛 근접
+## 밀리(LB 스윙·RB 게이지 일섬) 경로는 전면 삭제됐다.
+var _instant_slash: bool = true
 
 # ── 열관리(Heat) — 즉발 일섬 모드 전용(럼블 열관리 게이지식) ──
 ## 0~100(%). 일섬마다 오르고(연타 보너스), 유예 후 지수 감소. 100 도달 시 탈진.
@@ -174,20 +169,18 @@ func _ready() -> void:
 	# 기존 기본값 유지). max_hp 등을 읽기 전에 적용해야 반영됨.
 	_CombatDataScript.apply_to_player(self)
 
-	# 메인 메뉴에서 "게임 시작 2" 로 들어왔으면 즉발 일섬 모드.
-	_instant_slash = _GameConfigScript.instant_slash_mode
+	# M8 — 컨트롤은 일섬 단일. 항상 true 로 고정.
+	_instant_slash = true
 
-	collision_layer = 1 << 1  # Player
-	# 모드2(즉발 일섬) — NPC 와 서로 밀리지 않게 PC 레이어를 비운다(적이 PC 를 못 밀침).
-	# 대신 접촉 시 _check_contact_damage 로 HP 감소. 모드1 은 PC 가 군중 헤집기(기존) 유지.
-	if _instant_slash:
-		collision_layer = 0
+	# 일섬 단일 — NPC 와 서로 밀리지 않게 PC 레이어를 비운다(적이 PC 를 못 밀침).
+	# 대신 접촉 시 _check_contact_damage 로 HP 감소. 일섬 대시 중 적 관통도 이 0 이 전제.
+	collision_layer = 0
 	# 비대칭 충돌 — PC 는 World 만 마스크해 몬스터에 막히거나 밀리지 않는다(몬스터는
 	# PC 를 못 민다). 대신 각 몬스터가 Player 를 마스크해 PC 와 겹치면 스스로 옆으로
 	# 빠져나가므로, PC 가 군중을 헤집고 지나가면 몬스터가 밀려난다. 한 방향
 	# 디펜트레이션이라 예전의 상호 "쭉 밀림" 끼임 버그는 재발하지 않는다.
 	collision_mask = (1 << 0)  # World only (몬스터에 안 막힘 = PC 불가침)
-	# 대시 종료/사망 시 복원할 기본 레이어를 캐시(모드1=Player레이어 / 모드2=0).
+	# 대시 종료/사망 시 복원할 기본 레이어를 캐시(일섬 단일=0).
 	_collision_layer_default = collision_layer
 
 	_aim_arrow = get_node_or_null(aim_arrow_path) as AimArrow
@@ -221,13 +214,9 @@ func _ready() -> void:
 	_boon_executor.call("setup", self)
 
 func _physics_process(delta: float) -> void:
-	# 근접 기본 공격 — state 무관 매 프레임(이동 중에도 휘두름). 내부에서 차징/
-	# 대시/회피 중엔 억제.
-	_update_melee(delta)
-	# 열관리(즉발 일섬 모드) — 탈진 타이머 + 지수 감소. 모드1 이면 즉시 반환.
+	# 열관리(일섬 단일) — 탈진 타이머 + 지수 감소.
 	_update_heat(delta)
-	# 몬스터 몸 접촉 시 HP 감소(무적/대시 중 스킵). contact_damage_enabled 토글이 게이트 —
-	# 근접 모드 기본 OFF, 거합(게임 시작2) 기본 ON(OutGame 시작 핸들러가 설정).
+	# 몬스터 몸 접촉 시 HP 감소(무적/대시 중 스킵). contact_damage_enabled 토글이 게이트.
 	_check_contact_damage()
 	# 연속 대시 사이 최소 간격.
 	if _evade_cd > 0.0:
@@ -249,20 +238,13 @@ func _physics_process(delta: float) -> void:
 	match _state:
 		State.IDLE:
 			_handle_move(delta)
-			if _instant_slash:
-				_check_instant_slash()
-			else:
-				_check_attack_start()
+			_check_instant_slash()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
 				_cooldown_t -= delta
 		State.AIMING:
-			# 모드2(즉발 일섬)는 차징하며 이동 가능. 모드1 은 제자리 차징.
-			if _instant_slash:
-				_handle_move(delta)
-			else:
-				velocity = Vector3.ZERO
-				move_and_slide()
+			# 일섬 단일 — 차징하며 이동 가능.
+			_handle_move(delta)
 			_update_aim(delta)
 			_check_attack_release()
 		State.DASHING:
@@ -314,30 +296,13 @@ func _handle_move(delta: float) -> void:
 	if _dust_emitter != null:
 		_dust_emitter.emitting = moving
 
-func _check_attack_start() -> void:
-	# 4안 — 일섬은 우클릭("slash") + 게이지 100%일 때만 시작.
-	if Input.is_action_just_pressed("slash") and _cooldown_t <= 0.0:
-		# Suppress when the click was on a UI control (level-up cards etc.).
-		if _is_pointer_over_ui():
-			return
-		# Gate on a full slash gauge.
-		if _slash_gauge < data.slash_gauge_max:
-			return
-		_set_state(State.AIMING)
-		_charge_t = 0.0
-		_overcharge_t = 0.0  # ⏱ fresh charge — clear any prior overcharge
-		if _aim_arrow != null:
-			_aim_arrow.show_arrow()
-			_aim_arrow.set_charge(0.0)
-
-
-## D-3 — 일섬 자원 방식. 0=열기(Heat) / 1=고정 쿨다운. 즉발 일섬 모드에서만 의미.
+## D-3 — 일섬 자원 방식. 0=열기(Heat) / 1=고정 쿨다운.
 func _is_cooldown_resource() -> bool:
-	return _instant_slash and _GameConfigScript.slash_resource_mode == 1
+	return _GameConfigScript.slash_resource_mode == 1
 
-## D-3 — 일섬 에임 방식. 0=차징 / 1=즉발(LB 누르는 즉시 풀거리 발사). 즉발 일섬 모드 전용.
+## D-3 — 일섬 에임 방식. 0=차징 / 1=즉발(LB 누르는 즉시 풀거리 발사).
 func _is_instant_aim() -> bool:
-	return _instant_slash and _GameConfigScript.slash_aim_mode == 1
+	return _GameConfigScript.slash_aim_mode == 1
 
 ## D-3 — 쿨다운 자원 모드에서 다음 일섬까지의 락 잔여 타이머(초). 발사 시 세팅, 매프레임 감소.
 var _slash_fixed_cd_t: float = 0.0
@@ -552,25 +517,18 @@ func _is_pointer_over_ui() -> bool:
 	return vp.gui_get_hovered_control() != null
 
 func _check_attack_release() -> void:
-	# 모드2 는 LB(fire) 홀드 차징, 모드1 은 RB(slash). 버튼을 떼면 발사.
-	var action: String = "fire" if _instant_slash else "slash"
-	if not Input.is_action_pressed(action):
+	# 일섬 단일 — LB(fire) 홀드 차징. 버튼을 떼면 발사.
+	if not Input.is_action_pressed("fire"):
 		_fire_slash()
 
 func _update_aim(delta: float) -> void:
 	# 충전 속도 배수 — charge_speed_mult(기본 0.5)만큼 천천히 차오른다(데이터 제어).
 	_charge_t = min(_charge_t + delta * data.charge_speed_mult, data.max_charge_time)
-	# 최대 차지 도달 후 오버차지 누적.
+	# 최대 차지 도달 후 오버차지 누적 — instant_overcharge_hold 초 버틴 뒤 자동 발사.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
-		if _instant_slash:
-			# 모드2 — instant_overcharge_hold 초 버틴 뒤 자동 발사(불발 아님).
-			if _overcharge_t >= data.instant_overcharge_hold:
-				_fire_slash()
-				return
-		# 모드1 — ⏱ grace 초과 시 불발(fizzle) + 잠금. "혹시나" 홀드를 응징.
-		elif _overcharge_t >= data.overcharge_grace:
-			_fizzle_charge()
+		if _overcharge_t >= data.instant_overcharge_hold:
+			_fire_slash()
 			return
 	var dir := _mouse_to_world_dir()
 	if dir.length_squared() > 0.0001:
@@ -579,10 +537,8 @@ func _update_aim(delta: float) -> void:
 		var charge_frac: float = _charge_t / max(data.max_charge_time, 0.0001)
 		_aim_arrow.set_charge(charge_frac)
 		_aim_arrow.aim_at_direction(_aim_dir)
-	# 캐릭터 방향은 마우스에 동기화하지 않는다(공격 방향만 _aim_dir 로 추적). 모드2 는
-	# 이동하며 차징 → _handle_move 가 방향/걷기 애니를 정한다.
-	if _sprite_rig != null and not _instant_slash:
-		_sprite_rig.set_state(SpriteRig.State.IDLE)
+	# 캐릭터 방향은 마우스에 동기화하지 않는다(공격 방향만 _aim_dir 로 추적). 이동하며
+	# 차징하므로 _handle_move 가 방향/걷기 애니를 정한다.
 	# LB 차징 줌아웃(ESC 토글) — 차징 동안 카메라가 서서히 빠진다(최대값 cap).
 	_apply_charge_zoom(true)
 
@@ -595,35 +551,12 @@ func _apply_charge_zoom(active: bool) -> void:
 		rig.call("set_charge_zoom", on)
 
 
-## ⏱ Overcharge fizzle — the charge was held past the grace window. Waste
-## the slash, hide the arrow, and lock all charging for OVERCHARGE_LOCKOUT
-## seconds (handled by the COOLDOWN state ticking _cooldown_t down).
-func _fizzle_charge() -> void:
-	_apply_charge_zoom(false)
-	_charge_t = 0.0
-	_overcharge_t = 0.0
-	_cooldown_t = data.overcharge_lockout
-	if _aim_arrow != null:
-		_aim_arrow.hide_arrow()
-	if _sprite_rig != null:
-		_sprite_rig.set_state(SpriteRig.State.IDLE)
-	var rig := get_tree().get_first_node_in_group("camera_rig")
-	if rig != null and rig.has_method("shake"):
-		rig.call("shake", 0.05, 0.12)
-	_play_sfx("fizzle")
-	_set_state(State.COOLDOWN)
-
 func _fire_slash() -> void:
 	# 4안 — 일섬 발동 → 게이지 0으로 리셋.
 	_slash_gauge = 0.0
 	var charge_frac: float = clamp(_charge_t / max(data.max_charge_time, 0.0001), 0.0, 1.0)
-	# 사거리 — 즉발(모드2 고정) 또는 차징(모드1 선형).
-	var slash_range: float
-	if _instant_slash:
-		# 모드2 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 사거리 증가.
-		slash_range = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
-	else:
-		slash_range = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
+	# 사거리 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 풀차지 사거리 증가.
+	var slash_range: float = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
 	var ext: Vector3 = data.slash_hit_extents
 	_dash_start = global_position
 	_dash_end = global_position + _aim_dir.normalized() * slash_range
@@ -662,12 +595,11 @@ func _fire_slash() -> void:
 			_tb.call("emit", _TriggerBusScript.ON_SLASH_CHARGED, {"source": self, "position": global_position, "charge_frac": charge_frac})
 		if Time.get_ticks_msec() - _last_evade_end_msec <= 500:
 			_tb.call("emit", _TriggerBusScript.ON_SLASH_RIGHT_AFTER_DASH, {"source": self, "position": global_position})
-	# 모드2(즉발 일섬) — 자원 방식에 따라: 고정 쿨다운(락 세팅) 또는 열기(누적+탈진).
-	if _instant_slash:
-		if _is_cooldown_resource():
-			_slash_fixed_cd_t = max(data.slash_fixed_cooldown, 0.0)
-		else:
-			_add_heat()
+	# 일섬 자원 처리 — 고정 쿨다운(락 세팅) 또는 열기(누적+탈진).
+	if _is_cooldown_resource():
+		_slash_fixed_cd_t = max(data.slash_fixed_cooldown, 0.0)
+	else:
+		_add_heat()
 
 func _update_dash(delta: float) -> void:
 	_dash_elapsed += delta
@@ -685,7 +617,7 @@ func _update_dash(delta: float) -> void:
 
 
 func _complete_slash_action() -> void:
-	# 대시 종료 — 콜리전 레이어 복원(모드1=Player 레이어 / 모드2=0).
+	# 대시 종료 — 콜리전 레이어 복원(일섬 단일=0, 적 관통/비충돌 유지).
 	collision_layer = _collision_layer_default
 	_cooldown_t = data.slash_cooldown
 	slash_finished.emit()
@@ -923,102 +855,13 @@ func apply_zone_slow(duration: float, mult: float) -> void:
 	_zone_slow_mult = clampf(mult, 0.1, 1.0)
 
 
-# ══════════════ 기본 공격 — 근접 부채꼴 스윙 (LB) ══════════════
-
-## 매 프레임 — LB 홀드 중이면 melee_cooldown 간격으로 스윙(이동 중에도 가능).
-func _update_melee(delta: float) -> void:
-	# 모드2(즉발 일섬)에서는 LB 가 일섬에 쓰이므로 근접 스윙을 끈다.
-	if _instant_slash:
-		return
-	if _melee_cd > 0.0:
-		_melee_cd -= delta
-	# 차징(일섬)/대시/회피 중엔 기본 공격 억제.
-	if _state == State.AIMING or _state == State.DASHING \
-			or _state == State.EVADING:
-		return
-	if Input.is_action_pressed("fire") and _melee_cd <= 0.0:
-		if _is_pointer_over_ui():
-			return
-		_do_melee_swing()
-
-
-## (2) LB 근접 스윙 — 커서 방향 전방 부채꼴 안의 적을 타격. (4) 이동을 막지
-## 않으므로 걸으면서 휘두를 수 있다. 데미지는 적 HealthComponent 에 직접
-## (보스는 패리 없이 칩 데미지). 모션은 추후 — 임시 부채 VFX 만 띄운다.
-func _do_melee_swing() -> void:
-	var dir := _mouse_to_world_dir()
-	if dir.length() < 0.01:
-		dir = _aim_dir
-	dir = dir.normalized()
-	_aim_dir = dir
-	_melee_cd = data.melee_cooldown
-	# 근접 스윙은 dir(마우스)로 나가지만, 캐릭터 방향은 WASD 그대로 둔다.
-	var half := deg_to_rad(data.melee_angle_deg) * 0.5
-	var r2 := data.melee_range * data.melee_range
-	var hit_any := false
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(e) or not (e is Node3D):
-			continue
-		if "_dead" in e and e._dead:
-			continue
-		var to_e: Vector3 = (e as Node3D).global_position - global_position
-		to_e.y = 0.0
-		if to_e.length_squared() > r2:
-			continue
-		# 부채꼴 각도 체크(중심 = 커서 방향).
-		if to_e.length() > 0.01:
-			var ang := acos(clamp(dir.dot(to_e.normalized()), -1.0, 1.0))
-			if ang > half:
-				continue
-		var hp := (e as Node3D).get_node_or_null("HealthComponent")
-		if hp != null and hp is HealthComponent:
-			(hp as HealthComponent).take_damage(data.melee_damage + (attack_power - 1))
-			hit_any = true
-	# 발사체(적 화살)도 부채 안에 들어오면 격추한다.
-	for p in get_tree().get_nodes_in_group("enemy_projectiles"):
-		if not is_instance_valid(p) or not (p is Node3D):
-			continue
-		var to_p: Vector3 = (p as Node3D).global_position - global_position
-		to_p.y = 0.0
-		if to_p.length_squared() > r2:
-			continue
-		if to_p.length() > 0.01:
-			var ang_p := acos(clamp(dir.dot(to_p.normalized()), -1.0, 1.0))
-			if ang_p > half:
-				continue
-		if p.has_method("take_hit"):
-			p.call("take_hit")
-	_spawn_melee_swing(dir)
-	_play_sfx("melee")
-	# 타격감 — 스윙마다 약한 카메라 흔들림 + 적중 시 극소량 히트스탑(역경직).
-	var rig := get_tree().get_first_node_in_group("camera_rig")
-	if rig != null:
-		if rig.has_method("shake"):
-			rig.call("shake", data.melee_shake_amp, data.melee_shake_dur)
-		if hit_any and rig.has_method("hitstop"):
-			rig.call("hitstop", data.melee_hitstop_scale, data.melee_hitstop_dur)
-
-
-## 임시 스윙 VFX — 커서 방향으로 부채 플래시(모션 추후 교체).
-func _spawn_melee_swing(dir: Vector3) -> void:
-	if melee_swing_scene == null:
-		return
-	var fx := melee_swing_scene.instantiate()
-	var host := _effect_host()
-	if host == null:
-		fx.queue_free()
-		return
-	host.add_child(fx)
-	if fx.has_method("configure"):
-		fx.call("configure", global_position, dir, data.melee_range, data.melee_angle_deg)
-
-
 # ══════════════ 4안 — 일섬 게이지 ══════════════
 
 ## Add to the slash gauge (×gain mult), clamped to max. Called from Main
 ## on kill / gem pickup and from take_hit on perfect dodge.
 func add_slash_gauge(amount: float) -> void:
-	# 모드2(즉발 일섬)는 일섬 게이지를 쓰지 않는다 — 처치/젬/저스트회피와 무관.
+	# 일섬 단일 모드는 일섬 게이지를 쓰지 않는다(자원=열기/쿨다운) — 처치/젬/저스트
+	# 회피와 무관. _instant_slash 가 항상 참이라 항상 no-op(게터 호환 위해 변수 보존).
 	if _instant_slash:
 		return
 	if amount <= 0.0:
