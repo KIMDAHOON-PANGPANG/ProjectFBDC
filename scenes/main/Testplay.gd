@@ -445,8 +445,13 @@ func _build_button_panel() -> void:
 		{"label": "일반 몹 10마리", "cb": Callable(self, "_on_spawn_regular_10")},
 		{"label": "내려찍기 슬래머", "cb": Callable(self, "_on_spawn_slammer")},
 		{"label": "주술사 (마법사)", "cb": Callable(self, "_on_spawn_sorcerer")},
-		{"label": "은혜:구미호 표식(유니크)", "cb": Callable(self, "_on_boon_gumiho_mark")},
-		{"label": "은혜:구미호 흡혈(유니크)", "cb": Callable(self, "_on_boon_gumiho_lifesteal")},
+		{"label": "은혜:천호낙인(유니크)", "cb": Callable(self, "_on_boon_gumiho_mark")},
+		{"label": "은혜:월하정기흡(유니크)", "cb": Callable(self, "_on_boon_gumiho_lifesteal")},
+		{"label": "은혜:매혹파열(유니크)", "cb": Callable(self, "_on_boon_gumiho_charm")},
+		{"label": "은혜:야호분혼(유니크)", "cb": Callable(self, "_on_boon_gumiho_summon")},
+		{"label": "은혜:여우불세례(유니크)", "cb": Callable(self, "_on_boon_gumiho_foxfire")},
+		{"label": "은혜:구미낙화(유니크)", "cb": Callable(self, "_on_boon_gumiho_slashfan")},
+		{"label": "은혜:혼불난무(유니크)", "cb": Callable(self, "_on_boon_gumiho_radial")},
 		{"label": "보스 1 (Ch1)", "cb": Callable(self, "_on_spawn_boss")},
 	]
 	# Bosses 2/3 only show if their scenes are wired — keeps the panel
@@ -669,3 +674,38 @@ func _on_boon_gumiho_lifesteal() -> void:
 		return
 	if _player.has_method("add_boon"):
 		_player.call("add_boon", "gumiho_lifesteal", "uniq")
+
+
+func _on_boon_gumiho_charm() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_charm", "uniq")
+
+
+func _on_boon_gumiho_summon() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_summon", "uniq")
+
+
+func _on_boon_gumiho_foxfire() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_foxfire", "uniq")
+
+
+func _on_boon_gumiho_slashfan() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_slashfan", "uniq")
+
+
+func _on_boon_gumiho_radial() -> void:
+	if not is_instance_valid(_player):
+		return
+	if _player.has_method("add_boon"):
+		_player.call("add_boon", "gumiho_radial", "uniq")

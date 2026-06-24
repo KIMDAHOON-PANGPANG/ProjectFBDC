@@ -31,6 +31,8 @@ const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
 const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
 ## 권속 은혜 효과 실행기 — _ready 에서 코드 인스턴스로 add_child.
 const _BoonExecutorScript := preload("res://scripts/managers/BoonExecutor.gd")
+## 머리 위 상태 아이콘 스트립(굶주림 표시 — 적과 동일 공용 컴포넌트).
+const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
@@ -91,6 +93,22 @@ var attack_power: int = 1
 var active_boons: Array = []
 ## 권속 은혜 효과 실행기 노드 참조.
 var _boon_executor: Node = null
+## 머리 위 상태 아이콘 스트립(굶주림 등) — _ready 에서 코드 인스턴스.
+var _status_strip: Node = null
+
+# ── 구미호 굶주림 리스크(6★-1 11절) ──
+## 구미호 은혜 1개+ 장착 시 활성. 일정 시간 무처치(흡혈/처치 없음)면 굶주림 →
+## 초당 미세 HP 감소. 1처치/흡혈로 즉시 리셋(boon_feed). god_mode 시 감소 스킵.
+const HUNGER_THRESHOLD: float = 7.0    # 무피드 누적 임계(초)
+const HUNGER_HP_DPS: float = 0.5       # 굶주림 중 초당 HP 감소(미세, accum 으로 정수화)
+var _hunger_t: float = 0.0
+var _is_starving: bool = false
+var _hunger_dmg_accum: float = 0.0
+
+# ── 구미낙화(SLASH_FAN) — 풀차지 일섬 부채 폭 확장 일회성 보너스(BoonExecutor 가 세팅) ──
+## On_Slash_Charged 시 BoonExecutor 가 세팅 → 다음 _fire_slash 가 폭 확장에 소비 후 1.0 리셋.
+var boon_slash_fan_width_mult: float = 1.0
+var boon_slash_fan_arc_bonus: float = 0.0
 ## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
 ## 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속. _zone_slow_t > 0 이면 _handle_move 적용.
@@ -213,9 +231,19 @@ func _ready() -> void:
 	add_child(_boon_executor)
 	_boon_executor.call("setup", self)
 
+	# 머리 위 상태 아이콘 스트립(굶주림 등) — 적과 동일 공용 컴포넌트. 머리 위(y≈2.0).
+	var strip := _StatusStripScript.new()
+	strip.name = "StatusIconStrip3D"
+	if "follow_offset" in strip:
+		strip.follow_offset = Vector3(0, 2.0, 0)
+	add_child(strip)
+	_status_strip = strip
+
 func _physics_process(delta: float) -> void:
 	# 열관리(일섬 단일) — 탈진 타이머 + 지수 감소.
 	_update_heat(delta)
+	# 구미호 굶주림 리스크 — 구미호 은혜 장착 시 무처치 시간 누적 → 미세 HP 감소.
+	_update_hunger(delta)
 	# 몬스터 몸 접촉 시 HP 감소(무적/대시 중 스킵). contact_damage_enabled 토글이 게이트.
 	_check_contact_damage()
 	# 연속 대시 사이 최소 간격.
@@ -555,9 +583,20 @@ func _fire_slash() -> void:
 	# 4안 — 일섬 발동 → 게이지 0으로 리셋.
 	_slash_gauge = 0.0
 	var charge_frac: float = clamp(_charge_t / max(data.max_charge_time, 0.0001), 0.0, 1.0)
+	# 구미낙화(SLASH_FAN) — 풀차지면 ON_SLASH_CHARGED 를 *먼저* 발행해 BoonExecutor 가
+	# 부채 폭 확장 플래그를 세팅하게 하고, 같은 일섬이 그 플래그를 ext 에 소비한다.
+	var _tb_charged := _trigger_bus()
+	if charge_frac >= 1.0 and _tb_charged != null:
+		_tb_charged.call("emit", _TriggerBusScript.ON_SLASH_CHARGED, {"source": self, "position": global_position, "charge_frac": charge_frac})
 	# 사거리 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 풀차지 사거리 증가.
 	var slash_range: float = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
 	var ext: Vector3 = data.slash_hit_extents
+	# 직전(또는 방금 발행된 ON_SLASH_CHARGED)에서 세팅된 부채 폭 확장 보너스를 이번 일섬에 소비.
+	# 공유 PlayerData.tres 를 변형하지 않도록 로컬 복사본의 x(폭)만 키운다(런마다 리셋되는 런타임 변수).
+	if boon_slash_fan_width_mult > 1.0:
+		ext = Vector3(ext.x * boon_slash_fan_width_mult, ext.y, ext.z + boon_slash_fan_arc_bonus)
+		boon_slash_fan_width_mult = 1.0
+		boon_slash_fan_arc_bonus = 0.0
 	_dash_start = global_position
 	_dash_end = global_position + _aim_dir.normalized() * slash_range
 	_dash_elapsed = 0.0
@@ -591,8 +630,7 @@ func _fire_slash() -> void:
 	var _tb := _trigger_bus()
 	if _tb != null:
 		_tb.call("emit", _TriggerBusScript.ON_SLASH_START, {"source": self, "position": global_position, "charge_frac": charge_frac})
-		if charge_frac >= 1.0:
-			_tb.call("emit", _TriggerBusScript.ON_SLASH_CHARGED, {"source": self, "position": global_position, "charge_frac": charge_frac})
+		# ON_SLASH_CHARGED 는 위에서 이미 발행됨(SLASH_FAN 동일-일섬 적용 위해 spawn 전).
 		if Time.get_ticks_msec() - _last_evade_end_msec <= 500:
 			_tb.call("emit", _TriggerBusScript.ON_SLASH_RIGHT_AFTER_DASH, {"source": self, "position": global_position})
 	# 일섬 자원 처리 — 고정 쿨다운(락 세팅) 또는 열기(누적+탈진).
@@ -1010,6 +1048,66 @@ func _build_dust_emitter() -> void:
 	# than from the PC's pivot (which is at root height ~0).
 	_dust_emitter.position = Vector3(0, 0.08, 0)
 	add_child(_dust_emitter)
+
+
+# ══════════════ 구미호 굶주림 리스크(6★-1 11절) ══════════════
+
+## 구미호 은혜를 1개라도 장착했는가(굶주림 활성 조건).
+func has_gumiho_boon() -> bool:
+	for b in active_boons:
+		if not (b is Dictionary):
+			continue
+		var y := String(b.get("yokai", ""))
+		if y == "GUMIHO":
+			return true
+		var bid := String(b.get("id", ""))
+		if bid.begins_with("gumiho_"):
+			return true
+	return false
+
+
+## 처치/흡혈 시 호출(BoonExecutor) — 굶주림 즉시 리셋/해소.
+func boon_feed() -> void:
+	_hunger_t = 0.0
+	_hunger_dmg_accum = 0.0
+	_is_starving = false
+	if _status_strip != null and is_instance_valid(_status_strip):
+		_status_strip.call("clear_status", "hunger")
+
+
+## 매 프레임 — 구미호 은혜가 있으면 무피드 시간을 누적, 임계 초과 시 굶주림 진입 +
+## 초당 미세 HP 감소. god_mode/무적 중엔 감소 스킵(아레나 무적 관찰 보존).
+func _update_hunger(delta: float) -> void:
+	if not has_gumiho_boon():
+		# 구미호 미장착 — 상태 정리.
+		if _is_starving or _hunger_t > 0.0:
+			boon_feed()
+		return
+	_hunger_t += delta
+	if _hunger_t < HUNGER_THRESHOLD:
+		if _is_starving:
+			_is_starving = false
+			if _status_strip != null and is_instance_valid(_status_strip):
+				_status_strip.call("clear_status", "hunger")
+		return
+	# 굶주림 상태 — 초당 미세 HP 감소(god_mode 면 깎지 않음).
+	_is_starving = true
+	if not god_mode and _health != null:
+		_hunger_dmg_accum += HUNGER_HP_DPS * delta
+		if _hunger_dmg_accum >= 1.0:
+			_hunger_dmg_accum -= 1.0
+			# 굶주림은 i-frame/방어 우회 없이 직접 1 감소(과하지 않게 누적 게이팅).
+			if _health.hp > 1:
+				_health.take_damage(1)
+	# 굶주림 아이콘 — DEPLETE(mode 1) radial, 핑크. value=임계 초과 진행도(0→1 클램프).
+	if _status_strip != null and is_instance_valid(_status_strip):
+		var over: float = clampf((_hunger_t - HUNGER_THRESHOLD) / HUNGER_THRESHOLD, 0.0, 1.0)
+		_status_strip.call("set_status", "hunger", {
+			"value": 1.0 - over,
+			"mode": 1,
+			"color": Color(1.0, 0.37, 0.69, 1.0),
+			"icon": null,
+		})
 
 
 ## 권속 은혜 장착 — BoonSystem 조회 + 등급 params 해석해 active_boons 등록. BoonExecutor 가 구독 콜백에서 읽음.

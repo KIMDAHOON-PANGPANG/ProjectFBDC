@@ -4,8 +4,8 @@
       "id": "gumiho_mark",
       "yokai": "GUMIHO",
       "skill_type": "타격",
-      "name": "천호의 인장",
-      "desc": "일섬 적중마다 표식을 누적한다",
+      "name": "천호낙인",
+      "desc": "일섬 적중마다 천호의 표식을 누적한다",
       "components": [
         {
           "trigger": "On_Slash_Hit",
@@ -24,8 +24,8 @@
       "id": "gumiho_lifesteal",
       "yokai": "GUMIHO",
       "skill_type": "공격",
-      "name": "월하정음",
-      "desc": "일섬 처치 시 표식 수만큼 흡혈",
+      "name": "월하정기흡",
+      "desc": "일섬 처치 시 표식 수만큼 흡혈한다",
       "components": [
         {
           "trigger": "On_Kill_via_Slash",
@@ -45,7 +45,7 @@
       "yokai": "GUMIHO",
       "skill_type": "질주",
       "name": "구미회랑",
-      "desc": "회피로 스친 적에 표식을 살포",
+      "desc": "회피로 스친 적에게 표식을 살포한다",
       "components": [
         {
           "trigger": "On_Dash_Pass_Enemy",
@@ -56,6 +56,106 @@
             "uniq":    { "per_hits": 1, "mark_add": 2, "cap": 99 },
             "legend":  { "per_hits": 1, "mark_add": 2, "cap": 99 },
             "master":  { "per_hits": 1, "mark_add": 3, "cap": 99 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gumiho_charm",
+      "yokai": "GUMIHO",
+      "skill_type": "권능",
+      "name": "매혹파열",
+      "desc": "일섬 적중 지점에 매혹의 결계를 펼쳐 적을 끌어당기고, 재타격 시 파열시킨다",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "CHARM_ZONE",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.0, "duration": 2.5, "pull": 1.2, "burst_knockback": 6.0,  "burst_radius": 2.4 },
+            "rare":    { "radius": 2.4, "duration": 2.8, "pull": 1.5, "burst_knockback": 7.5,  "burst_radius": 2.8 },
+            "uniq":    { "radius": 2.8, "duration": 3.2, "pull": 1.9, "burst_knockback": 9.0,  "burst_radius": 3.2 },
+            "legend":  { "radius": 3.2, "duration": 3.6, "pull": 2.3, "burst_knockback": 11.0, "burst_radius": 3.8 },
+            "master":  { "radius": 3.8, "duration": 4.2, "pull": 2.8, "burst_knockback": 14.0, "burst_radius": 4.5 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gumiho_summon",
+      "yokai": "GUMIHO",
+      "skill_type": "소환",
+      "name": "야호분혼",
+      "desc": "일섬을 마칠 때 분혼(分魂) 정령을 소환해 표식 적을 추격·격추한다",
+      "components": [
+        {
+          "trigger": "On_Slash_End",
+          "effect": "SUMMON_SPIRIT",
+          "params_by_rarity": {
+            "chosim":  { "count": 1, "lifetime": 4.0, "speed": 6.0,  "radius": 0.7 },
+            "rare":    { "count": 1, "lifetime": 4.5, "speed": 7.0,  "radius": 0.8 },
+            "uniq":    { "count": 2, "lifetime": 5.0, "speed": 8.0,  "radius": 0.9 },
+            "legend":  { "count": 2, "lifetime": 5.5, "speed": 9.0,  "radius": 1.0 },
+            "master":  { "count": 3, "lifetime": 6.0, "speed": 10.0, "radius": 1.1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gumiho_foxfire",
+      "yokai": "GUMIHO",
+      "skill_type": "타격",
+      "name": "여우불세례",
+      "desc": "표식이 만개한 적에게 여우불 유도탄을 쏟아붓는다",
+      "components": [
+        {
+          "trigger": "On_Mark_Full",
+          "effect": "HOMING_PROJECTILE",
+          "params_by_rarity": {
+            "chosim":  { "count": 1, "speed": 10.0, "damage": 1, "radius": 0.7 },
+            "rare":    { "count": 2, "speed": 11.0, "damage": 1, "radius": 0.8 },
+            "uniq":    { "count": 3, "speed": 12.0, "damage": 1, "radius": 0.9 },
+            "legend":  { "count": 4, "speed": 13.0, "damage": 2, "radius": 1.0 },
+            "master":  { "count": 6, "speed": 15.0, "damage": 2, "radius": 1.1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gumiho_slashfan",
+      "yokai": "GUMIHO",
+      "skill_type": "공격",
+      "name": "구미낙화",
+      "desc": "풀차지 일섬의 부채 폭을 넓혀 광역으로 베어낸다",
+      "components": [
+        {
+          "trigger": "On_Slash_Charged",
+          "effect": "SLASH_FAN",
+          "params_by_rarity": {
+            "chosim":  { "width_mult": 1.4, "arc_bonus": 1.0 },
+            "rare":    { "width_mult": 1.7, "arc_bonus": 1.4 },
+            "uniq":    { "width_mult": 2.0, "arc_bonus": 1.8 },
+            "legend":  { "width_mult": 2.4, "arc_bonus": 2.3 },
+            "master":  { "width_mult": 3.0, "arc_bonus": 3.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gumiho_radial",
+      "yokai": "GUMIHO",
+      "skill_type": "권능",
+      "name": "혼불난무",
+      "desc": "퍼펙트 회피 순간 사방으로 혼불을 흩뿌린다",
+      "components": [
+        {
+          "trigger": "On_Just_Dodge",
+          "effect": "RADIAL_BURST",
+          "params_by_rarity": {
+            "chosim":  { "count": 6,  "speed": 9.0,  "damage": 1 },
+            "rare":    { "count": 8,  "speed": 10.0, "damage": 1 },
+            "uniq":    { "count": 10, "speed": 11.0, "damage": 1 },
+            "legend":  { "count": 12, "speed": 12.0, "damage": 2 },
+            "master":  { "count": 16, "speed": 14.0, "damage": 2 }
           }
         }
       ]
