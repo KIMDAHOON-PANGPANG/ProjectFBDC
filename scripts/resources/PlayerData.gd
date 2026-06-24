@@ -125,6 +125,10 @@ extends Resource
 @export var perfect_charge_threshold: float = 0.9
 ## 일섬이 보스에게 주는 데미지(일반). 젠/패리 보정은 M8 S3a 에서 제거됨.
 @export var boss_slash_damage_normal: int = 1
+## 일섬이 잡몹(다중타 몹)에 주는 기본 데미지(자연수). 몹 HP 스케일과 함께 밸런싱한다.
+## 보스는 위 boss_slash_damage_normal 로 별도. 발사체 격추는 원샷(데미지 무관).
+## player_data.tres 가 이 값을 set 하지 않으면 기본값(2)을 사용한다(고아 속성 없음).
+@export var slash_base_damage: int = 2
 
 # ── 열관리(Heat) — "게임 시작 2"(즉발 일섬) 모드 전용. 럼블 열관리 게이지식. ──
 # 일섬(평타)마다 열이 오르고, 직전 일섬 후 combo_window 초 이내면 combo_mult

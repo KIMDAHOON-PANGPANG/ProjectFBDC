@@ -316,6 +316,38 @@ func _wire_enemy_lifecycle(inst: Node) -> void:
 	if inst.has_signal("tree_exited"):
 		inst.tree_exited.connect(_on_enemy_freed_with_ref.bind(inst))
 	_apply_level_hp_scaling(inst)
+	_apply_time_hp_scaling(inst)
+
+
+## ⏱ 시간 HP 스케일 — 잡몹(근접/리퍼/궁수)만 경과 시간대로 max_hp 를 단계 상향.
+## 엘리트/보스/슬래머/주술사는 이미 _apply_level_hp_scaling(레벨당+1) 을 받으므로
+## 중복 적용 제외(동일 is_threat 가드 재사용). 인스턴스 HealthComponent 에만 더한다 —
+## 공유 .tres/MonsterStats 는 불변. 0~60s 추가0(슬래시 base 데미지로 스내피하게 1~2방),
+## 1분+ 단계 상향(스킬 데미지 카드로 상쇄). _lv 가 드립 잡몹엔 안 실려 시간을 축으로 쓴다.
+func _apply_time_hp_scaling(inst: Node) -> void:
+	if inst == null or not is_instance_valid(inst):
+		return
+	# 위협(엘리트/보스/슬래머)은 레벨 스케일 담당 → 시간 스케일 제외(이중 적용 방지).
+	var is_threat: bool = inst.is_in_group("elites") or inst.is_in_group("boss")
+	if not is_threat and "behavior" in inst and int(inst.behavior) == 2:  # SLAMMER
+		is_threat = true
+	if is_threat:
+		return
+	if not inst.is_in_group("enemies"):
+		return
+	var extra: int = _time_hp_extra(_elapsed_seconds())
+	if extra <= 0:
+		return
+	var hc = inst.get_node_or_null("HealthComponent")
+	if hc != null and hc.has_method("add_max_hp"):
+		hc.add_max_hp(extra)
+
+
+## 시간(초) → 잡몹 추가 HP 단계. 60s 미만=0(스내피), 이후 1분당 +1, 상한 +4.
+func _time_hp_extra(t: float) -> int:
+	if t < 60.0:
+		return 0
+	return min(int(t / 60.0), 4)
 
 
 ## 레벨 스케일링 — 다중타 위협(엘리트/주술사/슬래머/보스)만 레벨당 +1 HP.

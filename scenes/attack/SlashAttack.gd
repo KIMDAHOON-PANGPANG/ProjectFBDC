@@ -120,11 +120,10 @@ func _try_kill(node: Node) -> void:
 	# Walk up to find an entity with a HealthComponent or a `take_hit` method
 	while target != null:
 		if target.has_method("take_hit"):
-			# Only the boss take_hit accepts an amount — mobs/elites are
-			# 1-shot lethal so passing an arg would either be ignored or
-			# (worse) shift their argless signature. Branch on group.
+			# 보스는 boss_slash_damage_normal 만(잡몹 attack_power 스케일과 디커플링).
+			# 잡몹/엘리트/주술사는 attack_power 만큼 — HP 스케일과 함께 다중타로 처치된다.
 			if target.is_in_group("boss"):
-				target.call("take_hit", _resolve_boss_damage() + (attack_power - 1))
+				target.call("take_hit", _resolve_boss_damage())
 			else:
 				target.call("take_hit", attack_power)
 				_slash_hitstop()  # 잡몹/엘리트 쓸고 갈 때 탁탁 걸리는 미세 히트스탑
@@ -133,7 +132,7 @@ func _try_kill(node: Node) -> void:
 			return
 		var hp := target.get_node_or_null("HealthComponent")
 		if hp != null and hp is HealthComponent:
-			(hp as HealthComponent).take_damage(999)
+			(hp as HealthComponent).take_damage(max(attack_power, 1))
 			_slash_hitstop()
 			hit_enemy.emit(target)
 			_emit_slash_hit(target)
@@ -151,9 +150,26 @@ func _emit_slash_hit(target: Node) -> void:
 	var pos: Vector3 = (target as Node3D).global_position if (target is Node3D) else global_position
 	var src := get_tree().get_first_node_in_group("player")
 	var ctx := {"target": target, "position": pos, "source": src}
+	# On_Slash_Hit 은 적중마다(표식 누적·도깨비 ember 등). On_Kill_via_Slash 는 이 적중으로
+	# 실제 사망(HP<=0 / _dead)한 경우에만 — HP>1 몹은 다중타라 처치 시 1회만 흡혈/연쇄 발동.
 	tb.call("emit", _TriggerBusScript.ON_SLASH_HIT, ctx)
-	tb.call("emit", _TriggerBusScript.ON_KILL_VIA_SLASH, ctx)
+	if _target_is_dead(target):
+		tb.call("emit", _TriggerBusScript.ON_KILL_VIA_SLASH, ctx)
 	# TODO(S5): 표식 도입 후 target 이 마크됐으면 ON_HIT_MARKED_ENEMY emit. 현재 표식 시스템 없어 미발행.
+
+
+## take_hit/take_damage 직후 이 적이 실제 사망했는지 — HealthComponent(hp<=0) 우선,
+## 없으면 적 노드의 _dead 플래그(보스 take_hit→_on_died 동기 호출 포함)로 판정. 둘 다
+## 없으면 false(보수적). On_Kill_via_Slash 사망 게이트 전용.
+func _target_is_dead(target: Node) -> bool:
+	if target == null or not is_instance_valid(target):
+		return true
+	var hp := target.get_node_or_null("HealthComponent")
+	if hp != null and hp is HealthComponent:
+		return (hp as HealthComponent).hp <= 0
+	if "_dead" in target:
+		return bool(target._dead)
+	return false
 
 ## ⏱ 적중 미세 히트스탑 — 카메라 rig 의 hitstop 을 짧게 호출. 적 연속 적중이면 갱신되며 "탁탁".
 func _slash_hitstop() -> void:

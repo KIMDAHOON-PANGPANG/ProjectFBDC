@@ -570,8 +570,8 @@ func _leap_standoff_move(to_player_xz: Vector3, dist: float) -> void:
 		_sprite_rig.set_facing(dir.x)
 
 ## Called by SlashAttack when this enemy is inside its volume.
-## 1 damage per slash so LV2 mobs (max_hp=2) take 2 hits, LV1 (max_hp=1) dies
-## in one. WaveManager / spawn upgrades the EnemyData to bump max_hp.
+## amount = 일섬 데미지(Player.attack_power = slash_base_damage + 보너스). 인스턴스
+## HealthComponent.max_hp 가 시간/레벨 스케일로 올라가면 여러 대 맞아야 죽는다(표식 빌드).
 func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
@@ -592,12 +592,10 @@ func take_hit(amount: int = 1) -> void:
 			_active_slam_decal.call("cancel")
 		_active_slam_decal = null
 		_attacking = false
-	# 슬래시(PC) — 잡몹/리퍼는 한 방 정리(999). 슬래머는 2HP 라 1뎀씩(=2방 컷).
+	# 슬래시(PC) — 잡몹/리퍼/슬래머 모두 일섬 데미지(amount)만큼. HP 스케일(시간/레벨)과
+	# 함께 다중타로 처치돼 표식 누적·연쇄·흡혈 빌드가 동작한다(옛 999 원샷 제거).
 	if _health != null:
-		if behavior == Behavior.SLAMMER:
-			_health.take_damage(amount)   # 슬래머 = 공격력만큼(레벨링 HP 와 함께 스케일)
-		else:
-			_health.take_damage(999)       # 잡몹/리퍼 = 한 방 처치(공격력 무관)
+		_health.take_damage(amount)
 	else:
 		_on_died()
 

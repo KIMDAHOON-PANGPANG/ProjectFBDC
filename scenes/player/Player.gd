@@ -84,10 +84,14 @@ var _iframe_t: float = 0.0
 # 충돌(접촉피해)/탄에 즉시 피격되는 불쾌감을 막는다. data.slash_post_grace 로 세팅.
 var _slash_grace_t: float = 0.0
 
-## 기본 공격력(중립 base 스탯 — 레벨업 카드가 더는 올리지 않음, 기본 1). 슬래시/스윙이
-## 다중타 적·보스에 주는 데미지. SlashAttack/EliteEffectService/CircularSlash/balance_sim/
-## ArenaDebug 가 읽으므로 변수는 보존(중립 값으로 효과 중립화).
+## 기본 공격력 = 일섬이 잡몹(다중타 몹)에 주는 데미지. _ready 에서
+## data.slash_base_damage + slash_damage_bonus 로 세팅(ArenaDebug 슬라이더가 이후 덮어쓸 수
+## 있음). 보스는 별도(boss_slash_damage_normal). SlashAttack/EliteEffectService/CircularSlash/
+## balance_sim/ArenaDebug 가 읽으므로 변수 보존.
 var attack_power: int = 1
+## 스킬 카드용 런타임 일섬 데미지 보너스(런마다 _ready 재인스턴스로 0 리셋). 공유 .tres 변형
+## 금지 원칙에 맞춰 인스턴스 변수로만 누적한다 — attack_power = slash_base_damage + 이 값.
+var slash_damage_bonus: int = 0
 
 ## 권속 은혜 장착 목록(런타임 — 런마다 _ready 에서 리셋). 각 원소 = {id, rarity, components, params}.
 var active_boons: Array = []
@@ -186,6 +190,12 @@ func _ready() -> void:
 	# 데이터 관리 — pc_combat.json 값으로 PlayerData 를 덮어쓴다(파일/값 없으면
 	# 기존 기본값 유지). max_hp 등을 읽기 전에 적용해야 반영됨.
 	_CombatDataScript.apply_to_player(self)
+
+	# 일섬 잡몹 데미지 = data.slash_base_damage + 런타임 보너스(스킬 카드). data 가 그
+	# export 를 가질 때만 적용(구버전 .tres 대비), 없으면 기존 attack_power(1) 유지.
+	# ArenaDebug 슬라이더(1~10)가 이후 attack_power 를 직접 덮어쓸 수 있다.
+	if "slash_base_damage" in data:
+		attack_power = int(data.slash_base_damage) + slash_damage_bonus
 
 	# M8 — 컨트롤은 일섬 단일. 항상 true 로 고정.
 	_instant_slash = true

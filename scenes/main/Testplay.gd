@@ -244,6 +244,35 @@ func _wire_enemy_lifecycle(inst: Node) -> void:
 		return
 	if inst.has_signal("tree_exited"):
 		inst.tree_exited.connect(_on_enemy_freed_with_ref.bind(inst))
+	_apply_time_hp_scaling(inst)
+
+
+## ⏱ 시간 HP 스케일 (Main 미러) — 아레나 잡몹(근접/리퍼/궁수)도 경과 시간대로 단단해진다.
+## 시간원은 _arena_elapsed_seconds(). 공식·대상 가드는 Main._apply_time_hp_scaling 과 동일.
+## 엘리트/보스/슬래머는 제외(아레나엔 레벨 스케일이 없지만 위협군은 시간 스케일도 미적용 — 일관).
+func _apply_time_hp_scaling(inst: Node) -> void:
+	if inst == null or not is_instance_valid(inst):
+		return
+	var is_threat: bool = inst.is_in_group("elites") or inst.is_in_group("boss")
+	if not is_threat and "behavior" in inst and int(inst.behavior) == 2:  # SLAMMER
+		is_threat = true
+	if is_threat:
+		return
+	if not inst.is_in_group("enemies"):
+		return
+	var extra: int = _time_hp_extra(_arena_elapsed_seconds())
+	if extra <= 0:
+		return
+	var hc = inst.get_node_or_null("HealthComponent")
+	if hc != null and hc.has_method("add_max_hp"):
+		hc.add_max_hp(extra)
+
+
+## 시간(초) → 잡몹 추가 HP 단계 (Main 미러). 60s 미만=0, 이후 1분당 +1, 상한 +4.
+func _time_hp_extra(t: float) -> int:
+	if t < 60.0:
+		return 0
+	return min(int(t / 60.0), 4)
 
 func _on_enemy_freed_with_ref(enemy: Node) -> void:
 	# Same shutdown-safety as Main: during scene reload the tree may be
