@@ -17,6 +17,10 @@ var _t: float = 0.0
 var _lifetime: float = 3.0
 var _dead: bool = false
 var _seed: Node = null
+## 틴트(요괴/카드별) — 기본 핑크(구미호). params.tint(Color) 로 도깨비 금황 등 주입.
+var _tint: Color = PINK
+## 적중 시 적에 부여할 meta 키(빈문자=없음). 도깨비불 일섬 → "dokebi_ember"(CHAIN_BURST 연계).
+var _ember_meta: String = ""
 
 
 func init_proj(pos: Vector3, fire_dir: Vector3, params: Dictionary, homing: bool, seed_target) -> void:
@@ -25,6 +29,9 @@ func init_proj(pos: Vector3, fire_dir: Vector3, params: Dictionary, homing: bool
 	_radius = maxf(float(params.get("radius", 0.9)), 0.3)
 	_homing = homing
 	_seed = seed_target
+	if params.get("tint") is Color:
+		_tint = params.get("tint")
+	_ember_meta = String(params.get("ember_meta", ""))
 	var fd := Vector3(fire_dir.x, 0.0, fire_dir.z)
 	if fd.length_squared() < 0.0001:
 		fd = Vector3(1, 0, 0)
@@ -37,9 +44,9 @@ func init_proj(pos: Vector3, fire_dir: Vector3, params: Dictionary, homing: bool
 	mi.mesh = sm
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = PINK
+	m.albedo_color = _tint
 	m.emission_enabled = true
-	m.emission = PINK
+	m.emission = _tint
 	m.emission_energy_multiplier = 3.0
 	mi.material_override = m
 	add_child(mi)
@@ -95,6 +102,9 @@ func _explode(tgt: Node) -> void:
 	_dead = true
 	if tgt != null and is_instance_valid(tgt) and tgt.has_method("take_hit") and not tgt.is_in_group("boss"):
 		tgt.call("take_hit", _damage)
+		# 도깨비불 표식 — CHAIN_BURST(옮겨붙기) 연계용. 살아남은 적에 불씨 도장.
+		if _ember_meta != "" and is_instance_valid(tgt):
+			tgt.set_meta(_ember_meta, true)
 	var host := get_parent()
 	if host != null:
 		var p := CPUParticles3D.new()
@@ -118,9 +128,9 @@ func _explode(tgt: Node) -> void:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-		m.albedo_color = Color(PINK.r, PINK.g, PINK.b, 0.95)
+		m.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.95)
 		m.emission_enabled = true
-		m.emission = PINK
+		m.emission = _tint
 		m.emission_energy_multiplier = 2.4
 		qm.material = m
 		p.mesh = qm

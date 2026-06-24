@@ -159,6 +159,146 @@
           }
         }
       ]
+    },
+    {
+      "id": "dokebi_foxfire",
+      "yokai": "DOKEBI",
+      "skill_type": "타격",
+      "name": "도깨비불 일섬",
+      "desc": "일섬 적중 시 금황 혼불이 다음 적을 향해 날아가 폭발한다",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "HOMING_PROJECTILE",
+          "params_by_rarity": {
+            "chosim":  { "count": 1, "speed": 11.0, "damage": 1, "radius": 0.7, "per_hits": 2 },
+            "rare":    { "count": 1, "speed": 12.0, "damage": 1, "radius": 0.8, "per_hits": 2 },
+            "uniq":    { "count": 2, "speed": 13.0, "damage": 1, "radius": 0.9, "per_hits": 1 },
+            "legend":  { "count": 2, "speed": 14.0, "damage": 2, "radius": 1.0, "per_hits": 1 },
+            "master":  { "count": 3, "speed": 16.0, "damage": 2, "radius": 1.1, "per_hits": 1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dokebi_chain",
+      "yokai": "DOKEBI",
+      "skill_type": "옮김",
+      "name": "옮겨붙는 도깨비불",
+      "desc": "불씨가 붙은 적이 쓰러지면 금불이 폭발하며 인접한 적에게 옮겨붙는다",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "CHAIN_BURST",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.2, "damage": 1, "knockback": 5.0,  "spread": 1, "spread_radius": 3.0 },
+            "rare":    { "radius": 2.6, "damage": 1, "knockback": 6.0,  "spread": 1, "spread_radius": 3.4 },
+            "uniq":    { "radius": 3.0, "damage": 1, "knockback": 7.5,  "spread": 2, "spread_radius": 3.8 },
+            "legend":  { "radius": 3.4, "damage": 2, "knockback": 9.0,  "spread": 2, "spread_radius": 4.2 },
+            "master":  { "radius": 4.0, "damage": 2, "knockback": 11.0, "spread": 3, "spread_radius": 4.8 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dokebi_smash",
+      "yokai": "DOKEBI",
+      "skill_type": "공격",
+      "name": "방망이 한방",
+      "desc": "일섬을 마칠 때 금황 충격파로 내리찍어 주변을 강타한다",
+      "components": [
+        {
+          "trigger": "On_Slash_End",
+          "effect": "SMASH",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.6, "damage": 1, "knockback": 8.0,  "shake_amp": 0.10, "shake_dur": 0.25, "hitstop": 0.06 },
+            "rare":    { "radius": 3.0, "damage": 1, "knockback": 9.5,  "shake_amp": 0.12, "shake_dur": 0.28, "hitstop": 0.07 },
+            "uniq":    { "radius": 3.4, "damage": 2, "knockback": 11.0, "shake_amp": 0.14, "shake_dur": 0.30, "hitstop": 0.08 },
+            "legend":  { "radius": 3.8, "damage": 2, "knockback": 13.0, "shake_amp": 0.16, "shake_dur": 0.33, "hitstop": 0.09 },
+            "master":  { "radius": 4.4, "damage": 3, "knockback": 16.0, "shake_amp": 0.20, "shake_dur": 0.36, "hitstop": 0.11 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dokebi_extrafan",
+      "yokai": "DOKEBI",
+      "skill_type": "난타",
+      "name": "방망이 난타",
+      "desc": "일섬 적중이 쌓일 때마다 전방으로 금황 잔상 부채 추가타를 날린다",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "EXTRA_FAN",
+          "params_by_rarity": {
+            "chosim":  { "per_hits": 3, "range": 2.6, "width": 1.4, "damage": 1 },
+            "rare":    { "per_hits": 3, "range": 2.9, "width": 1.6, "damage": 1 },
+            "uniq":    { "per_hits": 2, "range": 3.2, "width": 1.8, "damage": 1 },
+            "legend":  { "per_hits": 2, "range": 3.6, "width": 2.1, "damage": 2 },
+            "master":  { "per_hits": 1, "range": 4.0, "width": 2.4, "damage": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dokebi_clone",
+      "yokai": "DOKEBI",
+      "skill_type": "소환",
+      "name": "난장도깨비패",
+      "desc": "일섬을 마칠 때 금황 도깨비 분신이 나타나 일섬을 따라 함께 벤다",
+      "components": [
+        {
+          "trigger": "On_Slash_End",
+          "effect": "SUMMON_CLONE",
+          "params_by_rarity": {
+            "chosim":  { "count": 1, "lifetime": 5.0, "range": 2.6, "damage": 1, "cap": 2 },
+            "rare":    { "count": 1, "lifetime": 5.5, "range": 2.9, "damage": 1, "cap": 3 },
+            "uniq":    { "count": 2, "lifetime": 6.0, "range": 3.2, "damage": 1, "cap": 4 },
+            "legend":  { "count": 2, "lifetime": 6.5, "range": 3.5, "damage": 2, "cap": 5 },
+            "master":  { "count": 3, "lifetime": 7.0, "range": 3.8, "damage": 2, "cap": 6 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dokebi_gold",
+      "yokai": "DOKEBI",
+      "skill_type": "질주",
+      "name": "뚝딱 금 나와라",
+      "desc": "일섬 처치 시 금화가 쏟아져 회수하면 열기가 식고 소량 회복된다",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "GOLD_REFUND",
+          "params_by_rarity": {
+            "chosim":  { "count": 2, "heat_refund": 6.0,  "heal": 0 },
+            "rare":    { "count": 2, "heat_refund": 8.0,  "heal": 0 },
+            "uniq":    { "count": 3, "heat_refund": 11.0, "heal": 1 },
+            "legend":  { "count": 4, "heat_refund": 14.0, "heal": 1 },
+            "master":  { "count": 5, "heat_refund": 18.0, "heal": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dokebi_ignite",
+      "yokai": "DOKEBI",
+      "skill_type": "권능",
+      "name": "도깨비 금줄",
+      "desc": "퍼펙트 회피 시 금황 결계를 펼쳐 내부 적을 지속 점화하고 테두리서 혼불을 쏜다",
+      "components": [
+        {
+          "trigger": "On_Just_Dodge",
+          "effect": "IGNITE_ZONE",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.6, "duration": 3.0, "dot_interval": 0.6, "dot_damage": 1, "foxfire_interval": 1.0, "foxfire_speed": 11.0 },
+            "rare":    { "radius": 3.0, "duration": 3.5, "dot_interval": 0.55, "dot_damage": 1, "foxfire_interval": 0.9, "foxfire_speed": 12.0 },
+            "uniq":    { "radius": 3.4, "duration": 4.0, "dot_interval": 0.5, "dot_damage": 1, "foxfire_interval": 0.8, "foxfire_speed": 13.0 },
+            "legend":  { "radius": 3.8, "duration": 4.5, "dot_interval": 0.45, "dot_damage": 2, "foxfire_interval": 0.7, "foxfire_speed": 14.0 },
+            "master":  { "radius": 4.4, "duration": 5.0, "dot_interval": 0.4, "dot_damage": 2, "foxfire_interval": 0.55, "foxfire_speed": 16.0 }
+          }
+        }
+      ]
     }
   ]
 }

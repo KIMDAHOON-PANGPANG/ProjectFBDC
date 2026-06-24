@@ -12,12 +12,16 @@ var _lifetime: float = 5.0
 var _radius: float = 0.9
 var _t: float = 0.0
 var _dead: bool = false
+## 틴트 — 기본 핑크(구미호). params.tint 로 다른 요괴 색 주입.
+var _tint: Color = PINK
 
 
 func init_spirit(pos: Vector3, params: Dictionary) -> void:
 	_speed = float(params.get("speed", 7.0))
 	_lifetime = float(params.get("lifetime", 5.0))
 	_radius = maxf(float(params.get("radius", 0.9)), 0.3)
+	if params.get("tint") is Color:
+		_tint = params.get("tint")
 	global_position = pos
 	_build_visual()
 
@@ -30,9 +34,9 @@ func _build_visual() -> void:
 	mi.mesh = sm
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = PINK
+	m.albedo_color = _tint
 	m.emission_enabled = true
-	m.emission = PINK
+	m.emission = _tint
 	m.emission_energy_multiplier = 2.5
 	mi.material_override = m
 	add_child(mi)
@@ -55,9 +59,9 @@ func _build_visual() -> void:
 	tm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	tm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	tm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	tm.albedo_color = Color(PINK.r, PINK.g, PINK.b, 0.7)
+	tm.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.7)
 	tm.emission_enabled = true
-	tm.emission = PINK
+	tm.emission = _tint
 	tm.emission_energy_multiplier = 1.8
 	tq.material = tm
 	trail.mesh = tq
@@ -120,9 +124,9 @@ func _burst() -> void:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	m.albedo_color = Color(PINK.r, PINK.g, PINK.b, 0.9)
+	m.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.9)
 	m.emission_enabled = true
-	m.emission = PINK
+	m.emission = _tint
 	m.emission_energy_multiplier = 2.0
 	qm.material = m
 	p.mesh = qm

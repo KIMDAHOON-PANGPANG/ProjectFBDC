@@ -4,15 +4,19 @@ func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 8)" % all.size())
-	assert(all.size() == 8, "all_boons 크기 불일치")
+	print("all_boons size: %d (기대: 15)" % all.size())
+	assert(all.size() == 15, "all_boons 크기 불일치")
 
 	var mark = _B.by_id("gumiho_mark")
 	print("by_id(gumiho_mark) name: %s" % str(mark.get("name", "?")))
 
 	var gumiho_list := _B.by_yokai("GUMIHO")
 	print("by_yokai(GUMIHO) size: %d (기대: 8)" % gumiho_list.size())
-	assert(gumiho_list.size() == 8, "by_yokai 크기 불일치")
+	assert(gumiho_list.size() == 8, "by_yokai(GUMIHO) 크기 불일치")
+
+	var dokebi_list := _B.by_yokai("DOKEBI")
+	print("by_yokai(DOKEBI) size: %d (기대: 7)" % dokebi_list.size())
+	assert(dokebi_list.size() == 7, "by_yokai(DOKEBI) 크기 불일치")
 
 	var rarities := _B.rarities_for("gumiho_mark")
 	print("rarities_for(gumiho_mark): %s" % str(rarities))
@@ -67,5 +71,44 @@ func _initialize() -> void:
 	assert(String(fox_comps[0].get("trigger", "")) == "On_Mark_Full", "foxfire trigger 불일치")
 	assert(String(fox_comps[0].get("effect", "")) == "HOMING_PROJECTILE", "foxfire effect 불일치")
 
-	print("boon_load_check: 전체 통과")
+	# ── 도깨비 7카드 스폿체크 ──
+	var dokebi_ids := ["dokebi_foxfire", "dokebi_chain", "dokebi_smash",
+		"dokebi_extrafan", "dokebi_clone", "dokebi_gold", "dokebi_ignite"]
+	for did in dokebi_ids:
+		var b = _B.by_id(did)
+		assert(b != null, "%s 없음" % did)
+		assert(String(b.get("yokai", "")) == "DOKEBI", "%s yokai 불일치" % did)
+		var comps = b.get("components", [])
+		assert(comps.size() > 0, "%s components 없음" % did)
+		# 등급 5단 보존.
+		var rar := _B.rarities_for(did)
+		assert(rar == ["chosim", "rare", "uniq", "legend", "master"], "%s rarities 불일치" % did)
+
+	# 효과 매핑 스폿체크.
+	var dfox = _B.by_id("dokebi_foxfire").get("components", [])[0]
+	assert(String(dfox.get("trigger", "")) == "On_Slash_Hit", "dokebi_foxfire trigger 불일치")
+	assert(String(dfox.get("effect", "")) == "HOMING_PROJECTILE", "dokebi_foxfire effect 불일치")
+	var dchain = _B.by_id("dokebi_chain").get("components", [])[0]
+	assert(String(dchain.get("effect", "")) == "CHAIN_BURST", "dokebi_chain effect 불일치")
+	var dsmash = _B.by_id("dokebi_smash").get("components", [])[0]
+	assert(String(dsmash.get("trigger", "")) == "On_Slash_End", "dokebi_smash trigger 불일치")
+	assert(String(dsmash.get("effect", "")) == "SMASH", "dokebi_smash effect 불일치")
+	var dfan = _B.by_id("dokebi_extrafan").get("components", [])[0]
+	assert(String(dfan.get("effect", "")) == "EXTRA_FAN", "dokebi_extrafan effect 불일치")
+	var dclone = _B.by_id("dokebi_clone").get("components", [])[0]
+	assert(String(dclone.get("effect", "")) == "SUMMON_CLONE", "dokebi_clone effect 불일치")
+	var dgold = _B.by_id("dokebi_gold").get("components", [])[0]
+	assert(String(dgold.get("effect", "")) == "GOLD_REFUND", "dokebi_gold effect 불일치")
+	var dignite = _B.by_id("dokebi_ignite").get("components", [])[0]
+	assert(String(dignite.get("trigger", "")) == "On_Just_Dodge", "dokebi_ignite trigger 불일치")
+	assert(String(dignite.get("effect", "")) == "IGNITE_ZONE", "dokebi_ignite effect 불일치")
+
+	# 도깨비 params 스폿체크.
+	var smash_uniq := _B.params_for("dokebi_smash", "uniq")
+	assert(float(smash_uniq.get("radius", 0.0)) > 0.0, "dokebi_smash radius 불량")
+	assert(float(smash_uniq.get("knockback", 0.0)) > 0.0, "dokebi_smash knockback 불량")
+	var gold_master := _B.params_for("dokebi_gold", "master")
+	assert(float(gold_master.get("heat_refund", 0.0)) > 0.0, "dokebi_gold heat_refund 불량")
+
+	print("boon_load_check: 전체 통과 (15장 = 구미호8 + 도깨비7)")
 	quit()

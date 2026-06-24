@@ -15,6 +15,8 @@ var _t: float = 0.0
 var _dying: bool = false
 var _mat: StandardMaterial3D
 var _player: Node = null
+## 틴트 — 기본 핑크(구미호). params.tint 로 다른 요괴 색 주입.
+var _tint: Color = PINK
 
 
 func init_zone(center: Vector3, params: Dictionary, player: Node) -> void:
@@ -23,6 +25,8 @@ func init_zone(center: Vector3, params: Dictionary, player: Node) -> void:
 	_pull = float(params.get("pull", 1.5))
 	_burst_kb = float(params.get("burst_knockback", 8.0))
 	_burst_radius = maxf(float(params.get("burst_radius", 3.0)), 0.3)
+	if params.get("tint") is Color:
+		_tint = params.get("tint")
 	_player = player
 	global_position = Vector3(center.x, center.y + 0.06, center.z)
 	_build_disc()
@@ -36,9 +40,9 @@ func _build_disc() -> void:
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_mat.albedo_color = Color(PINK.r, PINK.g, PINK.b, 0.36)
+	_mat.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.36)
 	_mat.emission_enabled = true
-	_mat.emission = PINK
+	_mat.emission = _tint
 	_mat.emission_energy_multiplier = 1.4
 	mi.material_override = _mat
 	add_child(mi)
@@ -106,9 +110,9 @@ func _burst_particles() -> void:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	m.albedo_color = Color(PINK.r, PINK.g, PINK.b, 0.95)
+	m.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.95)
 	m.emission_enabled = true
-	m.emission = PINK
+	m.emission = _tint
 	m.emission_energy_multiplier = 2.2
 	qm.material = m
 	p.mesh = qm

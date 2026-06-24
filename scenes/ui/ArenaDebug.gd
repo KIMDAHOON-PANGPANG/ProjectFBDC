@@ -225,6 +225,17 @@ func _refill_evade() -> void:
 	if _player != null and is_instance_valid(_player) and _player.has_method("refill_evade"):
 		_player.call("refill_evade")
 
+## 도깨비(또는 임의) 은혜 장착 — 중복이면 스킵, 아니면 uniq 등급으로 즉시 등록.
+func _equip_boon(id: String) -> void:
+	if _player == null or not is_instance_valid(_player) or not _player.has_method("add_boon"):
+		return
+	var owned = _player.get("active_boons")
+	if owned is Array:
+		for b in owned:
+			if b is Dictionary and String(b.get("id", "")) == id:
+				return  # 이미 장착 — 중복 누적 방지.
+	_player.call("add_boon", id, "uniq")
+
 func _set_pc_float(field: String, v: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
@@ -303,6 +314,16 @@ func _build() -> void:
 	t_stat.add_child(_btn("레벨 +1 (몬스터 강화)", _level_up_direct))
 	t_stat.add_child(_btn("공격력 +1", _attack_up))
 	t_stat.add_child(_btn("회피 가득", _refill_evade))
+
+	# 도깨비 은혜 장착(능동 FX 테스트) — 유일(uniq) 등급 즉시 장착.
+	t_stat.add_child(_title("도깨비 은혜 장착 (uniq)"))
+	t_stat.add_child(_btn("도깨비불 일섬 (혼불 유도)", func(): _equip_boon("dokebi_foxfire")))
+	t_stat.add_child(_btn("옮겨붙는 도깨비불 (연쇄)", func(): _equip_boon("dokebi_chain")))
+	t_stat.add_child(_btn("방망이 한방 (강타)", func(): _equip_boon("dokebi_smash")))
+	t_stat.add_child(_btn("방망이 난타 (추가 부채)", func(): _equip_boon("dokebi_extrafan")))
+	t_stat.add_child(_btn("난장도깨비패 (분신)", func(): _equip_boon("dokebi_clone")))
+	t_stat.add_child(_btn("뚝딱 금 나와라 (금화)", func(): _equip_boon("dokebi_gold")))
+	t_stat.add_child(_btn("도깨비 금줄 (점화존)", func(): _equip_boon("dokebi_ignite")))
 
 	# 현재 스탯 탭 — 읽기 전용(튜닝 반영된 최종 적용값)
 	var t_cur := _tab("현재")
