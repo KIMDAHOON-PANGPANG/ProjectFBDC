@@ -18,6 +18,7 @@ var _mode_label: Label
 var _spawn_count: SpinBox
 var _stats_label: Label
 var _wave_btn: Button
+var _escape_btn: Button
 
 var _t: float = 0.0
 var _tracked: Dictionary = {}   # enemy_ref -> {t, name, counted}
@@ -148,6 +149,14 @@ func _refresh_stats() -> void:
 
 
 # ── 환경 액션 ──
+func _toggle_escape_zone() -> void:
+	if _host == null or not is_instance_valid(_host) or not _host.has_method("arena_toggle_escape_zone"):
+		return
+	var on: bool = bool(_host.call("arena_toggle_escape_zone"))
+	if _escape_btn != null:
+		_escape_btn.text = "탈출 구역: " + ("ON" if on else "OFF")
+		_escape_btn.modulate = Color(1.0, 0.5, 0.5) if on else Color(1, 1, 1)
+
 func _toggle_god() -> void:
 	if _player != null and "god_mode" in _player:
 		_player.god_mode = not _player.god_mode
@@ -284,6 +293,9 @@ func _build() -> void:
 	t_env.add_child(_btn("기본 일섬 웨이브", func(): _set_mode(0)))
 	t_env.add_child(_btn("근접 몬스터 일섬", func(): _set_mode(1)))
 	t_env.add_child(_btn("원거리 몬스터 일섬", func(): _set_mode(2)))
+	t_env.add_child(HSeparator.new())
+	_escape_btn = _btn("탈출 구역: OFF", _toggle_escape_zone)
+	t_env.add_child(_escape_btn)
 
 	# 스폰 탭
 	var t_spawn := _tab("스폰")

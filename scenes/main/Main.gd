@@ -105,6 +105,7 @@ const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectSe
 const _BulletTimeServiceScript := preload("res://scripts/managers/BulletTimeService.gd")
 const _SkillViewerScript := preload("res://scenes/ui/SkillViewer.gd")
 const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
+const _EscapeZoneScript := preload("res://scenes/effects/EscapeZone.gd")
 var _elite_effect_service: Node
 var _bullet_time_service: Node
 var _skill_viewer: CanvasLayer
@@ -121,6 +122,9 @@ var _chapter_cleared: bool = false
 ## Wall-clock ticks at the moment WaveManager started — used to compute
 ## the run's elapsed time for the result screen + SaveSystem record.
 var _chapter_start_msec: int = 0
+var _escape_zone: Node3D = null
+var _escape_zone_done_mass: bool = false
+var _escape_zone_done_boss: bool = false
 ## Once-per-run guard: a PC dying mid-slash could in theory emit `died`
 ## twice (HealthComponent guards against negative HP, but signal wiring
 ## changes might break that). Keeps the overlay from double-spawning.
@@ -188,6 +192,34 @@ func _process(delta: float) -> void:
 		get_tree().reload_current_scene()
 		return
 	_update_hud()
+	_update_escape_zone_schedule()
+
+func _update_escape_zone_schedule() -> void:
+	var t: float = _elapsed_seconds()
+	if not _escape_zone_done_mass and t >= 240.0:
+		_escape_zone_done_mass = true
+		_spawn_escape_zone(60.0)
+		return
+	if not _escape_zone_done_boss and t >= 420.0:
+		_escape_zone_done_boss = true
+		_spawn_escape_zone(90.0)
+
+func _spawn_escape_zone(duration: float = 60.0) -> void:
+	_despawn_escape_zone()
+	_escape_zone = _EscapeZoneScript.new()
+	_escape_zone.name = "EscapeZone"
+	add_child(_escape_zone)
+	var c: Vector3 = (_player.global_position if _player != null and is_instance_valid(_player) else Vector3.ZERO)
+	_escape_zone.call("setup", c)
+	var tree := get_tree()
+	if tree != null and duration > 0.0:
+		tree.create_timer(duration).timeout.connect(_despawn_escape_zone)
+	_play_log("탈출 불가구역 활성")
+
+func _despawn_escape_zone() -> void:
+	if _escape_zone != null and is_instance_valid(_escape_zone):
+		_escape_zone.queue_free()
+	_escape_zone = null
 
 func _build_environment() -> void:
 	var we := WorldEnvironment.new()

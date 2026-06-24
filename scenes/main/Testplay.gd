@@ -65,6 +65,7 @@ const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd
 const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectService.gd")
 const _BulletTimeServiceScript := preload("res://scripts/managers/BulletTimeService.gd")
 const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
+const _EscapeZoneScript := preload("res://scenes/effects/EscapeZone.gd")
 
 var _player: Node
 var _camera: HD2DCamera
@@ -79,6 +80,7 @@ var _world_env: WorldEnvironment
 var _elite_effect_service: Node
 var _bullet_time_service: Node
 var _skill_viewer: CanvasLayer
+var _escape_zone: Node3D = null
 ## 현재 런에서 선택한 카드 목록 [{id, name}, ...].
 var _selected_cards: Array = []
 ## 레벨업 시 뽑힌 권속 카드 목록 — _on_upgrade_card_selected 에서 rarity 조회용.
@@ -681,6 +683,19 @@ func arena_wave_info() -> String:
 	var t: float = (float(_wave_mgr.call("elapsed")) if _wave_mgr.has_method("elapsed") else 0.0)
 	var tg: int = (int(_wave_mgr.call("current_target")) if _wave_mgr.has_method("current_target") else 0)
 	return "웨이브: %.0fs · 목표 %d" % [t, tg]
+
+
+func arena_toggle_escape_zone() -> bool:
+	if _escape_zone != null and is_instance_valid(_escape_zone):
+		_escape_zone.queue_free()
+		_escape_zone = null
+		return false
+	_escape_zone = _EscapeZoneScript.new()
+	_escape_zone.name = "EscapeZone"
+	add_child(_escape_zone)
+	var c: Vector3 = (_player.global_position if _player != null and is_instance_valid(_player) else Vector3.ZERO)
+	_escape_zone.call("setup", c)
+	return true
 
 
 func _on_spawn_regular_10() -> void:
