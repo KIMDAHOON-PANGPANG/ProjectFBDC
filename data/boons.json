@@ -1,0 +1,44 @@
+{
+  "boons": [
+    {
+      "id": "gumiho_mark",
+      "yokai": "GUMIHO",
+      "skill_type": "타격",
+      "name": "천호의 인장",
+      "desc": "일섬 적중마다 표식을 누적한다",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "APPLY_MARK",
+          "params_by_rarity": {
+            "chosim":  { "per_hits": 3, "mark_add": 1, "cap": 3 },
+            "rare":    { "per_hits": 3, "mark_add": 1, "cap": 4 },
+            "uniq":    { "per_hits": 2, "mark_add": 1, "cap": 5 },
+            "legend":  { "per_hits": 2, "mark_add": 2, "cap": 6 },
+            "master":  { "per_hits": 1, "mark_add": 1, "cap": 8 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gumiho_lifesteal",
+      "yokai": "GUMIHO",
+      "skill_type": "공격",
+      "name": "월하정음",
+      "desc": "일섬 처치 시 표식 수만큼 흡혈",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "LIFESTEAL",
+          "params_by_rarity": {
+            "chosim":  { "heal_per_mark": 0.4, "transfer": 0, "shield": false },
+            "rare":    { "heal_per_mark": 0.6, "transfer": 0, "shield": false },
+            "uniq":    { "heal_per_mark": 0.9, "transfer": 1, "shield": false },
+            "legend":  { "heal_per_mark": 1.2, "transfer": 2, "shield": false },
+            "master":  { "heal_per_mark": 1.6, "transfer": 3, "shield": true }
+          }
+        }
+      ]
+    }
+  ]
+}
