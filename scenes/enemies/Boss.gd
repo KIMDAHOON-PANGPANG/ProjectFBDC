@@ -1,27 +1,13 @@
 class_name Boss
 extends CharacterBody3D
 
-## Chapter 1 final boss. A big square cube with 15 HP. Slow chaser whose
-## attacks open with a ZZZ-style "critical hit" signal at its head:
-##   • YELLOW (70%) — PC's slash, well-timed to land in a tight ~0.3s
-##     window around the sweep moment, parries the attack. The boss
-##     cancels mid-swing, takes no damage from the parry hit itself,
-##     enters a 1s BLOCKED stun, then resumes the attack cycle. A short,
-##     punchy curve-decay camera shake sells the parry impact.
-##   • RED (30%) — unparryable. The PC must dodge; slashing through
-##     deals normal damage but does NOT cancel the swing.
-##
-## The "critical hit" pattern is a BOSS-ONLY rule (mobs / elites never
-## fire BossSignal). Adding a new boss = copy this Boss script's signal
-## + parry flow; staying in the `"boss"` group keeps any shared
-## owner-level logic (e.g. chapter clear) working.
+## 멧돼지 돌진 보스. 추적 → 호밍 윈드업(돌진 레인 데칼) → 직진 돌진 → 정지 회복의
+## 상태머신(BState)으로 동작한다. 돌진은 회피 전용 패턴(패리 없음).
 ##
 ## Owner (Main) listens for `boss_defeated` to invoke the chapter-clear flow.
 
 signal boss_defeated
 
-## Attack-type enum used by the critical-hit signal. Picked at attack start.
-enum AttackType { YELLOW, RED }
 ## 멧돼지 AI 상태 — 추적 / 돌진 호밍 윈드업 / 돌진 / 회복.
 enum BState { CHASE, WINDUP, CHARGE, RECOVER }
 
@@ -74,28 +60,10 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 ## 돌진 레인 데칼 — Boss.tscn 에 ChargeTelegraph.tscn 주입.
 @export var charge_telegraph_scene: PackedScene
 
-@export_group("Critical Attack")
-## Chance an attack rolls YELLOW (parryable). User-tuned baseline 0.7.
-@export var parry_yellow_ratio: float = 0.7
-## When true, a fraction `white_ratio` of attacks roll WHITE instead of
-## YELLOW/RED. WHITE behaves like RED (no parry, must dodge) but signals
-## a future "grab pattern" — currently a visual-only distinction so
-## Chapter 2's boss reads differently.
+@export_group("Variant Signal")
+## 레거시 보스 변형 식별용 비율(WHITE 시그널 — 현재 시각 구분만, 패리 없음).
+## CombatData 가 monster_table.tres 의 white_ratio 를 브리지한다.
 @export var white_ratio: float = 0.0
-@export_group("Parry Reward")
-## ⏱ Perfect-parry chain reward window. A successful parry sets the PC's
-## `parry_boost_until_msec` to `now + parry_boost_window_ms`; the next
-## SlashAttack that lands on the boss in that window deals
-## `parry_boost_dmg` instead of the normal 1.
-@export var parry_boost_window_ms: int = 1000
-@export var parry_boost_dmg: int = 3
-## Parry window opens this long BEFORE the sweep starts (i.e. at
-## telegraph_time - parry_window_pre_sweep), and stays open until
-## parry_window_post_sweep seconds AFTER the sweep starts.
-@export var parry_window_pre_sweep: float = 0.2
-@export var parry_window_post_sweep: float = 0.1
-## How long the boss is rooted/locked after a successful parry.
-@export var block_duration: float = 1.0
 
 ## Boss body footprint half-size on XZ (BoxShape3D in Boss.tscn is 2.1
 ## cube, half = 1.05). The PC's iaido dash uses direct global_position
@@ -123,27 +91,6 @@ var _boss_half_xz: float = _BOSS_HALF_XZ
 var _health: HealthComponent
 var _attack_cd: float = 0.0
 var _dead: bool = false
-## True from telegraph spawn until the FanTelegraph self-frees — keeps
-## the boss rooted and prevents double-queuing a wind-up.
-var _attacking: bool = false
-## Current attack's critical-hit type. Only meaningful while _attacking.
-var _attack_type: int = AttackType.YELLOW
-## M6 — visual override for the head icon. 0 = standard YELLOW/RED, 1 =
-## WHITE (Boss 2), 2 = PURPLE (Boss 3 광역), 3 = GREEN (Boss 3 다단).
-## Override types all carry RED semantics today (no parry, must dodge).
-## Cleared at the start of every telegraph in `_begin_telegraph`.
-var _color_override: int = 0
-## True only during the short parry window (yellow attacks only). When
-## true, an incoming take_hit triggers _on_parried instead of damage.
-var _parry_open: bool = false
-## True for `block_duration` seconds after a successful parry. While set,
-## the boss is rooted, can't attack, and the next-attack cooldown is
-## already advancing so it resumes naturally on _end_block.
-var _blocked: bool = false
-## In-flight effect references — used by the parry path to cancel/free
-## them the instant a parry resolves so the wind-up disappears on cue.
-var _active_telegraph: Node = null
-var _active_signal: Node = null
 var _label: Label3D
 var _sprite: Sprite3D
 
@@ -349,7 +296,7 @@ func _state_recover(delta: float) -> void:
 
 
 ## take_hit — 돌진 보스는 패리 패턴이 없다(돌진은 회피 전용). 그냥 피해.
-## amount 기본 1, SlashAttack 의 perfect-parry chain(parry_boost_dmg) 경로도 그대로 받는다.
+## amount 기본 1, SlashAttack 가 보스 데미지(boss_slash_damage_normal)를 넘겨 호출.
 func take_hit(amount: int = 1) -> void:
 	if _dead:
 		return

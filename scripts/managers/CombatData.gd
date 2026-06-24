@@ -162,12 +162,6 @@ static func _apply_boss(e, m) -> void:
 	e.fan_angle_deg = m.fan_angle_deg
 	e.max_hp = m.max_hp
 	e.attack_cooldown = m.attack_cooldown
-	e.parry_yellow_ratio = m.parry_yellow_ratio
-	e.parry_window_pre_sweep = m.parry_window_pre_sweep
-	e.parry_window_post_sweep = m.parry_window_post_sweep
-	e.block_duration = m.block_duration
-	e.parry_boost_window_ms = m.parry_boost_window_ms
-	e.parry_boost_dmg = m.parry_boost_dmg
 	e.white_ratio = m.white_ratio
 	if "charge_range" in e: e.charge_range = m.charge_range
 	if "charge_windup" in e: e.charge_windup = m.charge_windup

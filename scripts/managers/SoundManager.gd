@@ -8,7 +8,7 @@ extends Node
 ## silent no-op until the assets land.
 ##
 ## Why ship the manager before the audio:
-## 1. The hook points (Player.slash_finished, Boss._on_parried, etc.)
+## 1. The hook points (Player.slash_finished, Player.take_hit, etc.)
 ##    settle into the right places now; dropping .ogg files in later
 ##    is a single-file change per cue.
 ## 2. The PR diff stays small: code stabilizes one pass, audio another.

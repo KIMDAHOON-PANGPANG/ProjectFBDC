@@ -38,9 +38,6 @@ const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
 var _state: int = State.IDLE
 var _charge_t: float = 0.0
 var _aim_dir: Vector3 = Vector3(1, 0, 0)
-## 가드백 — 패리 직후 PC 가 에임 반대로 짧게 밀린다(감쇠).
-var _guardback_t: float = 0.0
-var _guardback_vel: Vector3 = Vector3.ZERO
 var _cooldown_t: float = 0.0
 var _dash_start: Vector3
 var _dash_end: Vector3
@@ -81,9 +78,6 @@ var _iframe_t: float = 0.0
 # 충돌(접촉피해)/탄에 즉시 피격되는 불쾌감을 막는다. data.slash_post_grace 로 세팅.
 var _slash_grace_t: float = 0.0
 
-# 저스트 패리(RMB). _parry_t > 0 동안 패리 윈도우(발사체 쳐냄). _parry_cd 는 재사용 대기.
-var _parry_t: float = 0.0
-var _parry_cd: float = 0.0
 ## 기본 공격력(중립 base 스탯 — 레벨업 카드가 더는 올리지 않음, 기본 1). 슬래시/스윙이
 ## 다중타 적·보스에 주는 데미지. SlashAttack/EliteEffectService/CircularSlash/balance_sim/
 ## ArenaDebug 가 읽으므로 변수는 보존(중립 값으로 효과 중립화).
@@ -142,13 +136,6 @@ var _perfect_dodge_fired: bool = false
 # 유예/잠금은 data.overcharge_grace / overcharge_lockout 로 이관.
 var _overcharge_t: float = 0.0
 
-## ⏱ Perfect-parry chain reward — Boss._on_parried stamps this with
-## `Time.get_ticks_msec() + window_ms`. SlashAttack reads it while
-## resolving boss damage: if `Time.get_ticks_msec() <= parry_boost_until_msec`
-## the next boss hit deals 3 instead of 1. No active timer or clear path
-## is needed — natural expiry handles dropoff.
-var parry_boost_until_msec: int = 0
-
 ## M4 meta passive — `MetaProgressionSystem.apply_to` adds owned levels
 ## of the "인내" passive here. take_hit uses `HIT_IFRAME + iframe_bonus`.
 var iframe_bonus: float = 0.0
@@ -159,16 +146,11 @@ var iframe_bonus: float = 0.0
 ## yellow elites die before any hit lands.
 var shield_charges: int = 0
 
-## ⏱ Zen meter integration (M4 후속). ZenSystem manages the counter +
-## arms `has_zen_burst` when full. `_fire_slash` consumes the burst on
-## the next slash → width × 3, range = max × 1.5, 5 dmg to bosses.
-var _zen_system: Node
-var has_zen_burst: bool = false
-
-# --- M3 card flags 제거됨 (M8 S1) ---
+# --- M3 card flags 제거됨 (M8 S1) · 젠/패리 제거됨 (M8 S3a) ---
 # Multistrike/Echo/Vampire/Phoenix/Counter Step/Parry Master/월영 원무 등
-# 레거시 스킬 빌드 효과는 전면 철거. 패리 코어·젠·회피·일섬 게이지·shield_charges·
-# parry_boost 같은 카드 무관 전투 시스템은 보존(아래에 그대로 남아 있음).
+# 레거시 스킬 빌드 효과는 전면 철거. 젠(Zen) 버스트·저스트 패리(RMB) 코어도
+# 권속 은혜가 인게임 액티브 깊이를 대체하면서 철거. 회피/퍼펙트닷지·일섬 게이지·
+# 열관리·shield_charges 같은 코어 전투 시스템은 보존(아래에 그대로 남아 있음).
 
 func _ready() -> void:
 	if data == null:
@@ -243,10 +225,6 @@ func _physics_process(delta: float) -> void:
 		_iframe_t -= delta
 	if _slash_grace_t > 0.0:
 		_slash_grace_t -= delta
-	if _parry_t > 0.0:
-		_parry_t -= delta
-	if _parry_cd > 0.0:
-		_parry_cd -= delta
 	if _zone_slow_t > 0.0:
 		_zone_slow_t -= delta
 	match _state:
@@ -256,7 +234,6 @@ func _physics_process(delta: float) -> void:
 				_check_instant_slash()
 			else:
 				_check_attack_start()
-			_check_parry()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
 				_cooldown_t -= delta
@@ -269,7 +246,6 @@ func _physics_process(delta: float) -> void:
 				move_and_slide()
 			_update_aim(delta)
 			_check_attack_release()
-			_check_parry()
 		State.DASHING:
 			_update_dash(delta)
 		State.COOLDOWN:
@@ -300,12 +276,6 @@ func _handle_move(delta: float) -> void:
 	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
 	velocity.x = dir.x * data.move_speed * speed_mult
 	velocity.z = dir.z * data.move_speed * speed_mult
-	# 가드백 — 패리 직후 에임 반대로 밀린다. 남은 시간 비례 감쇠(부드럽게 멈춤).
-	if _guardback_t > 0.0:
-		_guardback_t -= delta
-		var gb_frac: float = clampf(_guardback_t / maxf(data.parry_guardback_dur, 0.001), 0.0, 1.0)
-		velocity.x += _guardback_vel.x * gb_frac
-		velocity.z += _guardback_vel.z * gb_frac
 	velocity.y = 0.0
 	move_and_slide()
 	var moving: bool = dir.length_squared() > 0.01
@@ -391,57 +361,6 @@ func _check_instant_slash() -> void:
 			_aim_arrow.set_charge(0.0)
 
 
-## 저스트 패리(RMB) — 게임 시작2 우클릭. 쿨다운이 차 있으면 attack1 휘두르기로
-## 패리 윈도우(parry_window) 진입. 그 동안 발사체에 맞으면 피해 없이 쳐낸다.
-## 모드1 에선 RB 가 게이지 일섬이라 비활성.
-func _check_parry() -> void:
-	if not _instant_slash or _parry_cd > 0.0:
-		return
-	if Input.is_action_just_pressed("slash"):
-		if _is_pointer_over_ui():
-			return
-		_start_parry()
-
-func _start_parry() -> void:
-	_parry_t = data.parry_window
-	_parry_cd = data.parry_cooldown
-	# attack1 휘두르기 — 패리 연출 길이만큼 1회 재생(이동/걷기 애니가 덮지 않게 oneshot).
-	if _sprite_rig != null and _sprite_rig.has_method("play_oneshot"):
-		_sprite_rig.call("play_oneshot", "attack1", data.parry_anim_dur)
-	elif _sprite_rig != null:
-		_sprite_rig.set_state(SpriteRig.State.ATTACK)
-	_play_sfx("parry_swing")
-
-## 패리 윈도우 활성 여부 — Arrow._on_hit 이 발사체 쳐냄 판정에 쓴다.
-func is_parrying() -> bool:
-	return _parry_t > 0.0
-
-## 발사체가 패리 윈도우 중 적중 — Arrow 가 호출. 피해 없이 "쳐냈다" 연출:
-## 카메라 흔들림 + 자기 히트스탑(타격감) + 반짝 스파크 + 패리 보상(Zen/카운터).
-func on_projectile_parried() -> void:
-	_parry_t = 0.0  # 한 번 쳐내면 윈도우 소진(연타 방지)
-	var rig := get_tree().get_first_node_in_group("camera_rig")
-	if rig != null:
-		if rig.has_method("shake"):
-			rig.call("shake", 0.18, 0.25)
-		if rig.has_method("hitstop"):
-			rig.call("hitstop", data.parry_hitstop_scale, data.parry_hitstop_dur)
-	# 가드백 — 에임 반대 방향으로 짧게 밀려난다(쳐낸 반동, 밀리는 손맛).
-	_apply_guardback(-_aim_dir)
-	if _sprite_rig != null and _sprite_rig.has_method("flash"):
-		_sprite_rig.call("flash", 0.22)
-	_spawn_parry_spark()
-	on_parry_success()  # Zen +1 / 카운터스텝 보상 재사용
-	_play_sfx("parry")
-
-
-## 가드백 적용 — dir 방향으로 초기속도를 주고 _handle_move 가 감쇠하며 민다.
-func _apply_guardback(dir: Vector3) -> void:
-	if dir.length_squared() < 0.0001:
-		return
-	_guardback_vel = dir.normalized() * data.parry_guardback_speed
-	_guardback_t = data.parry_guardback_dur
-
 ## World node to parent spawned VFX/attacks under. Active scene normally;
 ## during a scene reload current_scene is briefly null, so fall back to our
 ## parent / tree root rather than crashing on add_child(null).
@@ -455,53 +374,6 @@ func _effect_host() -> Node:
 	if p != null:
 		return p
 	return tree.root
-
-## "쳐냈다" 반짝 — PC 앞에 흰/금 링이 잠깐 번쩍 퍼지고 사라진다.
-func _spawn_parry_spark() -> void:
-	# "쳐냈다" FX — 노란 섬광 입자가 사방으로 튀는 1회 버스트. 균일한 원형 셸이 안 되게
-	# 속도 편차 크게 + 약한 중력 + 댐핑으로 불규칙하게 흩뿌린다(원형 X, 섬광 O).
-	var p := CPUParticles3D.new()
-	var host := _effect_host()
-	if host == null:
-		p.queue_free()
-		return
-	host.add_child(p)
-	p.global_position = global_position + Vector3(0, 0.9, 0)
-	p.one_shot = true
-	p.explosiveness = 1.0
-	p.amount = 20
-	p.lifetime = 0.35
-	p.local_coords = false
-	p.direction = Vector3(0, 0.5, 0)
-	p.spread = 130.0
-	p.initial_velocity_min = 2.5
-	p.initial_velocity_max = 13.0      # 편차 크게 → 깔끔한 원 안 됨
-	p.gravity = Vector3(0, -9.0, 0)    # 살짝 떨어지며 흩어짐(대칭 깨짐)
-	p.damping_min = 1.0
-	p.damping_max = 4.0
-	p.scale_amount_min = 0.04
-	p.scale_amount_max = 0.14
-	# 노란 섬광 → 투명으로 페이드(입자 수명 동안). vertex_color 로 입혀짐.
-	var grad := Gradient.new()
-	grad.set_color(0, Color(1.0, 0.95, 0.45, 1.0))
-	grad.set_color(1, Color(1.0, 0.8, 0.25, 0.0))
-	p.color_ramp = grad
-	var qm := QuadMesh.new()
-	qm.size = Vector2(0.13, 0.13)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_color = Color(1, 1, 1, 1)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.9, 0.3)
-	mat.emission_energy_multiplier = 1.8
-	qm.material = mat
-	p.mesh = qm
-	p.emitting = true
-	get_tree().create_timer(p.lifetime + 0.3).timeout.connect(p.queue_free)
-
 
 ## 레벨업 직후(카드 선택 완료) — 자기 중심 원형으로 적을 약하게 밀어낸다(피해 없음)
 ## + 링 연출. Main._on_upgrade_card_selected 가 호출.
@@ -726,25 +598,14 @@ func _fire_slash() -> void:
 	# 4안 — 일섬 발동 → 게이지 0으로 리셋.
 	_slash_gauge = 0.0
 	var charge_frac: float = clamp(_charge_t / max(data.max_charge_time, 0.0001), 0.0, 1.0)
-	# ⏱ Zen burst — when armed, this slash consumes the burst and pays
-	# out wide / long / heavy. We snapshot the flag now (consume_burst
-	# below clears it) so the spawned trail gets the boost too.
-	var burst_active: bool = has_zen_burst
-	# 사거리 — 젠 버스트 > 즉발(모드2 고정) > 차징(모드1 선형) 순.
+	# 사거리 — 즉발(모드2 고정) 또는 차징(모드1 선형).
 	var slash_range: float
-	if burst_active:
-		slash_range = data.max_slash_range * data.zen_burst_range_mult
-	elif _instant_slash:
+	if _instant_slash:
 		# 모드2 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 사거리 증가.
 		slash_range = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
 	else:
 		slash_range = lerp(data.min_slash_range, data.max_slash_range, charge_frac)
-	# 범위(Vector3) — 젠 버스트면 폭(x)만 배수로 키운다.
 	var ext: Vector3 = data.slash_hit_extents
-	if burst_active:
-		ext = Vector3(ext.x * data.zen_burst_width_mult, ext.y, ext.z)
-		if _zen_system != null and _zen_system.has_method("consume_burst"):
-			_zen_system.call("consume_burst")
 	_dash_start = global_position
 	_dash_end = global_position + _aim_dir.normalized() * slash_range
 	_dash_elapsed = 0.0
@@ -767,16 +628,10 @@ func _fire_slash() -> void:
 	if _sprite_rig != null:
 		_sprite_rig.set_state(SpriteRig.State.ATTACK)
 	# Spawn slash trail at the start of the dash.
-	_spawn_slash_attack(_dash_start, _dash_end, ext, burst_active)
-	# ⏱ Perfect-charge zen reward — full charge (>= 0.9 of max) feeds
-	# the meter. Burst slashes don't double-dip (they consumed the meter).
-	# 즉발 에임은 차징이 없으므로 퍼펙트 차징 보상에서 제외(공짜 Zen 방지).
-	if not burst_active and not _is_instant_aim() and _zen_system != null \
-			and charge_frac >= data.perfect_charge_threshold and _zen_system.has_method("add"):
-		_zen_system.call("add", 1)
+	_spawn_slash_attack(_dash_start, _dash_end, ext)
 	# M7 — slash SFX cue. SoundManager silently no-ops if no .ogg yet.
 	if Engine.has_singleton("SoundManager") or _has_sound_manager():
-		_play_sfx("burst_slash" if burst_active else "slash")
+		_play_sfx("slash")
 	slash_started.emit()
 	var _tb := _trigger_bus()
 	if _tb != null:
@@ -815,7 +670,7 @@ func _complete_slash_action() -> void:
 		_tb_end.call("emit", _TriggerBusScript.ON_SLASH_END, {"source": self, "position": global_position})
 	_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
 
-func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO, burst: bool = false) -> void:
+func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO) -> void:
 	var attack: SlashAttack
 	if slash_attack_scene != null:
 		attack = slash_attack_scene.instantiate() as SlashAttack
@@ -830,14 +685,6 @@ func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector
 	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
 	attack.attack_power = attack_power
-	# ⏱ Zen burst payload — SlashAttack._resolve_boss_damage checks this
-	# meta and returns 5 (vs. 1 / 3) when set. Cheap to carry on the
-	# node; auto-frees with the attack.
-	if burst:
-		attack.set_meta("zen_burst", true)
-		# Visual polish — gold + emission so the burst reads as special.
-		if attack.has_method("set_burst_visual"):
-			attack.call("set_burst_visual")
 
 func _set_state(s: int) -> void:
 	_state = s
@@ -872,8 +719,6 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 		var _tb_jd := _trigger_bus()
 		if _tb_jd != null:
 			_tb_jd.call("emit", _TriggerBusScript.ON_JUST_DODGE, {"source": self, "position": global_position, "is_perfect": true})
-		if _zen_system != null and _zen_system.has_method("add"):
-			_zen_system.call("add", 1)
 		add_slash_gauge(data.slash_gauge_on_perfect_dodge)  # 4안 — 저스트 회피 → 게이지
 		_play_sfx("perfect_dodge")
 		var pd_rig := get_tree().get_first_node_in_group("camera_rig")
@@ -898,9 +743,6 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 			sh_rig.call("shake", 0.04, 0.1)
 		_play_sfx("shield")
 		return
-	# ⏱ Zen meter drains on damage so "perfect play sustained" matters.
-	if _zen_system != null and _zen_system.has_method("drain_on_hit"):
-		_zen_system.call("drain_on_hit")
 	_play_sfx("hit")
 	if _health != null:
 		_health.take_damage(amount)
@@ -1048,28 +890,11 @@ func _on_died() -> void:
 		queue_free()
 
 
-## Callback the Boss fires when a parry resolves. Centralizes any
-## parry-triggered card effects (Counter Step today; Zen meter feeds
-## off the same hook).
-func on_parry_success() -> void:
-	if _zen_system != null and _zen_system.has_method("add"):
-		_zen_system.call("add", 1)
-	_heat = 0.0  # 패리 성공 → 열기 즉시 0%
-	_play_sfx("parry")
-
-
 ## 주술사 장판(SorcererZone)이 PC 가 장판 안에 있는 동안 매 프레임 호출 — 이동 감속.
 ## 짧은 duration 으로 갱신만 하므로 장판을 벗어나면 곧 풀린다(자연 만료).
 func apply_zone_slow(duration: float, mult: float) -> void:
 	_zone_slow_t = maxf(_zone_slow_t, duration)
 	_zone_slow_mult = clampf(mult, 0.1, 1.0)
-
-
-## Wired by Main / Testplay after building ZenSystem. Holds the ref so
-## on_parry_success / _fire_slash can poke it without a group lookup
-## per call.
-func bind_zen_system(zs: Node) -> void:
-	_zen_system = zs
 
 
 # ══════════════ 기본 공격 — 근접 부채꼴 스윙 (LB) ══════════════

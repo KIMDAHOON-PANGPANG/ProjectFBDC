@@ -17,7 +17,6 @@ mesh_path = NodePath("Visual")
 max_hp = 22
 attack_cooldown = 1.4
 fan_radius = 3.3
-parry_yellow_ratio = 0.6
 white_ratio = 0.2
 charge_telegraph_scene = ExtResource("6_chg")
 boss_tint = Color(0.85, 0.6, 1, 1)

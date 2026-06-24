@@ -96,7 +96,6 @@ const _PlayerHudScene := preload("res://scenes/ui/PlayerHud.gd")
 const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd")
 const _SaveSystemScript := preload("res://scripts/managers/SaveSystem.gd")
 const _MetaScript := preload("res://scripts/managers/MetaProgressionSystem.gd")
-const _ZenSystemScript := preload("res://scripts/managers/ZenSystem.gd")
 # Refactor pass (M8) — elite payloads + bullet-time pulled into shared
 # service nodes so Main + Testplay run identical code instead of mirrored
 # copies. Main keeps a thin `trigger_elite_effect` delegate (EliteEnemy
@@ -113,11 +112,6 @@ var _selected_cards: Array = []
 var _exp_system: Node
 var _exp_bar: CanvasLayer
 var _wave_mgr: Node
-## ⏱ Zen meter (M4 후속 도입). Tracks consecutive perfect inputs and
-## arms a "burst" flag on the PC for the next slash. HUD label below
-## reads its `zen` / `max_zen` properties.
-var _zen_system: Node
-var _zen_label: Label
 # 하단 중앙 PC HUD (초상화 + HP 바 + 스택 + 레벨 뱃지). PlayerHud 컴포넌트.
 var _player_hud: Control
 var _chapter_cleared: bool = false
@@ -702,18 +696,6 @@ func _build_chapter_systems() -> void:
 	# HealthComponent.max_hp / ExpSystem.gain_multiplier / etc.
 	if _player != null and is_instance_valid(_player):
 		_MetaScript.apply_to(_player, _exp_system)
-
-	# ⏱ Zen meter — drives the perfect-input → burst slash reward loop.
-	# Attached as a child so it lives only as long as the run does.
-	_zen_system = _ZenSystemScript.new()
-	_zen_system.name = "ZenSystem"
-	add_child(_zen_system)
-	if _player != null and is_instance_valid(_player):
-		_zen_system.bind(_player)
-	if _player != null and "bind_zen_system" in _player:
-		_player.call("bind_zen_system", _zen_system)
-	if _zen_system.has_signal("zen_changed"):
-		_zen_system.zen_changed.connect(_on_zen_changed)
 
 	# M6 — chapter-specific sky / ambient tint so each chapter reads as
 	# a distinct biome at a glance. Runs after the WorldEnvironment has
@@ -1310,16 +1292,6 @@ func _build_hud() -> void:
 	mode_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(mode_label)
 
-	# ⏱ Zen meter readout — sits below the info line, refreshed by
-	# `_on_zen_changed`. "BURST!" overrides the count when armed.
-	_zen_label = Label.new()
-	_zen_label.text = "Zen: 0 / 5"
-	_zen_label.add_theme_color_override("font_color", Color(1, 0.85, 0.4))
-	_zen_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_zen_label.add_theme_constant_override("outline_size", 4)
-	_zen_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_zen_label)
-
 	# ESC 일시정지 메뉴 + 툴 에디터(PauseOverlay) — process_mode ALWAYS 라 정지 중에도 동작.
 	add_child(_PauseOverlayScene.instantiate())
 	# 카드 빌드 뷰어 — Tab 토글 오버레이(layer=70, 정지 없음).
@@ -1332,17 +1304,3 @@ func _update_hud() -> void:
 		return
 	_kill_label.text = "Kills: %d" % _kill_count
 	# HP/열기/회피/레벨은 PlayerHud 가 자가 갱신(PC 게터 덕타이핑).
-
-
-## ⏱ Zen meter HUD refresh. Connected to ZenSystem.zen_changed at
-## chapter setup; updates the label or paints BURST! while the burst
-## flag is armed.
-func _on_zen_changed(current: int, maximum: int) -> void:
-	if _zen_label == null:
-		return
-	if _zen_system != null and "burst_armed" in _zen_system and _zen_system.burst_armed:
-		_zen_label.text = "⚡ ZEN BURST READY ⚡"
-		_zen_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
-	else:
-		_zen_label.text = "Zen: %d / %d" % [current, maximum]
-		_zen_label.add_theme_color_override("font_color", Color(1, 0.85, 0.4))

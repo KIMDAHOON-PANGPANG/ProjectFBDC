@@ -60,7 +60,6 @@ const _NORMAL_SATURATION: float = 1.12
 const _ExpSystemScript := preload("res://scripts/managers/ExpSystem.gd")
 const _UpgradeSystemScript := preload("res://scripts/managers/UpgradeSystem.gd")
 const _InfiniteGroundScript := preload("res://scripts/managers/InfiniteGround.gd")
-const _ZenSystemScript := preload("res://scripts/managers/ZenSystem.gd")
 # M8 refactor — same shared services as Main, so the debug arena runs
 # identical elite-payload + bullet-time code instead of mirrored copies.
 const _EliteEffectServiceScript := preload("res://scripts/managers/EliteEffectService.gd")
@@ -219,16 +218,6 @@ func _build_chapter_systems() -> void:
 		add_child(_exp_bar)
 		if _exp_bar.has_method("set_exp_source"):
 			_exp_bar.call("set_exp_source", _exp_system)
-
-	# ⏱ Testplay mirrors the ZenSystem wire-up so perfect parries /
-	# charges on the debug arena feed the burst just like in Main.
-	var zs := _ZenSystemScript.new()
-	zs.name = "ZenSystem"
-	add_child(zs)
-	if _player != null and is_instance_valid(_player):
-		zs.bind(_player)
-	if _player != null and "bind_zen_system" in _player:
-		_player.call("bind_zen_system", zs)
 
 	# M8 — shared bullet-time + elite-effect services (mirror Main).
 	_bullet_time_service = _BulletTimeServiceScript.new()

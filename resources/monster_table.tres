@@ -93,7 +93,6 @@ fan_angle_deg = 90.0
 armor_max = 6
 stagger_duration = 0.6
 charge_speed = 10.8
-parry_yellow_ratio = 0.7
 
 [sub_resource type="Resource" id="Resource_dedpa"]
 script = ExtResource("1_qopk3")
@@ -119,7 +118,6 @@ charge_distance = 18.0
 charge_recover = 0.8
 charge_cooldown = 1.4
 charge_width = 2.6
-parry_yellow_ratio = 0.6
 enable_white_signal = true
 white_ratio = 0.2
 
@@ -148,7 +146,6 @@ charge_damage = 3
 charge_recover = 0.7
 charge_cooldown = 1.2
 charge_width = 2.8
-parry_yellow_ratio = 0.45
 enable_white_signal = true
 white_ratio = 0.15
 enable_purple_signal = true

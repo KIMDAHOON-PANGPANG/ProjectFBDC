@@ -95,21 +95,6 @@ func _apply_size() -> void:
 	_visual.scale = Vector3(_length + _len_pad, 0.04, _width)
 
 
-## Visual polish — repaint as a Zen-burst slash (gold + strong emission)
-## so the full-width burst reads as a special strike, not just a wider
-## normal slash. Called by Player._spawn_slash_attack after add_child
-## (so `_visual` exists) when the burst flag is set.
-func set_burst_visual() -> void:
-	if _visual == null:
-		return
-	var mat := _visual.material_override as StandardMaterial3D
-	if mat == null:
-		return
-	mat.albedo_color = Color(1.0, 0.85, 0.3, 0.92)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.8, 0.25)
-	mat.emission_energy_multiplier = 2.4
-
 func _do_initial_sweep() -> void:
 	for body in get_overlapping_bodies():
 		_try_kill(body)
@@ -179,38 +164,16 @@ func _slash_hitstop() -> void:
 		rig.call("hitstop", hit_hitstop_scale, hit_hitstop_dur)
 
 
-## ⏱ Damage resolver for boss hits. Two boost paths can apply:
-##   1. Zen burst — slash was spawned with `zen_burst` meta → 5 dmg
-##      (highest priority; consumed by Player._fire_slash on spawn).
-##   2. Perfect-parry chain — PC's `parry_boost_until_msec` still in
-##      the future → 3 dmg (M2).
-## Otherwise the normal 1 dmg. We resolve here so neither Boss nor
-## Player need to know the multiplier values.
+## 보스 적중 데미지 — PC 의 PlayerData(boss_slash_damage_normal)에서 읽는다.
+## (젠 버스트 / 퍼펙트 패리 보정은 M8 S3a 에서 제거됨 — 일반 데미지만.)
 func _resolve_boss_damage() -> int:
-	# 데미지 값은 PC 의 PlayerData(boss_slash_damage_*)에서 읽는다 — CombatData/
-	# pc_combat.json 가 구동. data 가 없으면 기존 1/3/5 로 폴백.
 	var pc := get_tree().get_first_node_in_group("player")
 	var dmg_normal: int = 1
-	var dmg_parry: int = 3
-	var dmg_zen: int = 5
 	if pc != null and is_instance_valid(pc) and "data" in pc and pc.data != null:
 		var d = pc.data
 		if "boss_slash_damage_normal" in d:
 			dmg_normal = d.boss_slash_damage_normal
-		if "boss_slash_damage_parry" in d:
-			dmg_parry = d.boss_slash_damage_parry
-		if "boss_slash_damage_zen" in d:
-			dmg_zen = d.boss_slash_damage_zen
-	# Zen burst takes precedence over the parry boost.
-	if has_meta("zen_burst") and bool(get_meta("zen_burst", false)):
-		return dmg_zen
-	if pc == null or not is_instance_valid(pc):
-		return dmg_normal
-	if not ("parry_boost_until_msec" in pc):
-		return dmg_normal
-	if Time.get_ticks_msec() > pc.parry_boost_until_msec:
-		return dmg_normal
-	return dmg_parry
+	return dmg_normal
 
 func _disable_collision() -> void:
 	monitoring = false

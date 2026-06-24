@@ -94,13 +94,6 @@ func _on_hit(node: Node) -> void:
 	# 여기서 부모 PC 로 거슬러 올라간다(모드1 은 PC body 가 직접 잡힘).
 	var pc := _find_player(node)
 	if pc != null:
-		# 저스트 패리 — 패리 윈도우 중이면 피해 없이 쳐냄(소멸) + 패리 연출.
-		if pc.has_method("is_parrying") and bool(pc.call("is_parrying")):
-			if pc.has_method("on_projectile_parried"):
-				pc.call("on_projectile_parried")
-			_consumed = true
-			queue_free()
-			return
 		if pc.has_method("take_hit"):
 			pc.call("take_hit", damage)
 		_consumed = true

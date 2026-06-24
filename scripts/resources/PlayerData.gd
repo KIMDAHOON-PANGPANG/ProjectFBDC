@@ -136,13 +136,8 @@ extends Resource
 @export var overcharge_lockout: float = 1.0
 ## 퍼펙트 차징 판정 비율(0~1). 기존 _fire_slash 의 0.9 리터럴.
 @export var perfect_charge_threshold: float = 0.9
-## 젠 버스트 일섬 강화 배수. 기존 _fire_slash 의 ×3 / ×1.5 리터럴.
-@export var zen_burst_width_mult: float = 3.0
-@export var zen_burst_range_mult: float = 1.5
-## 일섬이 보스에게 주는 데미지(일반/패리보상/젠버스트). 기존 SlashAttack 의 1/3/5.
+## 일섬이 보스에게 주는 데미지(일반). 젠/패리 보정은 M8 S3a 에서 제거됨.
 @export var boss_slash_damage_normal: int = 1
-@export var boss_slash_damage_parry: int = 3
-@export var boss_slash_damage_zen: int = 5
 
 # ── 열관리(Heat) — "게임 시작 2"(즉발 일섬) 모드 전용. 럼블 열관리 게이지식. ──
 # 일섬(평타)마다 열이 오르고, 직전 일섬 후 combo_window 초 이내면 combo_mult
@@ -165,22 +160,6 @@ extends Resource
 @export var heat_decay_delay: float = 4.0
 ## 지수 감소 계수 k (per second). H *= e^(-k·dt). 클수록 빨리 식음.
 @export var heat_decay_rate: float = 1.0
-
-# ── 저스트 패리 (Parry) — "게임 시작 2" 우클릭(RMB). attack1 휘두르기로 패리
-# 윈도우 진입, 그 동안 발사체에 맞으면 피해 없이 쳐낸다. ──
-@export_group("Parry (저스트 패리 · 게임 시작2 RMB)")
-## 패리 유효 시간(초) — 휘두른 뒤 이 동안 발사체를 쳐낼 수 있다.
-@export var parry_window: float = 0.2
-## 재사용 대기(초) — 연타 방지.
-@export var parry_cooldown: float = 0.45
-## attack1 휘두르기 연출 길이(초) — 스프라이트 1회 재생 시간.
-@export var parry_anim_dur: float = 0.3
-## 가드백 — 패리 성공 시 PC 가 뒤로(에임 반대) 짧게 밀리는 연출. speed=초기속도(m/s), dur=지속(초).
-@export var parry_guardback_speed: float = 6.0
-@export var parry_guardback_dur: float = 0.16
-## 패리 히트스탑(순간 멈칫) — scale=느려지는 배수(작을수록 강함), dur=시간(초). 멜리(0.05/0.045)보다 확실히 강하게.
-@export var parry_hitstop_scale: float = 0.035
-@export var parry_hitstop_dur: float = 0.22
 
 # ── 레벨업 넉백 (Level-up Pushback) — 카드 선택 직후 자기 중심 원형으로 적을
 # 약하게 밀어낸다(피해 없음). ──
