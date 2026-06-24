@@ -458,6 +458,25 @@ func _spawn_boss_3() -> void:
 	_spawn_boss_scene(boss_scene_3)
 
 
+## 보스 소환 요청 → 보스 주변 링에 근접 몹 count 마리 스폰(Main._on_boss_summon 미러).
+func _on_boss_summon(origin: Vector3, count: int) -> void:
+	if not is_inside_tree():
+		return
+	if melee_enemy_scene == null:
+		return
+	for i in count:
+		var inst := melee_enemy_scene.instantiate()
+		_inherit_bullettime(inst)
+		_enemies_root.add_child(inst)
+		if inst is Node3D:
+			var ang: float = TAU * (float(i) + randf()) / float(max(count, 1))
+			var r: float = 3.0  # summon_ring_radius 기본값 미러
+			var pos := origin + Vector3(cos(ang) * r, 0.0, sin(ang) * r)
+			pos.y = origin.y
+			(inst as Node3D).global_position = pos
+		_wire_enemy_lifecycle(inst)
+
+
 func _spawn_boss_scene(scene: PackedScene) -> void:
 	if scene == null:
 		return
@@ -465,6 +484,8 @@ func _spawn_boss_scene(scene: PackedScene) -> void:
 	_enemies_root.add_child(inst)
 	if inst is Node3D:
 		(inst as Node3D).global_position = _pick_random_spawn()
+	if inst.has_signal("summon_requested"):
+		inst.summon_requested.connect(_on_boss_summon)
 	_wire_enemy_lifecycle(inst)
 
 ## --- UI: right-side button panel ---

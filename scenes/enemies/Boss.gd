@@ -7,6 +7,7 @@ extends CharacterBody3D
 ## Owner (Main) listens for `boss_defeated` to invoke the chapter-clear flow.
 
 signal boss_defeated
+signal summon_requested(origin: Vector3, count: int)
 
 ## 멧돼지 AI 상태 — 추적 / 돌진 호밍 윈드업 / 돌진 / 회복.
 enum BState { CHASE, WINDUP, CHARGE, RECOVER }
@@ -64,6 +65,14 @@ const _HOLRIM_CAP := 8.0
 ## 돌진 레인 데칼 — Boss.tscn 에 ChargeTelegraph.tscn 주입.
 @export var charge_telegraph_scene: PackedScene
 
+@export_group("Summon (근접 몹 소환 — 돌진과 번갈아)")
+## 소환 주기(초). 이 간격마다 보스가 근접 몹 소환을 요청한다.
+@export var summon_interval: float = 5.0
+## 한 번에 소환할 근접 몹 수.
+@export var summon_count: int = 3
+## 소환 몹이 놓이는 보스 주변 링 반경(유닛).
+@export var summon_ring_radius: float = 3.0
+
 @export_group("Variant Signal")
 ## 레거시 보스 변형 식별용 비율(WHITE 시그널 — 현재 시각 구분만, 패리 없음).
 ## CombatData 가 monster_table.tres 의 white_ratio 를 브리지한다.
@@ -107,6 +116,7 @@ var _charge_t: float = 0.0
 var _charge_start: Vector3 = Vector3.ZERO
 var _charge_hit_done: bool = false
 var _charge_decal: Node3D = null
+var _summon_t: float = 0.0
 ## 머리 위 상태 아이콘 스트립(표식/버프 폴링 표시). _ready 에서 인스턴스.
 var _status_strip: Node = null
 
@@ -170,6 +180,8 @@ func _ready() -> void:
 	if _cs != null and _cs.shape is BoxShape3D:
 		_boss_half_xz = (_cs.shape as BoxShape3D).size.x * 0.5 * scale.x
 
+	_summon_t = summon_interval
+
 
 ## 머리 위 상태 아이콘 폴링 — 보스 meta(holrim_marks 등)를 매 프레임 읽어 스트립 갱신.
 func _poll_status() -> void:
@@ -211,6 +223,8 @@ func _physics_process(delta: float) -> void:
 			velocity = Vector3.ZERO
 			move_and_slide()
 			return
+
+	_tick_summon(delta)
 
 	# ── 멧돼지 AI: 추적 → 돌진(호밍 윈드업 → 고정 → 돌진) → 잠시 정지 ──
 	match _bstate:
@@ -304,6 +318,22 @@ func _state_charge(delta: float) -> void:
 	var max_t: float = charge_distance / maxf(charge_speed, 1.0) + 0.4  # 벽 막힘 등 안전 캡
 	if traveled >= charge_distance or _charge_t >= max_t:
 		_end_charge()
+
+## 소환 타이머 — summon_interval 마다, 돌진/윈드업 중이 아닐 때(CHASE/RECOVER)만
+## 소환을 요청한다. 이렇게 게이트하면 '소환 → 돌진 → (회복) → 소환' 으로 자연히
+## 번갈아 나온다(돌진 중엔 타이머가 차도 발동을 미뤄 겹침을 막음).
+func _tick_summon(delta: float) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	_summon_t -= delta
+	if _summon_t > 0.0:
+		return
+	# 돌진/윈드업 중이면 발동 보류(타이머는 0 이하로 유지 → CHASE/RECOVER 복귀 즉시 발동).
+	if _bstate == BState.WINDUP or _bstate == BState.CHARGE:
+		return
+	_summon_t = summon_interval
+	summon_requested.emit(global_position, summon_count)
+
 
 func _end_charge() -> void:
 	_bstate = BState.RECOVER

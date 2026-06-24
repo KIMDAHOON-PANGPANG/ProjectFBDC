@@ -1017,6 +1017,26 @@ func _seed_initial_mobs() -> void:
 			(inst as Node3D).global_position = _edge_spawn_forward()
 		_wire_enemy_lifecycle(inst)
 
+## 보스 소환 요청 → 보스 주변 링에 근접 몹 count 마리 스폰.
+## 일반 melee 경로(_wire_enemy_lifecycle/_inherit_bullettime/HP 스케일)를 그대로 재사용한다.
+func _on_boss_summon(origin: Vector3, count: int) -> void:
+	if not is_inside_tree():
+		return
+	if melee_enemy_scene == null:
+		return
+	for i in count:
+		var inst := melee_enemy_scene.instantiate()
+		_inherit_bullettime(inst)
+		_enemies_root.add_child(inst)
+		if inst is Node3D:
+			var ang: float = TAU * (float(i) + randf()) / float(max(count, 1))
+			var r: float = 3.0  # summon_ring_radius 기본값 미러
+			var pos := origin + Vector3(cos(ang) * r, 0.0, sin(ang) * r)
+			pos.y = origin.y
+			(inst as Node3D).global_position = pos
+		_wire_enemy_lifecycle(inst)
+
+
 ## One-shot at elite_time — ★ 원거리 기반 엘리트 1마리 스폰(S9).
 func _chapter_spawn_elites() -> void:
 	var scene: PackedScene = load("res://scenes/enemies/RangedEnemy.tscn")
@@ -1046,6 +1066,8 @@ func _chapter_spawn_boss() -> void:
 		(boss as Node3D).global_position = _pick_offscreen_spawn(10.0, 14.0)
 	if boss.has_signal("boss_defeated"):
 		boss.boss_defeated.connect(_on_boss_defeated)
+	if boss.has_signal("summon_requested"):
+		boss.summon_requested.connect(_on_boss_summon)
 	_wire_enemy_lifecycle(boss)
 
 ## Spawn a melee mob as LV2 — overrides data with the LV2 resource (HP 2)
