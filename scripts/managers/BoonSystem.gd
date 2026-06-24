@@ -7,6 +7,17 @@ extends RefCounted
 
 const _JSON := "res://data/boons.json"
 
+const YOKAI_COLORS := {
+	"GUMIHO": Color("ff5fb0"),
+	"DOKEBI": Color("ffc233"),
+	"MULGWISHIN": Color("2f9fe0"),
+	"JEOSEUNG": Color("7b5cf0"),
+	"CHEONYEO": Color("d11f3a"),
+}
+
+static func yokai_color(y: String) -> Color:
+	return YOKAI_COLORS.get(y, Color(0.7, 0.7, 0.7))
+
 static var BOONS: Array = []
 static var _by_id: Dictionary = {}
 static var _by_yokai: Dictionary = {}

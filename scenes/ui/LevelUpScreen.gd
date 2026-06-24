@@ -11,8 +11,28 @@ extends CanvasLayer
 
 signal card_selected(card_id: String)
 
+const _BoonSystem := preload("res://scripts/managers/BoonSystem.gd")
+
+const TYPE_ICONS := {
+	"질주": "»",
+	"공격": "⚔",
+	"타격": "✦",
+	"소환": "◈",
+	"패시브": "●",
+	"권능": "◎",
+}
+
+const TYPE_TOOLTIPS := {
+	"질주": "질주 — 회피(대시)에 얹는 효과",
+	"공격": "공격 — 기본 공격(LB) 강화",
+	"타격": "타격 — LB를 N회 적중해야 발동",
+	"소환": "소환 — 처치 시 확률로 PC를 돕는 AI 소환",
+	"패시브": "패시브 — 상시 효과",
+	"권능": "권능 — 오라(주변 범위 지속)",
+}
+
 @export var overlay_color: Color = Color(0, 0, 0, 0.55)
-@export var card_size: Vector2 = Vector2(220, 280)
+@export var card_size: Vector2 = Vector2(240, 300)
 @export var card_gap: float = 24.0
 @export var card_bg: Color = Color(0.18, 0.18, 0.22, 1.0)
 @export var card_hover: Color = Color(0.28, 0.32, 0.42, 1.0)
@@ -40,7 +60,7 @@ func _build_overlay() -> void:
 	add_child(_cards_root)
 
 ## Owner calls this after instantiating, with the 3 cards to display.
-## Each entry: { id, name, desc }.
+## Each entry: { id, name, desc, yokai, skill_type, rarity, rarity_label }.
 func show_cards(cards: Array) -> void:
 	_cards_data = cards
 	# Clear any previous cards (defensive — usually we're fresh).
@@ -60,31 +80,97 @@ func _build_card_button(card_dict: Dictionary, index: int) -> Button:
 	btn.size = card_size
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	btn.text = ""
+	btn.clip_contents = true
+
 	var name_str := String(card_dict.get("name", "?"))
 	var rarity_label := String(card_dict.get("rarity_label", ""))
 	var yokai := String(card_dict.get("yokai", ""))
 	var desc_str := String(card_dict.get("desc", ""))
-	btn.text = "%s\n[%s · %s]\n\n%s" % [name_str, rarity_label, yokai, desc_str]
-	btn.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	btn.add_theme_color_override("font_color_hover", Color(1, 1, 1, 1))
-	btn.add_theme_font_size_override("font_size", 16)
+	var sk := String(card_dict.get("skill_type", ""))
+
+	var key_col: Color = _BoonSystem.yokai_color(yokai)
+
+	# border width by rarity (등급=굵기, 색과 분리)
+	var border_w: int = 2
+	if rar == "master" or rar == "legend":
+		border_w = 4
+	elif rar == "uniq":
+		border_w = 3
+
 	var style := StyleBoxFlat.new()
 	style.bg_color = rare_card_bg if is_rare else card_bg
-	if is_rare:
-		style.border_color = rare_card_border
-		style.border_width_left = 2
-		style.border_width_right = 2
-		style.border_width_top = 2
-		style.border_width_bottom = 2
+	style.border_color = key_col
+	style.border_width_left = border_w
+	style.border_width_right = border_w
+	style.border_width_top = border_w
+	style.border_width_bottom = border_w
 	style.corner_radius_top_left = 8
 	style.corner_radius_top_right = 8
 	style.corner_radius_bottom_left = 8
 	style.corner_radius_bottom_right = 8
 	btn.add_theme_stylebox_override("normal", style)
+
 	var hover_style := style.duplicate() as StyleBoxFlat
 	hover_style.bg_color = rare_card_hover if is_rare else card_hover
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
+
+	# 카드명 Label (귀신 키컬러)
+	var name_lbl := Label.new()
+	name_lbl.text = name_str
+	name_lbl.add_theme_color_override("font_color", key_col)
+	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_lbl.position = Vector2(8, 10)
+	name_lbl.size = Vector2(card_size.x - 16, 30)
+	btn.add_child(name_lbl)
+
+	# 등급 뱃지 Label (회백색 — 귀신색과 분리)
+	var rar_lbl := Label.new()
+	rar_lbl.text = rarity_label
+	rar_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	rar_lbl.add_theme_font_size_override("font_size", 12)
+	rar_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rar_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rar_lbl.position = Vector2(8, 42)
+	rar_lbl.size = Vector2(card_size.x - 16, 18)
+	btn.add_child(rar_lbl)
+
+	# 설명 Label (autowrap 핵심, 하단 타입칸 44px 공간 확보)
+	var desc_lbl := Label.new()
+	desc_lbl.text = desc_str
+	desc_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	desc_lbl.add_theme_font_size_override("font_size", 14)
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desc_lbl.position = Vector2(12, 72)
+	desc_lbl.size = Vector2(card_size.x - 24, card_size.y - 72 - 44)
+	btn.add_child(desc_lbl)
+
+	# 타입 칸/아이콘 + 툴팁 (우하단)
+	var type_box := Panel.new()
+	type_box.custom_minimum_size = Vector2(40, 32)
+	type_box.size = Vector2(40, 32)
+	type_box.position = Vector2(card_size.x - 48, card_size.y - 40)
+	type_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	type_box.tooltip_text = TYPE_TOOLTIPS.get(sk, sk)
+
+	var icon_lbl := Label.new()
+	icon_lbl.text = TYPE_ICONS.get(sk, sk.substr(0, 1))
+	icon_lbl.add_theme_font_size_override("font_size", 18)
+	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_lbl.position = Vector2.ZERO
+	icon_lbl.size = Vector2(40, 32)
+	type_box.add_child(icon_lbl)
+	btn.add_child(type_box)
+
 	btn.pressed.connect(_on_card_pressed.bind(index))
 	return btn
 
@@ -94,9 +180,11 @@ func _layout() -> void:
 	var h := float(vp.y)
 	_overlay.position = Vector2.ZERO
 	_overlay.size = Vector2(w, h)
-	# Center 3 cards horizontally.
+	# Center cards horizontally.
 	var n := _cards_root.get_child_count()
-	var total_w: float = n * card_size.x + (n - 1) * card_gap if n > 0 else 0.0
+	if n <= 0:
+		return
+	var total_w: float = n * card_size.x + (n - 1) * card_gap
 	var start_x: float = (w - total_w) * 0.5
 	var y: float = (h - card_size.y) * 0.5
 	for i in range(n):
