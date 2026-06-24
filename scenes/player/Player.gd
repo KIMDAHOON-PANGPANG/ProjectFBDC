@@ -25,6 +25,8 @@ enum State { IDLE, AIMING, DASHING, COOLDOWN, EVADING }
 const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 ## 메인 메뉴에서 고른 컨트롤 모드(즉발 일섬 여부)를 씬 전환 너머로 읽는다.
 const _GameConfigScript := preload("res://scripts/managers/GameConfig.gd")
+## 은혜=트리거×컴포넌트 이벤트 키 참조.
+const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
@@ -65,6 +67,10 @@ var _evade_cd: float = 0.0
 ## 전부(0) 소진되면 _evade_refill_t(=evade_refill_time) 후 한 번에 가득 찬다.
 var _evade_stacks: int = 2
 var _evade_refill_t: float = 0.0
+## On_Slash_Right_After_Dash 판정용 — 회피 종료 시각(ms). 초기값은 충분히 과거.
+var _last_evade_end_msec: int = -100000
+## On_Dash_Pass_Enemy 중복 방지 캐시 — 회피 시작 시 clear, 회피 중 적 instance_id 기록.
+var _dash_passed: Dictionary = {}
 
 # Post-hit i-frame timer. While > 0, take_hit is suppressed. 4안 — 0.5s.
 # 값은 data.hit_iframe 으로 이관(CombatData/pc_combat.json 구동). iframe_bonus
@@ -772,6 +778,13 @@ func _fire_slash() -> void:
 	if Engine.has_singleton("SoundManager") or _has_sound_manager():
 		_play_sfx("burst_slash" if burst_active else "slash")
 	slash_started.emit()
+	var _tb := _trigger_bus()
+	if _tb != null:
+		_tb.call("emit", _TriggerBusScript.ON_SLASH_START, {"source": self, "position": global_position, "charge_frac": charge_frac})
+		if charge_frac >= 1.0:
+			_tb.call("emit", _TriggerBusScript.ON_SLASH_CHARGED, {"source": self, "position": global_position, "charge_frac": charge_frac})
+		if Time.get_ticks_msec() - _last_evade_end_msec <= 500:
+			_tb.call("emit", _TriggerBusScript.ON_SLASH_RIGHT_AFTER_DASH, {"source": self, "position": global_position})
 	# 모드2(즉발 일섬) — 자원 방식에 따라: 고정 쿨다운(락 세팅) 또는 열기(누적+탈진).
 	if _instant_slash:
 		if _is_cooldown_resource():
@@ -797,6 +810,9 @@ func _update_dash(delta: float) -> void:
 func _complete_slash_action() -> void:
 	_cooldown_t = data.slash_cooldown
 	slash_finished.emit()
+	var _tb_end := _trigger_bus()
+	if _tb_end != null:
+		_tb_end.call("emit", _TriggerBusScript.ON_SLASH_END, {"source": self, "position": global_position})
 	_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
 
 func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO, burst: bool = false) -> void:
@@ -853,6 +869,9 @@ func take_hit(amount: int = 1, do_knockback: bool = true) -> void:
 			and _evade_elapsed <= data.perfect_dodge_window:
 		_perfect_dodge_fired = true
 		perfect_dodge.emit()
+		var _tb_jd := _trigger_bus()
+		if _tb_jd != null:
+			_tb_jd.call("emit", _TriggerBusScript.ON_JUST_DODGE, {"source": self, "position": global_position, "is_perfect": true})
 		if _zen_system != null and _zen_system.has_method("add"):
 			_zen_system.call("add", 1)
 		add_slash_gauge(data.slash_gauge_on_perfect_dodge)  # 4안 — 저스트 회피 → 게이지
@@ -963,7 +982,11 @@ func _check_evade_start() -> void:
 	# (한 칸당 evade_refill_time 초).
 	_evade_stacks -= 1
 	_perfect_dodge_fired = false  # ⏱ fresh evade — re-arm the perfect-dodge reward
+	_dash_passed.clear()
 	_set_state(State.EVADING)
+	var _tb_dash := _trigger_bus()
+	if _tb_dash != null:
+		_tb_dash.call("emit", _TriggerBusScript.ON_DASH_START, {"source": self, "position": global_position})
 	if _sprite_rig != null:
 		_sprite_rig.set_facing_vec(dir)
 	# Nudge the camera so it trails the dash briefly.
@@ -981,7 +1004,22 @@ func _update_evade(delta: float) -> void:
 	# satisfying afterimage even on a flat plane.
 	if _dust_emitter != null:
 		_dust_emitter.emitting = true
+	# On_Dash_Pass_Enemy 간이 판정 — 회피 중 PC 반경 1.2m 안 적을 관통하면 발행.
+	var _tb_pass := _trigger_bus()
+	if _tb_pass != null:
+		for _e in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(_e) or not (_e is Node3D):
+				continue
+			var _eid: int = (_e as Node).get_instance_id()
+			if _dash_passed.has(_eid):
+				continue
+			var _ed: Vector3 = (_e as Node3D).global_position - global_position
+			_ed.y = 0.0
+			if _ed.length() <= 1.2:
+				_dash_passed[_eid] = true
+				_tb_pass.call("emit", _TriggerBusScript.ON_DASH_PASS_ENEMY, {"source": self, "target": _e, "position": (_e as Node3D).global_position})
 	if t >= 1.0:
+		_last_evade_end_msec = Time.get_ticks_msec()
 		_set_state(State.IDLE)
 
 ## 이어서 하기(사망 화면) — 같은 노드를 되살린다: 풀 HP + 2초 무적 + 스프라이트 복원.
@@ -1219,6 +1257,9 @@ func evade_refill_frac() -> float:
 # Cheap wrappers around the SoundManager Autoload. Guards keep these
 # safe in scenes that haven't booted the autoload yet (Testplay run
 # from F6 doesn't bypass it, but the guard costs nothing).
+
+func _trigger_bus() -> Node:
+	return get_node_or_null("/root/TriggerBus")
 
 func _has_sound_manager() -> bool:
 	# Autoload nodes live as children of /root. Look up by name.

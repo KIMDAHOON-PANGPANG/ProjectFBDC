@@ -1,6 +1,8 @@
 class_name SlashAttack
 extends Area3D
 
+const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
+
 ## Hit-trail spawned along the dash path. Any enemy whose hurtbox overlaps
 ## this volume during its lifetime takes lethal damage (death anim).
 ## After lifetime expires, the visual fades out and the node frees itself.
@@ -142,15 +144,31 @@ func _try_kill(node: Node) -> void:
 				target.call("take_hit", attack_power)
 				_slash_hitstop()  # 잡몹/엘리트 쓸고 갈 때 탁탁 걸리는 미세 히트스탑
 			hit_enemy.emit(target)
+			_emit_slash_hit(target)
 			return
 		var hp := target.get_node_or_null("HealthComponent")
 		if hp != null and hp is HealthComponent:
 			(hp as HealthComponent).take_damage(999)
 			_slash_hitstop()
 			hit_enemy.emit(target)
+			_emit_slash_hit(target)
 			return
 		target = target.get_parent()
 
+
+func _trigger_bus() -> Node:
+	return get_node_or_null("/root/TriggerBus")
+
+func _emit_slash_hit(target: Node) -> void:
+	var tb := _trigger_bus()
+	if tb == null:
+		return
+	var pos: Vector3 = (target as Node3D).global_position if (target is Node3D) else global_position
+	var src := get_tree().get_first_node_in_group("player")
+	var ctx := {"target": target, "position": pos, "source": src}
+	tb.call("emit", _TriggerBusScript.ON_SLASH_HIT, ctx)
+	tb.call("emit", _TriggerBusScript.ON_KILL_VIA_SLASH, ctx)
+	# TODO(S5): 표식 도입 후 target 이 마크됐으면 ON_HIT_MARKED_ENEMY emit. 현재 표식 시스템 없어 미발행.
 
 ## ⏱ 적중 미세 히트스탑 — 카메라 rig 의 hitstop 을 짧게 호출. 적 연속 적중이면 갱신되며 "탁탁".
 func _slash_hitstop() -> void:
