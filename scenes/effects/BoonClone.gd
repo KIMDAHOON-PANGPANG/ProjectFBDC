@@ -17,6 +17,8 @@ var _slash_cd: float = 0.0
 var _slash_interval: float = 1.0
 var _dead: bool = false
 var _mat: StandardMaterial3D
+## 틴트 — 기본 금황(도깨비). params.tint(Color) 로 저승사자 보라 등 주입.
+var _tint: Color = GOLD
 
 
 func init_clone(player: Node, params: Dictionary, slot_angle: float) -> void:
@@ -24,6 +26,8 @@ func init_clone(player: Node, params: Dictionary, slot_angle: float) -> void:
 	_lifetime = maxf(float(params.get("lifetime", 6.0)), 0.5)
 	_range = maxf(float(params.get("range", 3.0)), 0.5)
 	_damage = int(params.get("damage", 1))
+	if params.get("tint") is Color:
+		_tint = params.get("tint")
 	# 분신마다 PC 주변 다른 각도에 자리잡음.
 	var r := 1.3
 	_offset = Vector3(cos(slot_angle) * r, 0.9, sin(slot_angle) * r)
@@ -41,9 +45,9 @@ func _build_visual() -> void:
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_mat.albedo_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.55)
+	_mat.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.55)
 	_mat.emission_enabled = true
-	_mat.emission = GOLD
+	_mat.emission = _tint
 	_mat.emission_energy_multiplier = 2.0
 	mi.material_override = _mat
 	add_child(mi)
@@ -105,9 +109,9 @@ func _spawn_slash_vfx(origin: Vector3, aim: Vector3) -> void:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.albedo_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.6)
+	m.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.6)
 	m.emission_enabled = true
-	m.emission = GOLD
+	m.emission = _tint
 	m.emission_energy_multiplier = 2.2
 	mi.material_override = m
 	add_child(mi)

@@ -348,6 +348,17 @@ func _build() -> void:
 	t_stat.add_child(_btn("발목잡는손 (물손 속박)", func(): _equip_boon("mulgwishin_grasp_root")))
 	t_stat.add_child(_btn("심연의아가리 (대형 소용돌이)", func(): _equip_boon("mulgwishin_abyss_maw")))
 
+	# 저승사자 은혜 장착(능동 FX 테스트) — 유일(uniq) 등급 즉시 장착.
+	t_stat.add_child(_title("저승사자 은혜 장착 (uniq)"))
+	t_stat.add_child(_btn("명부혼불 (혼불 유도)", func(): _equip_boon("jeoseung_soul_homing")))
+	t_stat.add_child(_btn("차사사슬파편 (회피 속박)", func(): _equip_boon("jeoseung_chain_shard")))
+	t_stat.add_child(_btn("거두는 사자불 (추격불 펫)", func(): _equip_boon("jeoseung_summon_saja")))
+	t_stat.add_child(_btn("저승곡사자 (분신 에코)", func(): _equip_boon("jeoseung_clone_saja")))
+	t_stat.add_child(_btn("명부낙인 혼불처형 (처형)", func(): _equip_boon("jeoseung_execute")))
+	t_stat.add_child(_btn("황천 인도등불 (등불 존)", func(): _equip_boon("jeoseung_lantern")))
+	t_stat.add_child(_btn("명부의 영역 (결계 틱딜)", func(): _equip_boon("jeoseung_realm")))
+	t_stat.add_child(_btn("구혼사슬 (다수 견인)", func(): _equip_boon("jeoseung_soul_chain")))
+
 	# 현재 스탯 탭 — 읽기 전용(튜닝 반영된 최종 적용값)
 	var t_cur := _tab("현재")
 	tabs.add_child(t_cur)

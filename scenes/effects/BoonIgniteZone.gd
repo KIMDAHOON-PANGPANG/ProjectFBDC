@@ -21,6 +21,8 @@ var _dying: bool = false
 var _mat: StandardMaterial3D
 var _proj_group: String = "boon_proj"
 var _proj_cap: int = 24
+## 틴트 — 기본 금황(도깨비). params.tint(Color) 로 저승사자 보라(등불/결계) 등 주입.
+var _tint: Color = GOLD
 
 
 func init_zone(center: Vector3, params: Dictionary, proj_group: String, proj_cap: int) -> void:
@@ -30,6 +32,8 @@ func init_zone(center: Vector3, params: Dictionary, proj_group: String, proj_cap
 	_dot_damage = int(params.get("dot_damage", 1))
 	_foxfire_interval = maxf(float(params.get("foxfire_interval", 0.8)), 0.2)
 	_foxfire_speed = float(params.get("foxfire_speed", 12.0))
+	if params.get("tint") is Color:
+		_tint = params.get("tint")
 	_proj_group = proj_group
 	_proj_cap = proj_cap
 	global_position = Vector3(center.x, center.y + 0.06, center.z)
@@ -44,9 +48,9 @@ func _build_disc() -> void:
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_mat.albedo_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.32)
+	_mat.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.32)
 	_mat.emission_enabled = true
-	_mat.emission = GOLD
+	_mat.emission = _tint
 	_mat.emission_energy_multiplier = 1.5
 	mi.material_override = _mat
 	add_child(mi)
@@ -62,9 +66,9 @@ func _build_disc() -> void:
 	var rmat := StandardMaterial3D.new()
 	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	rmat.albedo_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.7)
+	rmat.albedo_color = Color(_tint.r, _tint.g, _tint.b, 0.7)
 	rmat.emission_enabled = true
-	rmat.emission = GOLD
+	rmat.emission = _tint
 	rmat.emission_energy_multiplier = 2.2
 	ring.material_override = rmat
 	ring.position.y = 0.02
@@ -120,7 +124,7 @@ func _fire_foxfire() -> void:
 	pr.add_to_group(_proj_group)
 	host.add_child(pr)
 	pr.call("init_proj", edge, fire_dir, {
-		"speed": _foxfire_speed, "damage": 1, "radius": 0.8, "tint": GOLD,
+		"speed": _foxfire_speed, "damage": 1, "radius": 0.8, "tint": _tint,
 	}, true, tgt)
 
 

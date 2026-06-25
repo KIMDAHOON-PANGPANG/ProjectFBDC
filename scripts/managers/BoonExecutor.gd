@@ -35,6 +35,10 @@ const PINK := Color(1.0, 0.37, 0.69)
 const GOLD := Color(1.0, 0.76, 0.2)
 ## 물귀신 물빛 틴트(공통, #2f9fe0).
 const WATER := Color(0.184, 0.624, 0.878)
+## 저승사자 보라 틴트(공통, #7b5cf0).
+const PURPLE := Color(0.482, 0.361, 0.941)
+## 명부 낙인(nakin_marks) 가시화 정규화 상한(아이콘 게이지 풀 = master cap 8).
+const NAKIN_CAP := 8
 
 ## FX 노드 그룹 + 동시 상한(성능 안전망).
 const GRP_ZONE := "boon_fx_zone"
@@ -126,6 +130,11 @@ func _on_slash_hit(ctx: Dictionary) -> void:
 		func(i, params): _water_grab(i, ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "WATER_PILLAR",
 		func(i, params): _water_pillar(i, ctx, params))
+	# ── 저승사자 ──
+	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "SOUL_HOMING",
+		func(i, params): _soul_homing(i, ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "EXECUTE",
+		func(i, params): _soul_execute(i, ctx, params))
 
 
 func _on_kill_via_slash(ctx: Dictionary) -> void:
@@ -142,6 +151,11 @@ func _on_kill_via_slash(ctx: Dictionary) -> void:
 	# ── 물귀신 ──
 	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "SUMMON_DROWNED",
 		func(_i, params): _summon_drowned(ctx, params))
+	# ── 저승사자 ──
+	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "SUMMON_SAJA",
+		func(_i, params): _summon_saja(ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "LANTERN_ZONE",
+		func(_i, params): _lantern_zone(ctx, params))
 
 
 func _on_dash_pass_enemy(ctx: Dictionary) -> void:
@@ -149,10 +163,13 @@ func _on_dash_pass_enemy(ctx: Dictionary) -> void:
 		func(i, params): _apply_mark(i, ctx, params))
 
 
-## 회피(대시) 종료 — 물귀신 발목잡는손(GRASP_ROOT).
+## 회피(대시) 종료 — 물귀신 발목잡는손(GRASP_ROOT) / 저승사자 차사사슬파편(CHAIN_SHARD).
 func _on_dash(ctx: Dictionary) -> void:
 	_for_each_effect(_TriggerBusScript.ON_DASH, "GRASP_ROOT",
 		func(_i, params): _grasp_root(ctx, params))
+	# ── 저승사자 ──
+	_for_each_effect(_TriggerBusScript.ON_DASH, "CHAIN_SHARD",
+		func(_i, params): _chain_shard(ctx, params))
 
 
 func _on_slash_end(ctx: Dictionary) -> void:
@@ -166,6 +183,11 @@ func _on_slash_end(ctx: Dictionary) -> void:
 	# ── 물귀신 ──
 	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "WHIRLPOOL",
 		func(_i, params): _whirlpool(ctx, params))
+	# ── 저승사자 ──
+	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "CLONE_SAJA",
+		func(_i, params): _clone_saja(ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "SOUL_CHAIN",
+		func(_i, params): _soul_chain(ctx, params))
 
 
 func _on_slash_charged(ctx: Dictionary) -> void:
@@ -184,6 +206,9 @@ func _on_just_dodge(ctx: Dictionary) -> void:
 		func(_i, params): _water_zone(ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "ABYSS_MAW",
 		func(_i, params): _abyss_maw(ctx, params))
+	# ── 저승사자 ──
+	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "REALM",
+		func(_i, params): _realm(ctx, params))
 
 
 func _on_mark_full(ctx: Dictionary) -> void:
@@ -1143,6 +1168,395 @@ func _spawn_water_swirl(center: Vector3, radius: float) -> void:
 	t.tween_property(mi, "rotation:y", PI, 0.4)
 	t.tween_property(mat, "albedo_color:a", 0.0, 0.4)
 	t.chain().tween_callback(mi.queue_free)
+
+
+# ══════════════ 저승사자 — 명부 낙인(nakin) 공용 ══════════════
+
+## 명부 낙인 누적 — 구미호 holrim / 물귀신 wet 와 같은 int 누적 표식.
+## cap clamp + 보라 인장 플래시. cap 전이 순간 1회 파편 버스트.
+func _add_nakin(target: Node, add: int, cap: int) -> void:
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return
+	if (target as Node).is_in_group("boss"):
+		return
+	var c := cap if cap > 0 else NAKIN_CAP
+	var cur := int(target.get_meta("nakin_marks", 0))
+	var nv: int = min(cur + add, c)
+	target.set_meta("nakin_marks", nv)
+	_spawn_mark_flash_color(target, PURPLE)
+	if cur < c and nv >= c:
+		_spawn_shard_burst(target, 1.4)
+
+
+## 반경 안 적 중 nakin 이 가장 많은 적(최대) 반환(없으면 null). EXECUTE 시드 보강용.
+func _nearest_enemy_purple(pos: Vector3) -> Node:
+	var best: Node = null
+	var best_d: float = 99999.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+# ══════════════ 저승사자 — SOUL_HOMING(명부혼불) ══════════════
+
+## 일섬 적중 시 보라 혼불을 가장 가까운 '다음 적'에게 곡선 호밍 발사 + 낙인.
+func _soul_homing(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:
+	var per_hits := int(params.get("per_hits", 1))
+	if per_hits > 1:
+		var k := boon_index + 400000  # 도메인 분리(다른 카운터와 충돌 방지).
+		_hit_counters[k] = int(_hit_counters.get(k, 0)) + 1
+		if _hit_counters[k] < per_hits:
+			return
+		_hit_counters[k] = 0
+	var count := int(params.get("count", 1))
+	var nakin_add := int(params.get("nakin_add", 1))
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var origin: Vector3 = (_player as Node3D).global_position + Vector3(0, 0.9, 0)
+	var hit_target = ctx.get("target", null)
+	var seed_target := _nearest_enemy_excluding(origin, hit_target)
+	if seed_target == null:
+		seed_target = hit_target
+	# 시드에 즉시 낙인(혼불 적중 전에라도 낙인 누적 — EXECUTE 와 연계).
+	if seed_target != null:
+		_add_nakin(seed_target, nakin_add, NAKIN_CAP)
+	var fox_params := {
+		"speed": float(params.get("speed", 12.0)),
+		"damage": int(params.get("damage", 1)),
+		"radius": float(params.get("radius", 0.9)),
+		"tint": PURPLE,
+	}
+	for k in range(count):
+		if get_tree().get_nodes_in_group(GRP_PROJ).size() >= PROJ_CAP:
+			break
+		var pr := _FoxfireScript.new() as Node3D
+		pr.add_to_group(GRP_PROJ)
+		host.add_child(pr)
+		var ang := TAU * float(k) / float(max(count, 1)) + randf() * 0.4
+		var fire_dir := Vector3(cos(ang), 0.0, sin(ang))
+		pr.call("init_proj", origin, fire_dir, fox_params, true, seed_target)
+
+
+# ══════════════ 저승사자 — CHAIN_SHARD(차사사슬파편) ══════════════
+
+## 회피 종료 시 PC 발밑 반경 적 속박 + 소량 피해 + 낙인 + 보라 파편 디스크.
+func _chain_shard(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		if _player is Node3D:
+			pos = (_player as Node3D).global_position
+		else:
+			return
+	var radius := maxf(float(params.get("radius", 3.0)), 0.5)
+	var root_dur := float(params.get("root_duration", 0.8))
+	var damage := int(params.get("damage", 1))
+	var nakin_add := int(params.get("nakin_add", 1))
+	# 보라 사슬 파편 연출(GraspScript 물손 패턴 재사용 — 색만 보라).
+	var host := _effect_host()
+	if host != null:
+		var g := _GraspScript.new() as Node3D
+		host.add_child(g)
+		g.call("init_grasp", pos, radius, PURPLE)
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d <= radius:
+			e.set_meta("boon_root_until_msec", Time.get_ticks_msec() + int(root_dur * 1000.0))
+			if e.has_method("take_hit"):
+				e.call("take_hit", damage)
+			_add_nakin(e, nakin_add, NAKIN_CAP)
+
+
+# ══════════════ 저승사자 — SUMMON_SAJA(거두는 사자불) ══════════════
+
+## 일섬 처치 자리에서 보라 사자불(추격 호밍) 소환 — 최근접 적 자동 추격 충돌 폭발.
+func _summon_saja(ctx: Dictionary, params: Dictionary) -> void:
+	var count := int(params.get("count", 1))
+	var nakin_add := int(params.get("nakin_add", 1))
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var origin: Vector3 = (_player as Node3D).global_position + Vector3(0, 0.9, 0)
+	var target = ctx.get("target", null)
+	var pos = ctx.get("position", null)
+	if pos is Vector3:
+		origin = (pos as Vector3) + Vector3(0, 0.9, 0)
+	elif target is Node3D:
+		origin = (target as Node3D).global_position + Vector3(0, 0.9, 0)
+	var fox_params := {
+		"speed": float(params.get("speed", 8.0)),
+		"damage": int(params.get("damage", 1)),
+		"radius": float(params.get("radius", 0.9)),
+		"tint": PURPLE,
+	}
+	# 소환 즉시 최근접 적 낙인(추격불 펫이 '거두는' 연출 보강).
+	var nearest := _nearest_enemy_purple(origin)
+	if nearest != null:
+		_add_nakin(nearest, nakin_add, NAKIN_CAP)
+	for k in range(count):
+		# 추격불도 발사체로 취급 — 동시 상한은 SPIRIT_CAP(펫 도메인).
+		if get_tree().get_nodes_in_group(GRP_SPIRIT).size() >= SPIRIT_CAP:
+			break
+		var pr := _FoxfireScript.new() as Node3D
+		pr.add_to_group(GRP_SPIRIT)
+		host.add_child(pr)
+		var ang := TAU * float(k) / float(max(count, 1)) + randf() * 0.6
+		var fire_dir := Vector3(cos(ang), 0.0, sin(ang))
+		# homing=true → 최근접/낙인 적 추격.
+		pr.call("init_proj", origin, fire_dir, fox_params, true, nearest)
+
+
+# ══════════════ 저승사자 — CLONE_SAJA(저승곡사자) ══════════════
+
+## 일섬 착지 시 보라 차사 분신 소환 — 일섬을 지연 에코로 따라 벤다(BoonClone 재사용, 보라).
+func _clone_saja(ctx: Dictionary, params: Dictionary) -> void:
+	var count := int(params.get("count", 1))
+	var cap := int(params.get("cap", 4))
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player):
+		return
+	var cp := params.duplicate()
+	cp["tint"] = PURPLE
+	for k in range(count):
+		if get_tree().get_nodes_in_group(GRP_CLONE).size() >= cap:
+			break
+		var cl := _CloneScript.new() as Node3D
+		cl.add_to_group(GRP_CLONE)
+		host.add_child(cl)
+		var ang := TAU * float(get_tree().get_nodes_in_group(GRP_CLONE).size()) / float(max(cap, 1)) + randf() * 0.5
+		cl.call("init_clone", _player, cp, ang)
+
+
+# ══════════════ 저승사자 — EXECUTE(명부낙인 혼불처형) ══════════════
+
+## 일섬 적중 시 낙인 cap 도달 적에 혼불 연발 자동 폭격 + 처형선 이하 즉사 + 인접 낙인 전파.
+func _soul_execute(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:
+	var per_hits := int(params.get("per_hits", 1))
+	if per_hits > 1:
+		var k := boon_index + 500000
+		_hit_counters[k] = int(_hit_counters.get(k, 0)) + 1
+		if _hit_counters[k] < per_hits:
+			return
+		_hit_counters[k] = 0
+	var target = ctx.get("target", null)
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return
+	if (target as Node).is_in_group("boss"):
+		return
+	var cap := int(params.get("cap", 6))
+	# 결산 — 낙인 만렙(cap 도달) 적에만 발동.
+	if int(target.get_meta("nakin_marks", 0)) < cap:
+		return
+	var count := int(params.get("count", 3))
+	var damage := int(params.get("damage", 3))
+	var threshold := int(params.get("execute_threshold", 3))
+	var spread := int(params.get("spread", 1))
+	var spread_radius := maxf(float(params.get("spread_radius", 3.4)), 0.5)
+	var center: Vector3 = (target as Node3D).global_position
+	var host := _effect_host()
+	# 혼불 연발 자동 폭격 — 처형 대상 좌표로 직격.
+	if host != null:
+		var origin: Vector3 = center + Vector3(0, 2.4, 0)
+		for k in range(count):
+			if get_tree().get_nodes_in_group(GRP_PROJ).size() >= PROJ_CAP:
+				break
+			var pr := _FoxfireScript.new() as Node3D
+			pr.add_to_group(GRP_PROJ)
+			host.add_child(pr)
+			var fire_dir: Vector3 = (center - origin)
+			pr.call("init_proj", origin, fire_dir, {
+				"speed": 16.0, "damage": damage, "radius": 1.0, "tint": PURPLE,
+			}, true, target)
+	# 처형 — HP 가 처형선 이하면 즉사 정산(큰 피해).
+	if is_instance_valid(target) and target.has_method("take_hit"):
+		var hp_now := _enemy_hp(target)
+		if hp_now >= 0 and hp_now <= threshold:
+			target.call("take_hit", 999)
+	# 낙인 소비 + 처형 버스트.
+	if is_instance_valid(target):
+		target.set_meta("nakin_marks", 0)
+		_spawn_burst_particles(center + Vector3(0, 0.8, 0), 26, 1.7, PURPLE)
+	# 인접 낙인 전파.
+	_propagate_nakin(center, spread_radius, spread)
+
+
+## 적 현재 HP 읽기(HealthComponent.hp 덕타이핑). 못 읽으면 -1.
+func _enemy_hp(e: Node) -> int:
+	if e == null or not is_instance_valid(e):
+		return -1
+	var hc = e.get_node_or_null("HealthComponent")
+	if hc != null and ("hp" in hc):
+		return int(hc.get("hp"))
+	return -1
+
+
+func _propagate_nakin(pos: Vector3, radius: float, count: int) -> void:
+	if count <= 0:
+		return
+	var cands: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if int(e.get_meta("nakin_marks", 0)) > 0:
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d <= radius:
+			cands.append([d, e])
+	cands.sort_custom(func(a, b): return a[0] < b[0])
+	for i in range(min(count, cands.size())):
+		var e = cands[i][1]
+		if is_instance_valid(e):
+			_add_nakin(e, 1, NAKIN_CAP)
+
+
+# ══════════════ 저승사자 — LANTERN_ZONE(황천 인도등불) ══════════════
+
+## 일섬 처치 자리 보라 등불 존 — 내부 적 둔화 + 틱딜(IgniteZone 재사용) + 재화 자석 가속.
+func _lantern_zone(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		if _player is Node3D:
+			pos = (_player as Node3D).global_position
+		else:
+			return
+	var host := _effect_host()
+	if host == null:
+		return
+	var radius := maxf(float(params.get("radius", 3.0)), 0.5)
+	# IgniteZone 재사용 — dot 틱딜. foxfire 는 끄기 위해 interval 을 duration 초과로(발사 안 함).
+	var duration := maxf(float(params.get("duration", 3.5)), 0.5)
+	var zp := {
+		"radius": radius,
+		"duration": duration,
+		"dot_interval": 0.5,
+		"dot_damage": int(params.get("dot_damage", 1)),
+		"foxfire_interval": duration + 10.0,
+		"foxfire_speed": 1.0,
+		"tint": PURPLE,
+	}
+	var z := _IgniteZoneScript.new() as Node3D
+	z.add_to_group(GRP_ZONE)
+	host.add_child(z)
+	z.call("init_zone", pos, zp, GRP_PROJ, PROJ_CAP)
+	# 생성 즉시 반경 적 둔화 1회(apply_zone_slow 있으면).
+	var slow_mult := float(params.get("slow_mult", 0.6))
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if ((e as Node3D).global_position - pos).length() <= radius:
+			if e.has_method("apply_zone_slow"):
+				e.call("apply_zone_slow", slow_mult)
+	# 재화(EXP 젬) 자석 가속 — 그룹 없음 → 효과 호스트 자식 중 magnet_radius 보유 노드 일시 확대.
+	var magnet_mult := float(params.get("magnet_mult", 2.0))
+	if magnet_mult > 1.0:
+		_boost_gem_magnet(pos, radius * 1.5, magnet_mult)
+
+
+## 반경 안 EXP 젬류(magnet_radius·exp_value 덕타이핑) 자석 반경 일시 확대(중복 무해).
+func _boost_gem_magnet(center: Vector3, radius: float, mult: float) -> void:
+	var host := _effect_host()
+	if host == null:
+		return
+	for n in host.get_children():
+		if not is_instance_valid(n) or not (n is Node3D):
+			continue
+		if not ("magnet_radius" in n):
+			continue
+		var d: float = ((n as Node3D).global_position - center).length()
+		if d <= radius:
+			# 1회 확대 — 자석권 안에 들어와 졸졸 끌려오게(영구 변형 무해, 노드 수명 짧음).
+			n.set("magnet_radius", float(n.get("magnet_radius")) * mult)
+
+
+# ══════════════ 저승사자 — REALM(명부의 영역) ══════════════
+
+## 퍼펙트 회피 시 대형 보라 명계 결계 — 주기 낫 틱딜(IgniteZone dot 재사용, foxfire OFF).
+func _realm(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		if _player is Node3D:
+			pos = (_player as Node3D).global_position
+		else:
+			return
+	var host := _effect_host()
+	if host == null:
+		return
+	var duration := maxf(float(params.get("duration", 4.5)), 0.5)
+	var zp := {
+		"radius": maxf(float(params.get("radius", 5.0)), 0.5),
+		"duration": duration,
+		"dot_interval": maxf(float(params.get("tick_interval", 0.5)), 0.1),
+		"dot_damage": int(params.get("tick_damage", 1)),
+		"foxfire_interval": duration + 10.0,
+		"foxfire_speed": 1.0,
+		"tint": PURPLE,
+	}
+	var z := _IgniteZoneScript.new() as Node3D
+	z.add_to_group(GRP_ZONE)
+	host.add_child(z)
+	z.call("init_zone", pos, zp, GRP_PROJ, PROJ_CAP)
+
+
+# ══════════════ 저승사자 — SOUL_CHAIN(구혼사슬) ══════════════
+
+## 일섬 착지 시 보라 사슬을 부채꼴로 사출 — 다수 근접 적 견인+속박+낙인, 혼불 1발 동반.
+func _soul_chain(ctx: Dictionary, params: Dictionary) -> void:
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var origin: Vector3 = (_player as Node3D).global_position + Vector3(0, 0.6, 0)
+	var count := int(params.get("count", 2))
+	var nakin_add := int(params.get("nakin_add", 1))
+	var gp := params.duplicate()
+	gp["tint"] = PURPLE
+	gp["speed"] = float(params.get("speed", 18.0))
+	# 시드 = 서로 다른 근접 적 다수(이미 잡힌 적 제외).
+	var picked: Array = []
+	for k in range(count):
+		if get_tree().get_nodes_in_group(GRP_PROJ).size() >= PROJ_CAP:
+			break
+		var seed_target := _nearest_enemy_excluding_list(origin, picked)
+		if seed_target == null:
+			break
+		picked.append(seed_target)
+		_add_nakin(seed_target, nakin_add, NAKIN_CAP)
+		var pr := _WaterGrabScript.new() as Node3D
+		pr.add_to_group(GRP_PROJ)
+		host.add_child(pr)
+		var fire_dir: Vector3 = (seed_target as Node3D).global_position - origin
+		pr.call("init_grab", origin, fire_dir, gp, _player, seed_target)
+	# 혼불 1발 동반(가장 가까운 적 호밍).
+	if get_tree().get_nodes_in_group(GRP_PROJ).size() < PROJ_CAP:
+		var nearest := _nearest_enemy_purple(origin)
+		var pr := _FoxfireScript.new() as Node3D
+		pr.add_to_group(GRP_PROJ)
+		host.add_child(pr)
+		pr.call("init_proj", origin, Vector3(1, 0, 0), {
+			"speed": 14.0, "damage": 1, "radius": 0.9, "tint": PURPLE,
+		}, true, nearest)
+
+
+## 가장 가까운 적(제외 리스트의 노드는 건너뜀) — 구혼사슬 다수 시드.
+func _nearest_enemy_excluding_list(pos: Vector3, exclude: Array) -> Node:
+	var best: Node = null
+	var best_d: float = 99999.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if e in exclude:
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
 
 
 func _effect_host() -> Node:

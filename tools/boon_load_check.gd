@@ -4,8 +4,8 @@ func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 22)" % all.size())
-	assert(all.size() == 22, "all_boons 크기 불일치")
+	print("all_boons size: %d (기대: 30)" % all.size())
+	assert(all.size() == 30, "all_boons 크기 불일치")
 
 	var mark = _B.by_id("gumiho_mark")
 	print("by_id(gumiho_mark) name: %s" % str(mark.get("name", "?")))
@@ -21,6 +21,10 @@ func _initialize() -> void:
 	var mul_list := _B.by_yokai("MULGWISHIN")
 	print("by_yokai(MULGWISHIN) size: %d (기대: 7)" % mul_list.size())
 	assert(mul_list.size() == 7, "by_yokai(MULGWISHIN) 크기 불일치")
+
+	var jeo_list := _B.by_yokai("JEOSEUNG")
+	print("by_yokai(JEOSEUNG) size: %d (기대: 8)" % jeo_list.size())
+	assert(jeo_list.size() == 8, "by_yokai(JEOSEUNG) 크기 불일치")
 
 	var rarities := _B.rarities_for("gumiho_mark")
 	print("rarities_for(gumiho_mark): %s" % str(rarities))
@@ -155,6 +159,38 @@ func _initialize() -> void:
 	assert(int(drown_uniq.get("count", 0)) >= 1, "summon_drowned count 불량")
 	assert(float(drown_uniq.get("lifetime", 0.0)) > 0.0, "summon_drowned lifetime 불량")
 
+	# ── 저승사자 8카드 스폿체크 ──
+	var jeo_ids := ["jeoseung_soul_homing", "jeoseung_chain_shard", "jeoseung_summon_saja",
+		"jeoseung_clone_saja", "jeoseung_execute", "jeoseung_lantern",
+		"jeoseung_realm", "jeoseung_soul_chain"]
+	for jid in jeo_ids:
+		var b = _B.by_id(jid)
+		assert(b != null, "%s 없음" % jid)
+		assert(String(b.get("yokai", "")) == "JEOSEUNG", "%s yokai 불일치" % jid)
+		var comps = b.get("components", [])
+		assert(comps.size() > 0, "%s components 없음" % jid)
+		var rar := _B.rarities_for(jid)
+		assert(rar == ["chosim", "rare", "uniq", "legend", "master"], "%s rarities 불일치" % jid)
+
+	# 효과 매핑 스폿체크.
+	var jhoming = _B.by_id("jeoseung_soul_homing").get("components", [])[0]
+	assert(String(jhoming.get("trigger", "")) == "On_Slash_Hit", "soul_homing trigger 불일치")
+	assert(String(jhoming.get("effect", "")) == "SOUL_HOMING", "soul_homing effect 불일치")
+	var jexec = _B.by_id("jeoseung_execute").get("components", [])[0]
+	assert(String(jexec.get("effect", "")) == "EXECUTE", "execute effect 불일치")
+	var jrealm = _B.by_id("jeoseung_realm").get("components", [])[0]
+	assert(String(jrealm.get("trigger", "")) == "On_Just_Dodge", "realm trigger 불일치")
+	assert(String(jrealm.get("effect", "")) == "REALM", "realm effect 불일치")
+	var jchain = _B.by_id("jeoseung_soul_chain").get("components", [])[0]
+	assert(String(jchain.get("trigger", "")) == "On_Slash_End", "soul_chain trigger 불일치")
+	assert(String(jchain.get("effect", "")) == "SOUL_CHAIN", "soul_chain effect 불일치")
+
+	# 저승사자 params 스폿체크.
+	var jexec_uniq := _B.params_for("jeoseung_execute", "uniq")
+	assert(int(jexec_uniq.get("cap", 0)) > 0, "execute cap 불량")
+	var jrealm_uniq := _B.params_for("jeoseung_realm", "uniq")
+	assert(float(jrealm_uniq.get("radius", 0.0)) > 0.0, "realm radius 불량")
+
 	# 단일 요괴 스폿체크: draw_boons 10회 호출 시 각 호출 내 모든 카드가 동일 yokai
 	var seen_yokais: Array = []
 	for i in range(10):
@@ -168,5 +204,5 @@ func _initialize() -> void:
 			seen_yokais.append(first_yokai)
 	print("draw_boons 단일요괴 스폿체크 통과. 등장 요괴: %s" % str(seen_yokais))
 
-	print("boon_load_check: 전체 통과 (22장 = 구미호8 + 도깨비7 + 물귀신7)")
+	print("boon_load_check: 전체 통과 (30장 = 구미호8 + 도깨비7 + 물귀신7 + 저승사자8)")
 	quit()

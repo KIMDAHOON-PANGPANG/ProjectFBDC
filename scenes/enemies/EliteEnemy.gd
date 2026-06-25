@@ -57,6 +57,9 @@ const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
 ## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
 const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
+## 저승사자 명부 낙인(nakin_marks) — 보라 디버프 아이콘 색(별개 슬롯). #7b5cf0.
+const _NAKIN_COLOR := Color(0.482, 0.361, 0.941)
+const _NAKIN_CAP := 8.0
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -163,6 +166,17 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "ember")
+	# ── 저승사자 명부 낙인(nakin_marks) — int 누적. 활성 시 보라 디버프 아이콘(별개 슬롯).
+	var nakin := int(get_meta("nakin_marks", 0))
+	if nakin > 0:
+		_status_strip.call("set_status", "nakin", {
+			"value": clampf(float(nakin) / _NAKIN_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _NAKIN_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "nakin")
 
 
 ## 도깨비 불씨 몸 펄스(직접 modulate). 피격 플래시 타이머(_hitflash_t)·사망 중엔 스킵.
