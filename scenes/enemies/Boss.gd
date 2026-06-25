@@ -18,16 +18,9 @@ const _CombatDataScript := preload("res://scripts/managers/CombatData.gd")
 const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 ## 머리 위 상태(버프/디버프) 아이콘 스트립(공용 — 표식 등 폴링 표시).
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
+## 표식 표시(holrim 슬롯) — 핑크 디버프 아이콘 색/상한. S2 가 slash_mark 로 의미 전환 예정.
 const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
-## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
-const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
-## 저승사자 명부 낙인(nakin_marks) — 보라 디버프 아이콘 색(별개 슬롯). #7b5cf0.
-const _NAKIN_COLOR := Color(0.482, 0.361, 0.941)
-const _NAKIN_CAP := 8.0
-## 처녀귀신 원한(wonhan_marks) — 진홍 디버프 아이콘 색(별개 슬롯). #d11f3a.
-const _WONHAN_COLOR := Color(0.820, 0.122, 0.227)
-const _WONHAN_CAP := 8.0
 
 ## 보스 변형 식별자 (1=Boss / 2=Boss2 / 3=Boss3). 각 .tscn 에서 지정.
 ## CombatData 가 enemy_combat.json 의 "보스_<id>" 섹션을 적용하는 키.
@@ -127,12 +120,6 @@ var _charge_decal: Node3D = null
 var _summon_t: float = 0.0
 ## 머리 위 상태 아이콘 스트립(표식/버프 폴링 표시). _ready 에서 인스턴스.
 var _status_strip: Node = null
-## 도깨비 불씨 펄스(직접 modulate 모델). _on_damaged untracked 플래시(0.18s) 동안
-## _hitflash_t 로 펄스 양보(피격 플래시 우선). base = boss_tint.
-var _ember_on: bool = false
-var _ember_pulse_t: float = 0.0
-var _ember_was: bool = false
-var _hitflash_t: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -211,66 +198,11 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "holrim")
-	# ── 도깨비 불씨(dokebi_ember) — bool 플래그. 빨강 디버프 아이콘(별개 슬롯) + 몸 펄스.
-	var ember: bool = bool(get_meta("dokebi_ember", false))
-	_ember_on = ember
-	if ember:
-		_status_strip.call("set_status", "ember", {
-			"value": 1.0,
-			"mode": 0,
-			"color": _EMBER_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "ember")
-	# ── 저승사자 명부 낙인(nakin_marks) — int 누적. 활성 시 보라 디버프 아이콘(별개 슬롯).
-	# (보스는 BoonExecutor 가 낙인 부여 대상에서 제외 → 사실상 항상 0이지만 일관성 위해 폴링.)
-	var nakin := int(get_meta("nakin_marks", 0))
-	if nakin > 0:
-		_status_strip.call("set_status", "nakin", {
-			"value": clampf(float(nakin) / _NAKIN_CAP, 0.0, 1.0),
-			"mode": 0,
-			"color": _NAKIN_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "nakin")
-	# ── 처녀귀신 원한(wonhan_marks) — int 누적. 활성 시 진홍 디버프 아이콘(별개 슬롯).
-	var wonhan := int(get_meta("wonhan_marks", 0))
-	if wonhan > 0:
-		_status_strip.call("set_status", "wonhan", {
-			"value": clampf(float(wonhan) / _WONHAN_CAP, 0.0, 1.0),
-			"mode": 0,
-			"color": _WONHAN_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "wonhan")
-
-
-## 도깨비 불씨 몸 펄스(직접 modulate). 피격 플래시 타이머·사망 중엔 스킵.
-## boss_tint 기준 빨강 맥동, 해제 시 1회 boss_tint 복원.
-func _apply_ember_pulse(delta: float) -> void:
-	if _sprite == null or _dead:
-		return
-	if _hitflash_t > 0.0:
-		_hitflash_t -= delta
-		return
-	if _ember_on:
-		_ember_pulse_t += delta
-		var pulse: float = 0.5 + 0.5 * sin(_ember_pulse_t * 6.0)
-		var red := Color(1.0, 0.35, 0.2, boss_tint.a)
-		_sprite.modulate = boss_tint.lerp(red, pulse * 0.55)
-		_ember_was = true
-	elif _ember_was:
-		_sprite.modulate = boss_tint
-		_ember_was = false
 
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
 	_poll_status()
-	_apply_ember_pulse(delta)
 	delta *= time_scale_mult
 	if _attack_cd > 0.0:
 		_attack_cd -= delta
@@ -474,15 +406,11 @@ func _on_damaged(_amount: int) -> void:
 	# Brief white flash on hit (skip lethal hit to avoid fighting death anim).
 	if _sprite == null or _health == null or _health.hp <= 0:
 		return
-	# ember 펄스가 modulate 를 빨강으로 바꿔 둔 상태라도 boss_tint 로 복귀(펄스 오염 방지).
 	var original: Color = boss_tint
 	var flash: Color = Color(2.5, 2.5, 2.5, original.a)
 	var t := create_tween()
 	t.tween_property(_sprite, "modulate", flash, 0.04)
 	t.tween_property(_sprite, "modulate", original, 0.14)
-	# 플래시 트윈(0.18s) 동안 ember 펄스 양보(피격 플래시 우선).
-	_hitflash_t = 0.2
-	_ember_was = false
 
 func _on_died() -> void:
 	if _dead:

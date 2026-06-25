@@ -72,22 +72,9 @@ const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
 const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 ## 머리 위 상태(버프/디버프) 아이콘 스트립(공용 — 표식 등 폴링 표시).
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
-## 구미호 홀림 표식 — 핑크 디버프 아이콘 색/상한.
+## 표식 표시(holrim 슬롯) — 핑크 디버프 아이콘 색/상한. S2 가 slash_mark 로 의미 전환 예정.
 const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
-## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
-const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
-## 물귀신 젖음(wet_marks) — 물빛 디버프 아이콘 색(holrim/ember 와 별개 슬롯). #2f9fe0.
-const _WET_COLOR := Color(0.184, 0.624, 0.878)
-## 젖음 가시화 정규화 상한(아이콘 게이지 풀 = 5중첩).
-const _WET_CAP := 5.0
-## 저승사자 명부 낙인(nakin_marks) — 보라 디버프 아이콘 색(별개 슬롯). #7b5cf0.
-const _NAKIN_COLOR := Color(0.482, 0.361, 0.941)
-## 낙인 가시화 정규화 상한(아이콘 게이지 풀 = master cap 8).
-const _NAKIN_CAP := 8.0
-## 처녀귀신 원한(wonhan_marks) — 진홍 디버프 아이콘 색(별개 슬롯). #d11f3a.
-const _WONHAN_COLOR := Color(0.820, 0.122, 0.227)
-const _WONHAN_CAP := 8.0
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -207,53 +194,6 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "holrim")
-	# ── 도깨비 불씨(dokebi_ember) — bool 플래그. 활성 시 빨강 디버프 아이콘(별개 슬롯) +
-	# 스프라이트 빨강 펄스. 해제(CHAIN_BURST 전파/소비)·사망 시 사라짐.
-	var ember: bool = bool(get_meta("dokebi_ember", false))
-	if ember:
-		_status_strip.call("set_status", "ember", {
-			"value": 1.0,
-			"mode": 0,
-			"color": _EMBER_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "ember")
-	if _sprite_rig != null and _sprite_rig.has_method("set_ember"):
-		_sprite_rig.call("set_ember", ember)
-	# ── 물귀신 젖음(wet_marks) — int 누적. 활성 시 물빛 디버프 아이콘(별개 슬롯).
-	var wet := int(get_meta("wet_marks", 0))
-	if wet > 0:
-		_status_strip.call("set_status", "wet", {
-			"value": clampf(float(wet) / _WET_CAP, 0.0, 1.0),
-			"mode": 0,
-			"color": _WET_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "wet")
-	# ── 저승사자 명부 낙인(nakin_marks) — int 누적. 활성 시 보라 디버프 아이콘(별개 슬롯).
-	var nakin := int(get_meta("nakin_marks", 0))
-	if nakin > 0:
-		_status_strip.call("set_status", "nakin", {
-			"value": clampf(float(nakin) / _NAKIN_CAP, 0.0, 1.0),
-			"mode": 0,
-			"color": _NAKIN_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "nakin")
-	# ── 처녀귀신 원한(wonhan_marks) — int 누적. 활성 시 진홍 디버프 아이콘(별개 슬롯).
-	var wonhan := int(get_meta("wonhan_marks", 0))
-	if wonhan > 0:
-		_status_strip.call("set_status", "wonhan", {
-			"value": clampf(float(wonhan) / _WONHAN_CAP, 0.0, 1.0),
-			"mode": 0,
-			"color": _WONHAN_COLOR,
-			"icon": null,
-		})
-	else:
-		_status_strip.call("clear_status", "wonhan")
 
 func _physics_process(delta: float) -> void:
 	if _dead:

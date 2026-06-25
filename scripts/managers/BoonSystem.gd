@@ -7,20 +7,14 @@ extends RefCounted
 
 const _JSON := "res://data/boons.json"
 
-const YOKAI_COLORS := {
-	"GUMIHO": Color("ff5fb0"),
-	"DOKEBI": Color("ffc233"),
-	"MULGWISHIN": Color("2f9fe0"),
-	"JEOSEUNG": Color("7b5cf0"),
-	"CHEONYEO": Color("d11f3a"),
-}
-
-static func yokai_color(y: String) -> Color:
-	return YOKAI_COLORS.get(y, Color(0.7, 0.7, 0.7))
+## M9-S1: 요괴 그룹핑(YOKAI_COLORS) 철거. 카드 UI(LevelUpScreen/SkillViewer)는 여전히
+## 카드 yokai 키로 액센트 색을 묻는다 — 중립 기본색을 반환하는 슬림 헬퍼만 유지.
+## M9 가 카드별 색 체계를 정하면 여기서 매핑을 다시 채운다.
+static func yokai_color(_y: String) -> Color:
+	return Color(0.7, 0.7, 0.7)
 
 static var BOONS: Array = []
 static var _by_id: Dictionary = {}
-static var _by_yokai: Dictionary = {}
 static var _loaded := false
 
 static func _ensure_loaded() -> void:
@@ -55,7 +49,6 @@ static func _ensure_loaded() -> void:
 
 	BOONS = data["boons"]
 	_by_id = {}
-	_by_yokai = {}
 
 	for b in BOONS:
 		if not (b is Dictionary):
@@ -67,12 +60,6 @@ static func _ensure_loaded() -> void:
 			push_warning("BoonSystem: 중복 id 스킵 — %s" % id)
 			continue
 		_by_id[id] = b
-		var yokai = b.get("yokai", "")
-		if not (yokai is String) or yokai == "":
-			continue
-		if not _by_yokai.has(yokai):
-			_by_yokai[yokai] = []
-		_by_yokai[yokai].append(b)
 
 
 static func all_boons() -> Array:
@@ -83,14 +70,6 @@ static func all_boons() -> Array:
 static func by_id(id: String) -> Variant:
 	_ensure_loaded()
 	return _by_id.get(id, null)
-
-
-static func by_yokai(y: String) -> Array:
-	_ensure_loaded()
-	var arr = _by_yokai.get(y, null)
-	if arr == null:
-		return []
-	return arr.duplicate()
 
 
 static func rarities_for(id: String) -> Array:
@@ -135,16 +114,6 @@ static func params_for(id: String, rarity: String, component_index: int = 0) -> 
 	return params
 
 
-# TODO: 귀신 풀이 4종 이상이면 런 시작 시 2~3 랜덤 선택 적용. 현재(구미호만)는 전부 사용.
-static func run_yokai_pool() -> Array:
-	_ensure_loaded()
-	var keys = _by_yokai.keys()
-	var result: Array = []
-	for k in keys:
-		result.append(k)
-	return result
-
-
 static func rarity_for_level(level: int) -> String:
 	var weights: Dictionary
 	if level <= 4:
@@ -175,8 +144,9 @@ static func rarity_for_level(level: int) -> String:
 
 static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 	_ensure_loaded()
-	var pool := run_yokai_pool()
-	if pool.is_empty():
+	# M9-S1: 요괴 그룹핑 제거 — 전체 BOONS 풀에서 직접 뽑는다.
+	# 빈 풀(boons.json == [])이면 [] 반환 → 레벨업 오버레이 graceful 스킵(크래시 금지).
+	if BOONS.is_empty():
 		return []
 
 	var rarity_labels := {
@@ -184,52 +154,45 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 		"legend": "전설", "master": "마스터"
 	}
 
-	# 요괴 순서 랜덤화 후 가용 카드가 있는 요괴를 첫 번째로 선택
-	var pool_copy := pool.duplicate()
-	pool_copy.shuffle()
-	for yokai in pool_copy:
-		var boons_for_yokai = _by_yokai.get(yokai, [])
-		# 미보유 카드만 추려 available 구성
-		var available: Array = []
-		for b in boons_for_yokai:
-			if not (b is Dictionary):
-				continue
-			var bid: String = String(b.get("id", ""))
-			if bid in owned_ids:
-				continue
-			available.append(b)
-		if available.is_empty():
+	# 미보유 카드만 추려 available 구성.
+	var available: Array = []
+	for b in BOONS:
+		if not (b is Dictionary):
 			continue
-		# 이 요괴로 확정 — 이 요괴 카드만으로 뽑기
-		available.shuffle()
-		var result: Array = []
-		var used_slots: Array = []
-		for b in available:
-			if result.size() >= count:
-				break
-			var slot: String = String(b.get("skill_type", ""))
-			if slot != "" and slot in used_slots:
-				continue
-			var bid: String = String(b.get("id", ""))
-			var already := false
-			for r in result:
-				if r.get("id", "") == bid:
-					already = true
-					break
-			if already:
-				continue
-			var rar := rarity_for_level(level)
-			result.append({
-				"id": bid,
-				"name": String(b.get("name", "")),
-				"desc": String(b.get("desc", "")),
-				"yokai": String(b.get("yokai", "")),
-				"skill_type": slot,
-				"rarity": rar,
-				"rarity_label": String(rarity_labels.get(rar, rar))
-			})
-			if slot != "":
-				used_slots.append(slot)
-		return result
+		var bid: String = String(b.get("id", ""))
+		if bid == "" or bid in owned_ids:
+			continue
+		available.append(b)
+	if available.is_empty():
+		return []
 
-	return []
+	available.shuffle()
+	var result: Array = []
+	var used_slots: Array = []
+	for b in available:
+		if result.size() >= count:
+			break
+		var slot: String = String(b.get("skill_type", ""))
+		if slot != "" and slot in used_slots:
+			continue
+		var bid: String = String(b.get("id", ""))
+		var already := false
+		for r in result:
+			if r.get("id", "") == bid:
+				already = true
+				break
+		if already:
+			continue
+		var rar := rarity_for_level(level)
+		result.append({
+			"id": bid,
+			"name": String(b.get("name", "")),
+			"desc": String(b.get("desc", "")),
+			"yokai": String(b.get("yokai", "")),
+			"skill_type": slot,
+			"rarity": rar,
+			"rarity_label": String(rarity_labels.get(rar, rar))
+		})
+		if slot != "":
+			used_slots.append(slot)
+	return result

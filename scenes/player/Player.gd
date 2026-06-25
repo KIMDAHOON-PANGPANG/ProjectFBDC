@@ -100,15 +100,6 @@ var _boon_executor: Node = null
 ## 머리 위 상태 아이콘 스트립(굶주림 등) — _ready 에서 코드 인스턴스.
 var _status_strip: Node = null
 
-# ── 구미호 굶주림 리스크(6★-1 11절) ──
-## 구미호 은혜 1개+ 장착 시 활성. 일정 시간 무처치(흡혈/처치 없음)면 굶주림 →
-## 초당 미세 HP 감소. 1처치/흡혈로 즉시 리셋(boon_feed). god_mode 시 감소 스킵.
-const HUNGER_THRESHOLD: float = 9.0    # 무피드 누적 임계(초)
-const HUNGER_HP_DPS: float = 0.25      # 굶주림 중 초당 HP 감소(미세, accum 으로 정수화)
-var _hunger_t: float = 0.0
-var _is_starving: bool = false
-var _hunger_dmg_accum: float = 0.0
-
 # ── 구미낙화(SLASH_FAN) — 풀차지 일섬 부채 폭 확장 일회성 보너스(BoonExecutor 가 세팅) ──
 ## On_Slash_Charged 시 BoonExecutor 가 세팅 → 다음 _fire_slash 가 폭 확장에 소비 후 1.0 리셋.
 var boon_slash_fan_width_mult: float = 1.0
@@ -257,8 +248,6 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	# 열관리(일섬 단일) — 탈진 타이머 + 지수 감소.
 	_update_heat(delta)
-	# 구미호 굶주림 리스크 — 구미호 은혜 장착 시 무처치 시간 누적 → 미세 HP 감소.
-	_update_hunger(delta)
 	# 몬스터 몸 접촉 시 HP 감소(무적/대시 중 스킵). contact_damage_enabled 토글이 게이트.
 	_check_contact_damage()
 	# 연속 대시 사이 최소 간격.
@@ -1073,71 +1062,6 @@ func _build_dust_emitter() -> void:
 	# than from the PC's pivot (which is at root height ~0).
 	_dust_emitter.position = Vector3(0, 0.08, 0)
 	add_child(_dust_emitter)
-
-
-# ══════════════ 구미호 굶주림 리스크(6★-1 11절) ══════════════
-
-## 구미호 은혜를 1개라도 장착했는가(굶주림 활성 조건).
-func has_gumiho_boon() -> bool:
-	for b in active_boons:
-		if not (b is Dictionary):
-			continue
-		var y := String(b.get("yokai", ""))
-		if y == "GUMIHO":
-			return true
-		var bid := String(b.get("id", ""))
-		if bid.begins_with("gumiho_"):
-			return true
-	return false
-
-
-## 굶주림(구미호 무처치 HP 감소) 진행 중 여부 — HUD 폴링용.
-func is_starving() -> bool:
-	return _is_starving
-
-
-## 처치/흡혈 시 호출(BoonExecutor) — 굶주림 즉시 리셋/해소.
-func boon_feed() -> void:
-	_hunger_t = 0.0
-	_hunger_dmg_accum = 0.0
-	_is_starving = false
-	if _status_strip != null and is_instance_valid(_status_strip):
-		_status_strip.call("clear_status", "hunger")
-
-
-## 매 프레임 — 구미호 은혜가 있으면 무피드 시간을 누적, 임계 초과 시 굶주림 진입 +
-## 초당 미세 HP 감소. god_mode/무적 중엔 감소 스킵(아레나 무적 관찰 보존).
-func _update_hunger(delta: float) -> void:
-	if not has_gumiho_boon():
-		# 구미호 미장착 — 상태 정리.
-		if _is_starving or _hunger_t > 0.0:
-			boon_feed()
-		return
-	_hunger_t += delta
-	if _hunger_t < HUNGER_THRESHOLD:
-		if _is_starving:
-			_is_starving = false
-			if _status_strip != null and is_instance_valid(_status_strip):
-				_status_strip.call("clear_status", "hunger")
-		return
-	# 굶주림 상태 — 초당 미세 HP 감소(god_mode 면 깎지 않음).
-	_is_starving = true
-	if not god_mode and _health != null:
-		_hunger_dmg_accum += HUNGER_HP_DPS * delta
-		if _hunger_dmg_accum >= 1.0:
-			_hunger_dmg_accum -= 1.0
-			# 굶주림은 i-frame/방어 우회 없이 직접 1 감소(과하지 않게 누적 게이팅).
-			if _health.hp > 1:
-				_health.take_damage(1)
-	# 굶주림 아이콘 — DEPLETE(mode 1) radial, 핑크. value=임계 초과 진행도(0→1 클램프).
-	if _status_strip != null and is_instance_valid(_status_strip):
-		var over: float = clampf((_hunger_t - HUNGER_THRESHOLD) / HUNGER_THRESHOLD, 0.0, 1.0)
-		_status_strip.call("set_status", "hunger", {
-			"value": 1.0 - over,
-			"mode": 1,
-			"color": Color(0.80, 0.13, 0.0, 1.0),
-			"icon": null,
-		})
 
 
 ## 권속 은혜 장착 — BoonSystem 조회 + 등급 params 해석해 active_boons 등록. BoonExecutor 가 구독 콜백에서 읽음.
