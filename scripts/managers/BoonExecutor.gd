@@ -10,7 +10,8 @@ extends Node
 const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
 const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
 
-## 납도(On_Sheathe) 정산 — Player 상수와 동일값(정산 주체이므로 자체 보유). 공유 .tres 변형 금지.
+## 납도(On_Sheathe) 정산 — 코드 폴백값(데이터 미연결 시). M9-S13: 실제값은 PlayerData @export(sheathe_range/sheathe_dmg)
+## 를 _sheathe_range()/_sheathe_dmg() 로 읽는다(authoring 읽기 — 공유 .tres 변형 금지). 미연결/구버전 Player 면 이 폴백.
 const _SHEATHE_RANGE := 5.0
 const _SHEATHE_DMG := 2
 ## M9-S12: 표식 만개 cap = 활성 스타일 cap(숏3/미들5/롱7) 단일 소스. _mark_cap() 헬퍼가 Player.get_mark_cap()
@@ -24,6 +25,11 @@ var _hit_counters: Dictionary = {}
 ## 무납(IAIDO_CHAIN) 거합 미터 — 연속 납도 단계(0~max). _last_chain_msec 로 combo_window 판정.
 var _chain_stage: int = 0
 var _last_chain_msec: int = 0
+## M9-S13: 무납 게이트 — _apply_iaido_chain 이 prospective 로 계산한 다음 단계/now. 실제 회수(total_marks>0)일 때만
+## _commit_iaido_chain() 이 _chain_stage/_last_chain_msec 로 확정한다(헛납도면 미커밋 → 미터 정지). _pending_chain=false 면 commit no-op.
+var _pending_chain: bool = false
+var _pending_chain_stage: int = 0
+var _pending_chain_msec: int = 0
 ## 블러드 FX 변주 카운터 — 정산 적마다 +1, %8 로 핏자국 텍스처 인덱스 선택.
 var _blood_counter: int = 0
 ## 안티-보스 처형선 — 보스 HP 가 max_hp 의 이 비율 이하면 거합+만개 납도로 처형(코드 1차값).
@@ -41,6 +47,10 @@ var _cascade_bonus_marks: int = 0
 const _CASCADE_DEPTH_CAP := 2
 ## 1납도당 도미노 처형 마릿수 cap(폭주 방지 안전망).
 const _CASCADE_KILL_CAP := 6
+## M9-S13: 1납도당 참결(baseline 표식 파문) 발동 횟수 cap — 다중 처치(도미노) 시 표식 살포 인플레 억제(≤2).
+const _BASELINE_SPREAD_CAP := 2
+## 1회 납도가 일으킨 참결 발동 누계 — _on_sheathe 시작 시 0, _baseline_mark_spread 가 cap 까지만 발동.
+var _baseline_spread_count: int = 0
 ## 연환납도 코드 1차값(boons.json chain_sheathe params 우선, 없으면 이 값).
 const _CHAIN_RADIUS_DEFAULT := 3.0
 const _CHAIN_COUNT_DEFAULT := 2
@@ -91,6 +101,30 @@ const _PIERCE_THUNDER_PER_MARK_DEFAULT := 3
 const _PIERCE_THUNDER_RADIUS_DEFAULT := 2.5
 const _PIERCE_THUNDER_MAX_TARGETS_DEFAULT := 2
 
+# ══════════════ M9-S13: 킬 소스 계측 (주인공 규칙 검증 — 자율 FX 킬 0 확인) ══════════════
+## ★설계 불변식: 모든 처치는 일섬 본체 / 납도 정산 / 연쇄 중 하나여야 한다. 자율 FX(감속장·취약표식·자원·연출)는
+## take_hit 을 호출하지 않으므로 절대 죽이지 않는다 = _kills_other 0 기대. 집계/표시만 — 게임플레이 무영향.
+##  · _kills_by_slash   : 일섬 본체(SlashAttack)가 적을 처치(ON_KILL_via_Slash). _on_kill_via_slash_charge 무조건 +1.
+##  · _kills_by_sheathe : 납도 정산(_settle_enemy, _in_cascade==false)이 적을 처치(RB 입력 동기).
+##  · _kills_by_cascade : 연쇄(_in_cascade==true 하의 _settle_enemy = 도미노/거합도미노/참예수확/참결파문/
+##                        관통천참·천뢰)가 적을 처치.
+##  · _kills_other      : 위 3개로 분류 안 된 처치(0 기대 — 분류 누락 감지용).
+var _kills_by_slash: int = 0
+var _kills_by_sheathe: int = 0
+var _kills_by_cascade: int = 0
+var _kills_other: int = 0
+
+
+## ArenaDebug(F1 패널) 폴링용 — 킬 소스 카운터 스냅샷. 게임플레이 무영향(읽기 전용).
+func get_kill_source_counts() -> Dictionary:
+	return {
+		"slash": _kills_by_slash,
+		"sheathe": _kills_by_sheathe,
+		"cascade": _kills_by_cascade,
+		"other": _kills_other,
+	}
+
+
 ## baseline 6종 코드 1차값(카드 무관 항상 on — 강한 한정자로 약하게).
 const _BL_RIPPLE_RADIUS := 1.5     # 1 납도 파문 — 만개 적 1마리 흘려 처형
 const _BL_MARK_RADIUS := 3.0       # 2 참결 — 표식 살포
@@ -140,6 +174,20 @@ func _mark_cap() -> int:
 	return 5
 
 
+## 납도 정산 사거리 — PlayerData.sheathe_range(authoring) 읽기. 미연결/구버전이면 코드 폴백(_SHEATHE_RANGE).
+func _sheathe_range() -> float:
+	if _player != null and is_instance_valid(_player) and "data" in _player and _player.data != null and "sheathe_range" in _player.data:
+		return float(_player.data.sheathe_range)
+	return _SHEATHE_RANGE
+
+
+## 납도 미만 표식 단가 — PlayerData.sheathe_dmg(authoring) 읽기. 미연결/구버전이면 코드 폴백(_SHEATHE_DMG).
+func _sheathe_dmg() -> int:
+	if _player != null and is_instance_valid(_player) and "data" in _player and _player.data != null and "sheathe_dmg" in _player.data:
+		return int(_player.data.sheathe_dmg)
+	return _SHEATHE_DMG
+
+
 # ══════════════ 납도(On_Sheathe) 정산 — slash_mark 거두기 ══════════════
 
 ## RB 납도 시 호출 — sheathe_range 내 slash_mark>0 적을 거둔다. 만개(>=cap, 보스 제외)=처형,
@@ -155,10 +203,12 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 	_sheathe_kill_count = 0
 	_cascade_bonus_marks = 0
 	_in_cascade = false
+	# M9-S13: 참결 발동 횟수 리셋 — 이 납도가 일으킨 다중 처치에서 표식 살포를 _BASELINE_SPREAD_CAP 회로 제한.
+	_baseline_spread_count = 0
 	var origin: Vector3 = (_player as Node3D).global_position
 
 	# ── 이 한 번의 납도에 적용될 배율을 active_boons 스캔으로 산출 ──
-	var range_eff: float = _SHEATHE_RANGE
+	var range_eff: float = _sheathe_range()
 	var dmg_bonus: int = 0          # 발도(STYLE_IAIDO) — 표식 단가 가산
 	var dmg_mult: float = 1.0       # 거합 — settle 곱
 	var refund_mult: float = 1.0    # 거합/환원 — 환급 곱
@@ -190,6 +240,9 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 		full_collect_mult = max(full_collect_mult, float(params.get("full_collect_mult", 1.0)))
 	)
 	# 무납(IAIDO_CHAIN) — 거합 미터: combo_window 안 연속 납도면 단계↑, 단계당 회수범위/환원 누진.
+	# M9-S13: 미터 누진(commit)은 '실제 회수가 일어난 납도'에만 — 여기선 prospective 배율만 적용(범위/환원),
+	#         실제 _chain_stage/_last_chain_msec 갱신은 아래 total_marks>0 확인 후 _commit_iaido_chain() 에서.
+	#         헛납도(거둔 것 0)는 _commit 미호출 → 미터 안 오름.
 	_apply_iaido_chain(func(stage_mult):
 		range_eff *= stage_mult
 		refund_mult *= stage_mult
@@ -224,6 +277,10 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 	# ON_SHEATHE_KILL 을 쏘고, _on_sheathe_kill 핸들러가 epicenter 기준 도미노를 reactively 수행한다.
 	# 도미노로 거둔 표식 합은 _cascade_bonus_marks 로 누적돼 여기서 환급에 합산(기존 batch 호출 대체). ──
 	total_marks += _cascade_bonus_marks
+
+	# M9-S13: 무납 미터 누진 — '실제 회수가 일어난 납도'에만 commit(헛납도는 미터 정지). prospective 배율은 위에서 이미 적용됨.
+	if total_marks > 0:
+		_commit_iaido_chain()
 
 	# 거둔 표식이 있으면 PC 자원 환급(열/HP — 환원·거합·미터 배율 반영).
 	if total_marks > 0 and _player.has_method("_sheathe_restore"):
@@ -298,10 +355,16 @@ func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 
 	else:
 		# M9-S9 산화진 취약표식(vuln_mark) — 미만/보스(처형선 미달) 단가에만 ×vuln_mult 가산(만개 9999 처형은 무관).
 		var vuln: float = float(e.get_meta("vuln_mark", 1.0))
-		var dmg: int = int(round(float(marks * (_SHEATHE_DMG + dmg_bonus)) * dmg_mult * max(vuln, 1.0)))
+		var dmg: int = int(round(float(marks * (_sheathe_dmg() + dmg_bonus)) * dmg_mult * max(vuln, 1.0)))
 		e.call("take_hit", max(dmg, 1))  # 미만 + 보스(처형선 미달) = (표식×단가)×거합×취약
 	# ── take_hit '직후' 사망 판정(SlashAttack._target_is_dead 패턴 복제) ──
 	var died: bool = _enemy_is_dead(e)
+	# M9-S13 킬 소스 계측 — 납도 정산 사망을 분류(연쇄 중=cascade, 1차=sheathe). 집계만, 게임플레이 무영향.
+	if died:
+		if _in_cascade:
+			_kills_by_cascade += 1
+		else:
+			_kills_by_sheathe += 1
 	# 죽었든 살았든 표식 소거(살아남은 보스는 다시 새겨야 함).
 	if is_instance_valid(e):
 		e.set_meta("slash_mark", 0)
@@ -411,6 +474,9 @@ func _charge_pierce_reap(target: Node) -> void:
 	var pos: Vector3 = (target as Node3D).global_position if (target is Node3D) else Vector3.ZERO
 	_spawn_perfect_flash(pos)
 	target.call("take_hit", max(marks * per_mark, 1))
+	# M9-S13 킬 소스 계측 — 관통천참 처형은 연쇄(cascade)로 분류. take_hit 직후 사망 판정.
+	if _enemy_is_dead(target):
+		_kills_by_cascade += 1
 	# 살아남았으면(보스 등) 표식 0 리셋 — 이중 가산 방지.
 	if is_instance_valid(target):
 		target.set_meta("slash_mark", 0)
@@ -471,6 +537,9 @@ func _charge_pierce_thunder(target: Node) -> void:
 		var p: Vector3 = (e as Node3D).global_position
 		_spawn_chain_arc(origin, p)  # 라인 흡수 아크(청백).
 		e.call("take_hit", max(marks * per_mark, 1))
+		# M9-S13 킬 소스 계측 — 천뢰관통 흡수 처형은 연쇄(cascade)로 분류.
+		if _enemy_is_dead(e):
+			_kills_by_cascade += 1
 		if is_instance_valid(e):
 			e.set_meta("slash_mark", 0)
 		hit += 1
@@ -484,6 +553,8 @@ func _on_kill_via_slash_charge(ctx) -> void:
 		return
 	if not (ctx is Dictionary):
 		return
+	# M9-S13 킬 소스 계측 — 일섬 본체 처치(ON_KILL_via_Slash)는 카드 보유 무관 무조건 집계. 게임플레이 무영향.
+	_kills_by_slash += 1
 	var has_card: bool = false
 	var haste: float = 0.0
 	var dash_bonus: float = 0.0
@@ -531,7 +602,10 @@ func _spread_marks_from(src: Node3D, count: int, radius: float) -> void:
 
 ## 연속 납도 단계 갱신 + 단계 보너스 적용. apply_cb.call(stage_mult) 로 회수범위/환원 곱 전달.
 ## combo_window 안에 다시 납도하면 단계+1(max_stage cap), 넘기면 1단으로 리셋. 단계당 per_stage 누진.
+## M9-S13: prospective 계산만 — _chain_stage/_last_chain_msec 를 '여기서 쓰지 않고' 다음 단계를 _pending_* 에 담는다.
+## 실제 미터 누진은 회수 확정(total_marks>0) 후 _commit_iaido_chain() 이 한다. 헛납도는 _pending 만 세팅되고 미커밋 → 미터 정지.
 func _apply_iaido_chain(apply_cb: Callable) -> void:
+	_pending_chain = false
 	var has_chain: bool = false
 	var per_stage: float = 0.0
 	var max_stage: int = 0
@@ -545,15 +619,29 @@ func _apply_iaido_chain(apply_cb: Callable) -> void:
 	if not has_chain:
 		return
 	var now: int = Time.get_ticks_msec()
+	# 다음 단계를 prospective 로 산출(미커밋) — 마지막 '회수된' 납도 기준 combo_window 판정.
+	var next_stage: int
 	if _last_chain_msec > 0 and (now - _last_chain_msec) <= window_ms:
-		_chain_stage = min(_chain_stage + 1, max_stage)
+		next_stage = min(_chain_stage + 1, max_stage)
 	else:
-		_chain_stage = 1  # 창 밖/첫 납도 — 1단부터 시작.
-	_last_chain_msec = now
-	# 단계 보너스 = 1 + per_stage × (stage-1). 1단=무보너스, 단계마다 per_stage 누진.
-	var stage_mult: float = 1.0 + per_stage * float(max(_chain_stage - 1, 0))
+		next_stage = 1  # 창 밖/첫 납도 — 1단부터 시작.
+	_pending_chain = true
+	_pending_chain_stage = next_stage
+	_pending_chain_msec = now
+	# 단계 보너스 = 1 + per_stage × (stage-1). 1단=무보너스, 단계마다 per_stage 누진. (배율은 prospective 단계로 즉시 적용.)
+	var stage_mult: float = 1.0 + per_stage * float(max(next_stage - 1, 0))
 	if stage_mult > 1.0:
 		apply_cb.call(stage_mult)
+
+
+## M9-S13: 무납 미터 확정 — 실제 회수가 있었던 납도(total_marks>0)에서만 호출. prospective 단계/시각을 미터에 커밋.
+## 헛납도면 호출 안 됨 → _chain_stage/_last_chain_msec 불변(다음 회수 납도가 같은 단계 기준으로 combo 판정).
+func _commit_iaido_chain() -> void:
+	if not _pending_chain:
+		return
+	_chain_stage = _pending_chain_stage
+	_last_chain_msec = _pending_chain_msec
+	_pending_chain = false
 
 
 # ══════════════ M9-S6: ON_SHEATHE_KILL 핸들러 — epicenter 도미노 재정렬 + baseline 6종 ══════════════
@@ -766,6 +854,9 @@ func _on_sheathe_kill_reaping(epicenter: Vector3) -> void:
 		var pos: Vector3 = (e as Node3D).global_position
 		_spawn_perfect_flash(pos)  # 노랑→흰 호 더미(재사용).
 		e.call("take_hit", max(marks * per_mark, 1))
+		# M9-S13 킬 소스 계측 — 참예수확이 미만 표식 적을 죽이면 연쇄(cascade)로 분류. take_hit 직후 사망 판정.
+		if _enemy_is_dead(e):
+			_kills_by_cascade += 1
 		# 처형 아님 — 살아남았으면 표식 0 리셋(이중 정산 방지).
 		if is_instance_valid(e):
 			e.set_meta("slash_mark", 0)
@@ -1074,6 +1165,10 @@ func _baseline_ripple(epicenter: Vector3) -> void:
 
 ## 2 참결(표식 파문) — epicenter 반경 내 적에 표식 살포(0뎀). grant=tier>0?2:1, cap 클램프. 청백 링.
 func _baseline_mark_spread(epicenter: Vector3, tier: int) -> void:
+	# M9-S13: 1납도당 참결 발동 cap — 다중 처치(도미노) 시 표식 살포 인플레 억제. 초과분은 살포 스킵.
+	if _baseline_spread_count >= _BASELINE_SPREAD_CAP:
+		return
+	_baseline_spread_count += 1
 	var grant: int = 2 if tier > 0 else 1
 	var any: bool = false
 	for e in get_tree().get_nodes_in_group("enemies"):

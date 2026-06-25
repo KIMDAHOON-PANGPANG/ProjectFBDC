@@ -132,6 +132,10 @@ extends Resource
 ## 납도(RB) 후 다음 납도까지 대기 시간(초). 거합 추격 윈도우는 무시(쿨 바이패스).
 ## authoring 값 — 런타임 변형 아님.
 @export var sheathe_cooldown: float = 1.2
+## 납도(RB) 정산 사거리(유닛) — 이 안의 표식 적만 거둔다. BoonExecutor 가 읽음(authoring — 런타임 변형 아님).
+@export var sheathe_range: float = 5.0
+## 납도 미만 표식 단가(자연수) — 미만/보스(처형선 미달) 적에 marks×이 값 피해. BoonExecutor 가 읽음(authoring — 변형 아님).
+@export var sheathe_dmg: int = 2
 
 # ── 열관리(Heat) — "게임 시작 2"(즉발 일섬) 모드 전용. 럼블 열관리 게이지식. ──
 # 일섬(평타)마다 열이 오르고, 직전 일섬 후 combo_window 초 이내면 combo_mult

@@ -20,4 +20,6 @@ slash_gauge_on_perfect_dodge = 15.0
 heat_overheat_duration = 3.0
 heat_decay_delay = 2.0
 sheathe_cooldown = 1.2
+sheathe_range = 5.0
+sheathe_dmg = 2
 visuals = ExtResource("2_pv")

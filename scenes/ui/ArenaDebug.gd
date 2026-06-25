@@ -119,6 +119,22 @@ func _refresh_readout() -> void:
 		maxf(_last_ttk, 0.0), _last_ttk_name, _kills, avg]
 	if _host != null and is_instance_valid(_host) and _host.has_method("arena_wave_info"):
 		_readout.text += "\n" + String(_host.call("arena_wave_info"))
+	# M9-S13 킬 소스 계측 — BoonExecutor(Player 자식) 카운터 폴링. '기타(FX)킬' 0 기대(주인공 규칙 불변식).
+	var ks := _kill_source_counts()
+	if not ks.is_empty():
+		_readout.text += "\n일섬킬 %d / 납도킬 %d / 연쇄킬 %d / 기타(FX)킬 %d" % [
+			int(ks.get("slash", 0)), int(ks.get("sheathe", 0)),
+			int(ks.get("cascade", 0)), int(ks.get("other", 0))]
+
+
+## Player 자식 BoonExecutor 의 킬 소스 카운터 폴링(있으면). 미연결이면 빈 사전(라인 생략).
+func _kill_source_counts() -> Dictionary:
+	if _player == null or not is_instance_valid(_player):
+		return {}
+	var be = _player.get_node_or_null("BoonExecutor")
+	if be == null or not is_instance_valid(be) or not be.has_method("get_kill_source_counts"):
+		return {}
+	return be.call("get_kill_source_counts")
 
 
 ## PC 현재 적용 스탯(읽기 전용) — 카드/튜닝 반영된 최종 실효값.
