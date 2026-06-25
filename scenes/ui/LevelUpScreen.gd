@@ -152,22 +152,25 @@ func _build_card_button(card_dict: Dictionary, index: int) -> Button:
 	desc_lbl.size = Vector2(card_size.x - 24, card_size.y - 72 - 44)
 	btn.add_child(desc_lbl)
 
-	# 타입 칸/아이콘 + 툴팁 (우하단)
+	# 타입 칸/아이콘+타입명 + 툴팁 (우하단)
+	var box_text: String = sk
+	if TYPE_ICONS.has(sk):
+		box_text = String(TYPE_ICONS[sk]) + " " + sk
 	var type_box := Panel.new()
-	type_box.custom_minimum_size = Vector2(40, 32)
-	type_box.size = Vector2(40, 32)
-	type_box.position = Vector2(card_size.x - 48, card_size.y - 40)
+	type_box.custom_minimum_size = Vector2(78, 26)
+	type_box.size = Vector2(78, 26)
+	type_box.position = Vector2(card_size.x - (78 + 8), card_size.y - 34)
 	type_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	type_box.tooltip_text = TYPE_TOOLTIPS.get(sk, sk)
 
 	var icon_lbl := Label.new()
-	icon_lbl.text = TYPE_ICONS.get(sk, sk.substr(0, 1))
-	icon_lbl.add_theme_font_size_override("font_size", 18)
+	icon_lbl.text = box_text
+	icon_lbl.add_theme_font_size_override("font_size", 12)
 	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_lbl.position = Vector2.ZERO
-	icon_lbl.size = Vector2(40, 32)
+	icon_lbl.size = Vector2(78, 26)
 	type_box.add_child(icon_lbl)
 	btn.add_child(type_box)
 
