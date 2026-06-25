@@ -122,6 +122,8 @@ var _chapter_cleared: bool = false
 ## Wall-clock ticks at the moment WaveManager started — used to compute
 ## the run's elapsed time for the result screen + SaveSystem record.
 var _chapter_start_msec: int = 0
+## 게임시간(초) 누적 — _process(PAUSABLE) 에서 delta 합산이라 tree.paused/time_scale 자동 반영. WaveManager.elapsed 폴백.
+var _game_elapsed: float = 0.0
 var _escape_zone: Node3D = null
 var _escape_zone_done_mass: bool = false
 var _escape_zone_done_boss: bool = false
@@ -191,6 +193,7 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 		return
+	_game_elapsed += delta
 	_update_hud()
 	_update_escape_zone_schedule()
 
@@ -755,6 +758,7 @@ func _build_chapter_systems() -> void:
 	# result-screen "클리어 시간" reads as time-since-first-spawn rather
 	# than time-since-_ready (which includes the bootstrap frame).
 	_chapter_start_msec = Time.get_ticks_msec()
+	_game_elapsed = 0.0
 
 	# 초반 시드 — 0초부터 1~2마리가 화면 가장자리 바로 밖에 등장해 곧장 걸어 들어온다.
 	# 카메라 rig 가 첫 프레임에 PC 위치로 스냅한 뒤(_ready) 프러스텀이 안정되도록 한 틱
@@ -1191,6 +1195,7 @@ func _advance_chapter() -> void:
 
 	# 6) Anchor the new chapter's clock + resume.
 	_chapter_start_msec = Time.get_ticks_msec()
+	_game_elapsed = 0.0
 	# M6 — refresh the sky/ambient for the new chapter.
 	_apply_chapter_visuals()
 	var tree := get_tree()
@@ -1283,12 +1288,13 @@ func _on_player_continue() -> void:
 		tree.paused = false
 
 
-## Wall-clock seconds since WaveManager started. Centralised so the
-## clear / death paths can't drift out of sync on the formula.
+## 게임시간(초) since 챕터 시작. 클리어/사망/탈출구역/HP스케일이 HUD 웨이브 타이머와 동기. WaveManager.elapsed 우선, 폴백 _game_elapsed(일시정지-aware).
 func _elapsed_seconds() -> float:
-	if _chapter_start_msec <= 0:
-		return 0.0
-	return float(Time.get_ticks_msec() - _chapter_start_msec) / 1000.0
+	# 게임시간 단일화: WaveManager 게임시간(elapsed) 우선 → HUD 타이머(_wave_elapsed)와 literal 동일.
+	# WaveManager 없거나 메서드 없으면 Main 자체 일시정지-aware 누적(_game_elapsed) 폴백.
+	if _wave_mgr != null and _wave_mgr.has_method("elapsed"):
+		return float(_wave_mgr.call("elapsed"))
+	return _game_elapsed
 
 ## ExpSystem fired leveled_up → pause world, show 3 upgrade cards, wait for
 ## a pick, apply it, then resume.

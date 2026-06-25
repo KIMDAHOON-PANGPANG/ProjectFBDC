@@ -86,6 +86,8 @@ var _selected_cards: Array = []
 ## 레벨업 시 뽑힌 권속 카드 목록 — _on_upgrade_card_selected 에서 rarity 조회용.
 var _pending_boon_cards: Array = []
 var _arena_start_msec: int = 0
+## 아레나 게임시간(초) 누적 — _process(PAUSABLE) delta 합산. Testplay 는 WaveManager 없어 이 값이 단일 시간원.
+var _arena_game_elapsed: float = 0.0
 
 func _ready() -> void:
 	_arena_start_msec = Time.get_ticks_msec()
@@ -109,10 +111,11 @@ func _ready() -> void:
 	add_child(arena)
 	arena.call("setup", _player, _exp_system, self)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 		return
+	_arena_game_elapsed += delta
 	# HP/열기/회피/레벨은 PlayerHud 가 자가 갱신(PC 게터 덕타이핑).
 
 ## --- Procedural arena (mirrors Main; intentional duplication so this
@@ -337,9 +340,8 @@ func collect_exp_gem(value: int) -> void:
 
 
 func _arena_elapsed_seconds() -> float:
-	if _arena_start_msec <= 0:
-		return 0.0
-	return float(Time.get_ticks_msec() - _arena_start_msec) / 1000.0
+	# 게임시간 단일화: 일시정지-aware 누적(_process PAUSABLE). 벽시계 폐기 — Main._elapsed_seconds 폴백과 동일 의미.
+	return _arena_game_elapsed
 
 
 func _on_leveled_up(_new_level: int) -> void:
