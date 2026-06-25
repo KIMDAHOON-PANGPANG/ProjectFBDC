@@ -21,6 +21,9 @@ var attack_power: int = 1
 @export var hit_hitstop_dur: float = 0.03
 ## 표식 '참(斬)' 누적 상한 — 일섬 적중마다 slash_mark +1(cap 5). 납도(RB)로 정산.
 const _SLASH_MARK_CAP := 5
+## 참향(잔향 일섬, baseline) 전용 — true 면 데미지/킬 없이 표식만 새긴다(_try_kill 우회).
+## Player.spawn_echo_slash 가 스폰 후 세팅. 발사체 격추도 스킵.
+var mark_only: bool = false
 var _length: float = 1.0
 var _width: float = 1.4
 ## 범위 Vector3 분해 — _width=x(폭) · _height=y(높이) · _len_pad=z(전방 길이 가산).
@@ -110,15 +113,25 @@ func _on_area_entered(area: Area3D) -> void:
 	_try_kill(area)
 
 func _try_kill(node: Node) -> void:
-	# 적 발사체는 격추만 한다(적 처치/보스 데미지로 치지 않음 — hit_enemy 미발생).
+	# 참향(mark_only) — 발사체 격추도 스킵(데미지/킬 없는 표식 전용 일섬).
 	var pr := node
 	while pr != null:
 		if pr.is_in_group("enemy_projectiles"):
-			if pr.has_method("take_hit"):
+			if not mark_only and pr.has_method("take_hit"):
 				pr.call("take_hit")
 			return
 		pr = pr.get_parent()
 	var target: Node = node
+	# 참향(mark_only) — take_hit/take_damage(킬) 없이 표식만 발화. _emit_slash_hit 가
+	# _apply_slash_mark 를 돌리되, 데미지가 0이라 적은 살아남아 ON_KILL_via_Slash 미발생.
+	if mark_only:
+		var mt: Node = node
+		while mt != null:
+			if mt.has_method("take_hit") or (mt.get_node_or_null("HealthComponent") != null):
+				_emit_slash_hit(mt)
+				return
+			mt = mt.get_parent()
+		return
 	# Walk up to find an entity with a HealthComponent or a `take_hit` method
 	while target != null:
 		if target.has_method("take_hit"):

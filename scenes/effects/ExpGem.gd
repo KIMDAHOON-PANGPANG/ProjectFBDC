@@ -52,8 +52,18 @@ func configure(value: int) -> void:
 
 
 func _ready() -> void:
+	# 혼백 소집(BoonExecutor baseline) 이 group 으로 일괄 호밍 트리거할 수 있게 가입.
+	add_to_group("exp_gems")
 	_player = get_tree().get_first_node_in_group("player")
 	_build_visual()
+
+
+## 외부(혼백 소집 baseline) 강제 호밍 — 거리 무관 예약해 PC 로 졸졸 따라오게 한다.
+## _set_reserved 가 호밍 경로(_process 의 _reserved 분기)를 켜므로 권역 밖이어도 빨려든다.
+func force_home() -> void:
+	if _collected:
+		return
+	_set_reserved()
 
 
 func _build_visual() -> void:

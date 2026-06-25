@@ -138,11 +138,11 @@
           "trigger": "On_Sheathe",
           "effect": "SHEATHE_DOMINO",
           "params_by_rarity": {
-            "chosim": { "chain_radius": 3.0 },
-            "rare":   { "chain_radius": 3.4 },
-            "uniq":   { "chain_radius": 3.8 },
-            "legend": { "chain_radius": 4.2 },
-            "master": { "chain_radius": 4.8 }
+            "chosim": { "chain_radius": 3.0, "chain_count": 2, "depth": 2 },
+            "rare":   { "chain_radius": 3.4, "chain_count": 2, "depth": 2 },
+            "uniq":   { "chain_radius": 3.8, "chain_count": 3, "depth": 2 },
+            "legend": { "chain_radius": 4.2, "chain_count": 3, "depth": 2 },
+            "master": { "chain_radius": 4.8, "chain_count": 4, "depth": 2 }
           }
         }
       ]

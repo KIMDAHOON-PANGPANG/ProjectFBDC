@@ -24,6 +24,10 @@ const ON_HIT_MARKED_ENEMY      := "On_Hit_Marked_Enemy"
 const ON_MARK_FULL             := "On_Mark_Full"
 ## 납도(RB) — slash_mark 정산 트리거. Player._do_sheathe 가 emit, BoonExecutor._on_sheathe 가 구독.
 const ON_SHEATHE               := "On_Sheathe"
+## 납도 정산(_settle_enemy)이 적을 '죽인' 순간 1회 — epicenter 도미노/baseline 6종 트리거.
+## BoonExecutor._settle_enemy 가 take_hit 직후 사망 판정 시 emit(연쇄 중 _in_cascade 면 재발 금지=무한연쇄 차단).
+## 일섬 본체 킬(On_Kill_via_Slash)과는 별개 — 납도 정산 사망만 쏨.
+const ON_SHEATHE_KILL          := "On_Sheathe_Kill"
 # 아래 2종: 결계 기하 판정 후행 — 상수만 정의, emit 금지.
 const ON_LINE_INTERSECTION     := "On_Line_Intersection"
 const ON_ENCLOSE_AREA          := "On_Enclose_Area"

@@ -796,6 +796,12 @@ func _complete_slash_action() -> void:
 	_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
 
 func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO) -> void:
+	_spawn_slash_attack_node(start, end, extents)
+
+
+## _spawn_slash_attack 의 노드 반환 변형 — 참향(mark_only) 등 스폰 후 플래그를 세팅해야 하는
+## 경로에서 사용. 스폰/구성은 동일, 생성된 SlashAttack 를 반환(실패 시 null).
+func _spawn_slash_attack_node(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO) -> SlashAttack:
 	var attack: SlashAttack
 	if slash_attack_scene != null:
 		attack = slash_attack_scene.instantiate() as SlashAttack
@@ -804,12 +810,13 @@ func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector
 	var host := _effect_host()
 	if host == null:
 		attack.queue_free()
-		return
+		return null
 	host.add_child(attack)
 	var ext: Vector3 = extents if extents.length_squared() > 0.0001 else data.slash_hit_extents
 	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
 	attack.attack_power = attack_power
+	return attack
 
 ## 거합일도(IAIDO_FINISHER) — BoonExecutor 가 거합+만개 처형 시 호출. 마지막 일섬 방향(_aim_dir)으로
 ## 추가 일섬 본체를 count 줄 발사한다. 본체는 SlashAttack 라 _try_kill(데미지)·_apply_slash_mark(새 표식)
@@ -828,6 +835,41 @@ func spawn_finisher_slash(count: int = 1) -> void:
 		var s: Vector3 = global_position
 		var e: Vector3 = global_position + dir * rng
 		_spawn_slash_attack(s, e, ext)
+
+
+## 참향(잔향 일섬, baseline) — BoonExecutor 가 ON_SHEATHE_KILL 시 호출. spawn_finisher_slash 변형으로
+## 데미지/킬 없이 표식만 새기는 SlashAttack 1줄을 발사한다(mark_only). 방향 = _aim_dir(없으면
+## epicenter 최근접 '미표식' 적 방향). 공유 .tres 미변형 — 로컬 ext/플래그만.
+func spawn_echo_slash(epicenter: Vector3 = Vector3.INF) -> void:
+	var dir: Vector3 = _aim_dir.normalized()
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(1, 0, 0)
+	# epicenter 가 주어졌으면 거기서 최근접 미표식 적 방향으로 보정(없으면 _aim_dir 유지).
+	if epicenter.x != INF:
+		var best: Node3D = null
+		var best_d: float = INF
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e == null or not is_instance_valid(e) or not (e is Node3D):
+				continue
+			if int(e.get_meta("slash_mark", 0)) > 0:
+				continue
+			var d: float = (e as Node3D).global_position.distance_to(epicenter)
+			if d < best_d:
+				best_d = d
+				best = e as Node3D
+		if best != null:
+			var to_e: Vector3 = best.global_position - global_position
+			to_e.y = 0.0
+			if to_e.length_squared() > 0.0001:
+				dir = to_e.normalized()
+	var rng: float = data.instant_slash_distance * boon_slash_range_mult
+	var ext: Vector3 = data.slash_hit_extents
+	if boon_slash_width_mult > 1.0:
+		ext = Vector3(ext.x * boon_slash_width_mult, ext.y, ext.z * boon_slash_width_mult)
+	var attack := _spawn_slash_attack_node(global_position, global_position + dir * rng, ext)
+	if attack != null:
+		attack.mark_only = true
+		attack.attack_power = 0
 
 
 ## 역수(IAIDO_HASTE) — BoonExecutor 가 납도 성공 시 호출. 다음 일섬까지 가속 윈도우 켜고
