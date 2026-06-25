@@ -44,8 +44,6 @@ const _SHEATHE_MARK_CAP := 5
 const _SHEATHE_HEAT_REFUND_PER_MARK := 0.08
 ## 거둔 표식 총합당 HP 미세 회복(반올림).
 const _SHEATHE_HP_PER_MARK := 0.4
-## 납도 쿨다운(초) — 연타 방지.
-const _SHEATHE_COOLDOWN := 0.3
 
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
@@ -135,7 +133,7 @@ var boon_dash_dist_bonus: float = 0.0
 var evade_refill_mult: float = 1.0
 # ── M9-S7 baseline④: 거합 추격 윈도우(코드 상수·항상 on) ──
 ## 추격 윈도우 잔여(초). 납도가 처치를 내면 open_sheathe_follow 가 0.4 로 세팅, _physics_process 가 깎음.
-## > 0 동안 RB(slash) 재입력 시 _SHEATHE_COOLDOWN 무시하고 즉시 추격 납도 1회.
+## > 0 동안 RB(slash) 재입력 시 납도 쿨 무시하고 즉시 추격 납도 1회.
 var _sheathe_follow_t: float = 0.0
 ## 추격 1회 cap — 추격 납도가 또 추격 윈도우를 열지 못하게(open_sheathe_follow 가 used 면 return).
 ## 일반 납도 시작 시에만 false 로 리셋. ★무한 추격 방지.
@@ -453,7 +451,7 @@ func _check_sheathe() -> void:
 	if _sheathe_follow_t > 0.0 and Input.is_action_just_pressed("slash") and not _is_pointer_over_ui():
 		_sheathe_follow_used = true
 		_sheathe_follow_t = 0.0
-		_sheathe_cd_t = 0.0  # _SHEATHE_COOLDOWN 무시.
+		_sheathe_cd_t = 0.0  # 쿨 무시(추격 바이패스).
 		_do_sheathe()
 		return
 	if _sheathe_cd_t > 0.0:
@@ -481,7 +479,7 @@ func open_sheathe_follow() -> void:
 ## 납도 발동 — 짧은 거두기 모션 + 칼집 섬광 더미연출 + ON_SHEATHE 발행(BoonExecutor 가 정산).
 ## 표식 적이 없으면 정산은 BoonExecutor 쪽에서 자연히 no-op(헛납도) — 모션만 남는다.
 func _do_sheathe() -> void:
-	_sheathe_cd_t = _SHEATHE_COOLDOWN
+	_sheathe_cd_t = maxf(data.sheathe_cooldown, 0.001)
 	# 거두기 모션 — attack1 1회 재생(없으면 flash 폴백).
 	if _sprite_rig != null and _sprite_rig.has_method("play_oneshot"):
 		_sprite_rig.call("play_oneshot", "attack1", 0.2)
@@ -492,6 +490,16 @@ func _do_sheathe() -> void:
 	var tb := _trigger_bus()
 	if tb != null:
 		tb.call("emit", _TriggerBusScript.ON_SHEATHE, {"source": self, "position": global_position})
+
+
+## HUD 납도 쿨다운 클록용 — 1=방금 거둠(쿨 가득) / 0=준비됨.
+func get_sheathe_cooldown_frac() -> float:
+	return clampf(_sheathe_cd_t / maxf(data.sheathe_cooldown, 0.001), 0.0, 1.0)
+
+
+## 납도 준비 완료 여부(쿨 0 이하).
+func is_sheathe_ready() -> bool:
+	return _sheathe_cd_t <= 0.0
 
 
 ## 납도 정산 자원 환급(BoonExecutor 가 거둔 표식 총합으로 호출). 음수 열 가산 + HP 미세 회복.

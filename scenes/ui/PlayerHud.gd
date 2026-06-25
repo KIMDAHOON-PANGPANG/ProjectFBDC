@@ -24,6 +24,10 @@ const _HP_W := 372.0
 
 ## 공용 상태 아이콘(2D) — 적 머리 스트립과 같은 radial 셰이더 데이터 모델 공유.
 const _StatusIcon2DScript := preload("res://scenes/ui/StatusIcon2D.gd")
+
+const _SHEATHE_READY := Color(0.95, 0.82, 0.35)
+const _SHEATHE_COOL := Color(0.45, 0.40, 0.30, 0.9)
+const _SHEATHE_PIE := Color(0.02, 0.02, 0.03, 0.78)
 ## 버프/디버프 스트립 아이콘 간격(px).
 const _STATUS_SPACING := 34.0
 
@@ -42,6 +46,7 @@ var _level_label: Label
 var _status_strip_2d: Control = null
 ## key(String) -> StatusIcon2D(Control)
 var _status_icons_2d: Dictionary = {}
+var _sheathe_clock: Control = null
 
 
 func _ready() -> void:
@@ -182,6 +187,17 @@ func _build() -> void:
 		add_child(fill)
 		_dodge_fills.append(fill)
 
+	# --- 납도(RB) 쿨다운 클록 (MOBA 스킬버튼식 시계방향) ---
+	var clock_x := dodge_x + 2 * 30.0 + 14.0
+	_sheathe_clock = _SheatheClock.new()
+	_sheathe_clock.position = Vector2(clock_x, 18.0)
+	_sheathe_clock.size = Vector2(48, 48)
+	_sheathe_clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_sheathe_clock.set("ready_col", _SHEATHE_READY)
+	_sheathe_clock.set("cool_col", _SHEATHE_COOL)
+	_sheathe_clock.set("pie_col", _SHEATHE_PIE)
+	add_child(_sheathe_clock)
+
 	# --- 버프/디버프 상태 스트립(스캐폴드) ---
 	# 패널 위쪽(HP 바 상단 바깥)에 좌→우 배치되는 빈 컨테이너. PC 지속버프가 생기면
 	# set_status(key, {...}) 로 즉시 아이콘이 뜨도록 공용 StatusIcon2D 를 재활용한다.
@@ -295,3 +311,47 @@ func _style_label(l: Label, sz: int) -> void:
 	l.add_theme_constant_override("outline_size", 4)
 	l.add_theme_font_size_override("font_size", sz)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+class _SheatheClock extends Control:
+	var player: Node = null
+	var ready_col: Color
+	var cool_col: Color
+	var pie_col: Color
+	func _ready() -> void:
+		set_process(true)
+	func _process(_d: float) -> void:
+		queue_redraw()
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5 - 2.0
+		var p := get_parent()
+		if player == null and p != null:
+			player = p.get("_player")
+		var frac := 0.0
+		var rdy := true
+		if player != null and is_instance_valid(player):
+			if player.has_method("get_sheathe_cooldown_frac"):
+				frac = clampf(float(player.call("get_sheathe_cooldown_frac")), 0.0, 1.0)
+			if player.has_method("is_sheathe_ready"):
+				rdy = bool(player.call("is_sheathe_ready"))
+		# 베이스 원(어두운 배경)
+		draw_circle(c, r, Color(0.06, 0.06, 0.09, 0.92))
+		# 납(納) 글리프
+		var font := ThemeDB.fallback_font
+		var fs := 22
+		var glyph := "納"
+		var tw := font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+		var gcol := (Color(1, 1, 1) if rdy else Color(0.6, 0.6, 0.65))
+		draw_string(font, c - tw * 0.5 + Vector2(0, fs * 0.36), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, gcol)
+		# 시계방향 쿨다운 파이 — 12시(-90°) 기준 시계방향으로 frac 만큼 덮음.
+		if frac > 0.001:
+			var pts: PackedVector2Array = [c]
+			var start := -PI * 0.5
+			var steps := 48
+			for i in steps + 1:
+				var a := start + (TAU * frac) * (float(i) / float(steps))
+				pts.append(c + Vector2(cos(a), sin(a)) * r)
+			draw_colored_polygon(pts, pie_col)
+		# 테두리 — 준비됨이면 금색 강조, 쿨 중이면 어둠.
+		draw_arc(c, r, 0.0, TAU, 48, (ready_col if rdy else cool_col), (3.0 if rdy else 2.0), true)
