@@ -170,6 +170,11 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 				active_style = sr
 			break
 
+	# ── M9-S12 첫 발도술 강제 1픽 — style 미보유면 첫 draw 에 발도술(kind=='style') 3종만 노출한다. ──
+	# style 카드를 1개 확정하기 전엔 build-up/universal 카드를 섞지 않는다(한 판 = 발도술 1픽 확정).
+	# style 보유 시엔 기존 로직(style 제외 + style_req 필터) 그대로.
+	var force_style := not owns_style
+
 	# 미보유 카드만 추려 available 구성.
 	var available: Array = []
 	for b in BOONS:
@@ -177,6 +182,12 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 			continue
 		var bid: String = String(b.get("id", ""))
 		if bid == "" or bid in owned_ids:
+			continue
+		if force_style:
+			# 첫 픽 강제 — style 카드만 노출(발도/속발/일도양단 3종). 나머지(build-up/universal) 전부 제외.
+			if String(b.get("kind", "")) != "style":
+				continue
+			available.append(b)
 			continue
 		# style 카드는 1픽 exclusive — 이미 스타일 보유면 제외.
 		if owns_style and String(b.get("kind", "")) == "style":
@@ -196,7 +207,9 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 		if result.size() >= count:
 			break
 		var slot: String = String(b.get("skill_type", ""))
-		if slot != "" and slot in used_slots:
+		# ★강제 첫 픽(force_style)에서는 slot 중복 체크를 건너뛴다 — 발도술 3종은 skill_type 이 모두
+		#   '발도술'(동일 slot)이라, used_slots 가 막으면 1개만 노출돼 1픽이 불가능해진다. 3종 다 노출해야 한다.
+		if not force_style and slot != "" and slot in used_slots:
 			continue
 		var bid: String = String(b.get("id", ""))
 		var already := false

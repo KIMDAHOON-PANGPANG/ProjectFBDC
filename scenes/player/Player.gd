@@ -39,7 +39,7 @@ const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 const _SHEATHE_RANGE := 5.0
 ## 미만 표식 정산 데미지 단가(표식 1개당). 만개=처형(보스 제외).
 const _SHEATHE_DMG := 2
-const _SHEATHE_MARK_CAP := 5
+# M9-S12: 옛 하드코딩 표식 cap(_SHEATHE_MARK_CAP := 5)은 제거. cap 은 스타일별 런타임 _mark_cap(get_mark_cap) 단일 소스.
 ## 거둔 표식 총합당 열 환급(%) — 음수 가산으로 식힘.
 const _SHEATHE_HEAT_REFUND_PER_MARK := 0.08
 ## 거둔 표식 총합당 HP 미세 회복(반올림).
@@ -226,6 +226,12 @@ var _charge_dash_cancel_has: bool = false
 var _charge_dash_cancel_haste: float = 0.0
 var _charge_dash_cancel_dash: float = 0.0
 
+# ── M9-S12 스타일 cap/템포 — 표식 만개 cap 단일 소스 ──
+## 활성 스타일 표식 cap(숏/미들/롱). 미선택=5(미들·기존 회귀), 연격류=3(숏), 충전류=7(롱), 납도류=5(미들).
+## ★단일 소스: SlashAttack 부여 cap·BoonExecutor 정산 cap·적 _poll_status 가시화 cap 이 전부 get_mark_cap() 을 읽는다.
+## 런타임 변수(_ready 리셋, 공유 .tres 미변형). _nuki/_charge/_iaido refresh 가 세팅, add_boon 이 동기화.
+var _mark_cap: int = 5
+
 ## M8 — 컨트롤은 일섬 단일로 통합됐다. 이 플래그는 항상 true 로 고정(_ready 에서
 ## 세팅). 수십 개 분기·게터(is_instant_slash_mode, add_heat/add_slash_gauge 가드,
 ## _is_cooldown_resource 등)가 이 변수를 읽으므로 변수 자체는 보존한다. 옛 근접
@@ -367,6 +373,8 @@ func _ready() -> void:
 	_charge_pending_mark_depth = 0
 	_charge_perfect_has = false
 	_charge_mark_depth_per_tier = 0
+	# M9-S12 표식 cap 리셋 — 스타일 미선택 기본 5(미들·회귀 0). 스타일 카드 픽 시 refresh 가 3/5/7 로 세팅.
+	_mark_cap = 5
 	_boon_executor = _BoonExecutorScript.new()
 	_boon_executor.name = "BoonExecutor"
 	add_child(_boon_executor)
@@ -1159,6 +1167,9 @@ func _spawn_slash_attack_node(start: Vector3, end: Vector3, extents: Vector3 = V
 	if _charge_pending_mark_depth > 0:
 		attack.set("charge_mark_depth", _charge_pending_mark_depth)
 		_charge_pending_mark_depth = 0
+	# M9-S12 표식 cap 주입 — 매 발사마다 활성 스타일 cap 을 일섬 본체에 전달(단일 소스).
+	# ★항상 주입(charge_mark_depth 처럼 조건부 아님) — 인게임 중 스타일/cap 변경도 다음 발사부터 반영.
+	attack.set("mark_cap", get_mark_cap())
 	return attack
 
 ## 거합일도(IAIDO_FINISHER) — BoonExecutor 가 거합+만개 처형 시 호출. 마지막 일섬 방향(_aim_dir)으로
@@ -1647,6 +1658,9 @@ func add_boon(id: String, rarity: String) -> void:
 	_nuki_refresh_from_boons()
 	# M9-S11 충전류 — active_boons 스캔해 _charge_active + 충전 params 재계산(보유 시에만 차징 경로 강제).
 	_charge_refresh_from_boons()
+	# M9-S12 납도류 표식 cap 동기화 — iaido(STYLE_IAIDO)는 Player refresh 가 없어 별도 동기.
+	# ★nuki/charge active 면 이미 cap 세팅 끝(상호배타) → 덮지 않는다. 미선택은 기본 5 회귀.
+	_sync_iaido_mark_cap()
 
 
 ## M9-S10 — active_boons 를 스캔해 연격류 런타임 상태를 재계산한다.
@@ -1691,6 +1705,8 @@ func _nuki_refresh_from_boons() -> void:
 					_nuki_max = max(_nuki_max, int(p.get("nuki_max", _nuki_max)))
 					_nuki_sweet_frac = clampf(float(p.get("sweet_frac", _nuki_sweet_frac)), 0.05, 0.9)
 					_nuki_retap_charge_frac = clampf(float(p.get("retap_charge_frac", _nuki_retap_charge_frac)), 0.1, 1.0)
+					# M9-S12 연격류 = 숏 cap(빨리 채워 자주 회수). 기본 3.
+					_mark_cap = max(1, int(p.get("mark_cap", 3)))
 				"NUKI_COMBO_EXT":
 					_nuki_max += max(0, int(p.get("max_bonus", 0)))
 				"NUKI_ACCEL":
@@ -1755,6 +1771,8 @@ func _charge_refresh_from_boons() -> void:
 					_charge_pierce_width_mult = max(_charge_pierce_width_mult, float(p.get("pierce_width_mult", 1.0)))
 					_charge_dash_speed_mult = max(_charge_dash_speed_mult, float(p.get("dash_speed_mult", 1.0)))
 					_charge_mark_depth_base = max(_charge_mark_depth_base, int(p.get("mark_depth_base", 1)))
+					# M9-S12 충전류 = 롱 cap(고cap·깊게 쌓아 한 방). 기본 7.
+					_mark_cap = max(1, int(p.get("mark_cap", 7)))
 				"CHARGE_HASTE":
 					_charge_haste_mult = max(_charge_haste_mult, float(p.get("haste_pct", 0.0)))
 				"CHARGE_PERFECT":
@@ -1776,6 +1794,35 @@ func _charge_refresh_from_boons() -> void:
 ## M9-S11 충전류 getter — HUD/디버그용(차징 UI/AimArrow 가 메인, 라벨은 최소).
 func is_charge_active() -> bool:
 	return _charge_active
+
+## M9-S12 — 활성 스타일 표식 cap(단일 소스). SlashAttack 부여·BoonExecutor 정산·적 가시화가 전부 이 값을 읽는다.
+## 미선택=5(미들·회귀), 연격류=3(숏), 충전류=7(롱), 납도류=5(미들). _ready 가 5 로 리셋, refresh 가 갱신.
+func get_mark_cap() -> int:
+	return _mark_cap
+
+
+## M9-S12 — 납도류(STYLE_IAIDO) 표식 cap 동기화. iaido 는 Player refresh 가 없어(BoonExecutor 가 정산 처리)
+## add_boon 끝에서 별도 호출한다. ★연격/충전 active 면 그 refresh 가 이미 cap 을 세팅했으므로 덮지 않는다(상호배타 안전).
+## active_boons 에 STYLE_IAIDO 가 있으면 그 params(mark_cap, 기본 5=미들)로 세팅, 없으면 기본 5 로 회귀(미선택/유니버설).
+func _sync_iaido_mark_cap() -> void:
+	if _nuki_active or _charge_active:
+		return  # 연격/충전 refresh 가 이미 cap 세팅(상호배타 — 덮지 않음).
+	var cap: int = 5  # 미선택/유니버설 기본 = 미들 5(회귀 0).
+	for boon in active_boons:
+		if not (boon is Dictionary):
+			continue
+		var comps = boon.get("components", [])
+		if not (comps is Array):
+			continue
+		var p: Dictionary = boon.get("params", {})
+		if not (p is Dictionary):
+			p = {}
+		for comp in comps:
+			if not (comp is Dictionary):
+				continue
+			if String(comp.get("effect", "")) == "STYLE_IAIDO":
+				cap = max(1, int(p.get("mark_cap", 5)))  # 납도류 = 미들 5.
+	_mark_cap = cap
 
 ## 현재 차징 프랙(0~1). AIMING 이 아니면 0.
 func get_charge_frac() -> float:

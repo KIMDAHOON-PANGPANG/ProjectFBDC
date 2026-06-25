@@ -21,7 +21,8 @@ const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 ## 표식 '참(斬)' 표시 — 청백(冷光) 아이콘. 만개(5) 도달 시 _poll_status 에서 붉게 점멸.
 ## 단 보스는 만개여도 납도 처형 면역(marks×피해만) — 점멸은 '많이 새겨짐' 연출 의미.
 const _MARK_COLOR := Color(0.67, 0.8, 1.0)
-const _MARK_CAP := 5.0
+## M9-S12: 만개 가시화 cap = 활성 스타일 cap(Player.get_mark_cap 폴링, 미연결 시 5.0=미들). 캐시 _player 재사용.
+const _MARK_CAP_FALLBACK := 5.0
 
 ## 보스 변형 식별자 (1=Boss / 2=Boss2 / 3=Boss3). 각 .tscn 에서 지정.
 ## CombatData 가 enemy_combat.json 의 "보스_<id>" 섹션을 적용하는 키.
@@ -191,19 +192,28 @@ func _poll_status() -> void:
 		return
 	var marks := int(get_meta("slash_mark", 0))
 	if marks > 0:
-		var full: bool = marks >= int(_MARK_CAP)
+		var cap: float = _mark_cap_value()  # M9-S12 활성 스타일 cap.
+		var full: bool = marks >= int(cap)
 		var col: Color = _MARK_COLOR
 		if full:
 			var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 90.0)
 			col = Color(1.0, 0.25, 0.25).lerp(Color(1.0, 0.7, 0.7), pulse)
 		_status_strip.call("set_status", "slash_mark", {
-			"value": clampf(float(marks) / _MARK_CAP, 0.0, 1.0),
+			"value": clampf(float(marks) / cap, 0.0, 1.0),
 			"mode": 0,
 			"color": col,
 			"icon": null,
 		})
 	else:
 		_status_strip.call("clear_status", "slash_mark")
+
+## M9-S12 — 만개 가시화 cap = 활성 스타일 cap(Player.get_mark_cap). 캐시 _player 재사용(없으면 한 번 재취득). 미연결 시 5.0.
+func _mark_cap_value() -> float:
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group("player")
+	if _player != null and is_instance_valid(_player) and _player.has_method("get_mark_cap"):
+		return float(_player.call("get_mark_cap"))
+	return _MARK_CAP_FALLBACK
 
 func _physics_process(delta: float) -> void:
 	if _dead:

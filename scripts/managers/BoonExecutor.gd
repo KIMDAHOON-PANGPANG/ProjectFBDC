@@ -13,7 +13,9 @@ const _TriggerBusScript := preload("res://scripts/managers/TriggerBus.gd")
 ## 납도(On_Sheathe) 정산 — Player 상수와 동일값(정산 주체이므로 자체 보유). 공유 .tres 변형 금지.
 const _SHEATHE_RANGE := 5.0
 const _SHEATHE_DMG := 2
-const _MARK_CAP := 5
+## M9-S12: 표식 만개 cap = 활성 스타일 cap(숏3/미들5/롱7) 단일 소스. _mark_cap() 헬퍼가 Player.get_mark_cap()
+## 을 읽는다(미연결 시 5=미들·회귀 0). SlashAttack 부여 cap·적 가시화 cap 과 같은 값을 써야 '쌓이는데 안 만개' 버그가 없다.
+## ★각 정산 함수는 진입 시 var cap := _mark_cap() 1회로 폴링 = 한 사이클 내 일관 cap 보장.
 
 var _player: Node = null
 var _tb: Node = null
@@ -128,6 +130,16 @@ func _exit_tree() -> void:
 	_slow_fields.clear()
 
 
+# ══════════════ M9-S12: 표식 만개 cap 단일 소스 ══════════════
+
+## 활성 스타일 표식 cap — Player.get_mark_cap() 폴링(숏3/미들5/롱7). 미연결/구버전 Player 면 5(미들·회귀 0).
+## ★정산 함수 진입 시 1회 호출해 지역 var cap 에 담아 쓴다(한 사이클 내 일관). SlashAttack 부여·적 가시화와 같은 값.
+func _mark_cap() -> int:
+	if _player != null and is_instance_valid(_player) and _player.has_method("get_mark_cap"):
+		return int(_player.call("get_mark_cap"))
+	return 5
+
+
 # ══════════════ 납도(On_Sheathe) 정산 — slash_mark 거두기 ══════════════
 
 ## RB 납도 시 호출 — sheathe_range 내 slash_mark>0 적을 거둔다. 만개(>=cap, 보스 제외)=처형,
@@ -184,6 +196,8 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 	)
 
 	# ── 1차 정산 패스: sheathe_range 내 표식 적 거두기. 처형(만개·비보스) 적은 위치 기록(도미노/피니셔). ──
+	# M9-S12 cap 폴링 1회 — 이 정산 사이클 내내 같은 cap(만개 판정 일관). SlashAttack 부여 cap 과 동일.
+	var cap: int = _mark_cap()
 	var total_marks: int = 0
 	var executed_pts: Array = []   # SHEATHE_DOMINO 전파 기점 + FINISHER 발동 게이트
 	var settled: Array = []        # 이미 거둔 적(도미노 중복 방지)
@@ -197,7 +211,7 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 		if (e as Node3D).global_position.distance_to(origin) > range_eff:
 			continue
 		# 만개+비보스(처형) 적의 표식은 환원 full_collect_mult 로 가중해 환급에 반영.
-		var is_full: bool = marks >= _MARK_CAP and not e.is_in_group("boss")
+		var is_full: bool = marks >= cap and not e.is_in_group("boss")
 		if is_full:
 			total_marks += int(round(float(marks) * full_collect_mult))
 			executed_pts.append((e as Node3D).global_position)
@@ -269,14 +283,16 @@ func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 
 	var is_boss: bool = e.is_in_group("boss")
 	# tier 분류 — 보스2 / 엘리트1 / 잡몹0 (group 우선순위).
 	var tier: int = 2 if is_boss else (1 if e.is_in_group("elites") else 0)
+	# M9-S12 cap 폴링 1회 — 이 정산 1마리 내 만개 판정 일관(SlashAttack 부여 cap 과 동일).
+	var cap: int = _mark_cap()
 	# 만개(보스 제외) — epicenter 도미노 자격 게이트.
-	var is_full: bool = marks >= _MARK_CAP and not is_boss
+	var is_full: bool = marks >= cap and not is_boss
 	# 처형 여부 산출 — 아래 take_hit 분기와 동일 판정(블러드 크기 결정용).
-	var is_exec: bool = (marks >= _MARK_CAP and not is_boss) \
-		or (is_boss and marks >= _MARK_CAP and is_perfect and _boss_below_execute_threshold(e))
-	if marks >= _MARK_CAP and not is_boss:
+	var is_exec: bool = (marks >= cap and not is_boss) \
+		or (is_boss and marks >= cap and is_perfect and _boss_below_execute_threshold(e))
+	if marks >= cap and not is_boss:
 		e.call("take_hit", 9999)  # 만개 처형 — 잡몹/엘리트/주술사 즉사
-	elif is_boss and marks >= _MARK_CAP and is_perfect and _boss_below_execute_threshold(e):
+	elif is_boss and marks >= cap and is_perfect and _boss_below_execute_threshold(e):
 		# 안티-보스 처형선 — 보스 저HP(≤threshold)에서 거합+만개 납도면 처형.
 		e.call("take_hit", 9999)
 	else:
@@ -357,7 +373,7 @@ func _on_slash_hit_deepmark(ctx: Dictionary) -> void:
 			_hit_counters[i] = 0
 			if extra > 0:
 				var cur: int = int((target as Node).get_meta("slash_mark", 0))
-				(target as Node).set_meta("slash_mark", min(cur + extra, _MARK_CAP))
+				(target as Node).set_meta("slash_mark", min(cur + extra, _mark_cap()))
 		else:
 			_hit_counters[i] = c
 	)
@@ -637,7 +653,7 @@ func _cascade_domino_from(epicenter: Vector3, depth: int, is_perfect: bool) -> v
 		var marks: int = int(e.get_meta("slash_mark", 0))
 		if marks <= 0:
 			continue  # 그새 다른 전파로 거둬졌으면 스킵(visited 대용).
-		var is_full: bool = marks >= _MARK_CAP
+		var is_full: bool = marks >= _mark_cap()
 		_cascade_bonus_marks += marks
 		# epicenter→대상 청백 호 더미.
 		_spawn_chain_arc(epicenter, (e as Node3D).global_position)
@@ -670,6 +686,7 @@ func _on_sheathe_kill_domino_iai(epicenter: Vector3, is_perfect: bool) -> void:
 	)
 	if not has_card or radius <= 0.0 or count <= 0:
 		return
+	var cap: int = _mark_cap()  # M9-S12 만개 판정 cap 폴링 1회.
 	# epicenter 기준 '만개·비보스' 후보 수집 → 가까운 순 정렬.
 	var cands: Array = []
 	for e in get_tree().get_nodes_in_group("enemies"):
@@ -677,7 +694,7 @@ func _on_sheathe_kill_domino_iai(epicenter: Vector3, is_perfect: bool) -> void:
 			continue
 		if e.is_in_group("boss"):
 			continue  # 보스 만개 면역.
-		if int(e.get_meta("slash_mark", 0)) < _MARK_CAP:
+		if int(e.get_meta("slash_mark", 0)) < cap:
 			continue  # 만개만.
 		var d: float = (e as Node3D).global_position.distance_to(epicenter)
 		if d > radius:
@@ -697,7 +714,7 @@ func _on_sheathe_kill_domino_iai(epicenter: Vector3, is_perfect: bool) -> void:
 		if e == null or not is_instance_valid(e):
 			continue
 		var marks: int = int(e.get_meta("slash_mark", 0))
-		if marks < _MARK_CAP:
+		if marks < cap:
 			continue  # 그새 다른 전파로 거둬졌으면 스킵(visited 대용).
 		_cascade_bonus_marks += marks
 		_spawn_perfect_flash((e as Node3D).global_position)  # 흰 섬광 재사용.
@@ -721,6 +738,7 @@ func _on_sheathe_kill_reaping(epicenter: Vector3) -> void:
 	)
 	if not has_card or radius <= 0.0:
 		return
+	var cap: int = _mark_cap()  # M9-S12 만개 판정 cap 폴링 1회.
 	# 후보 수집 — 미만 표식(0<marks<cap)·비보스·반경 내. (take_hit 중 free 가능성 대비 사전 수집.)
 	var targets: Array = []
 	for e in get_tree().get_nodes_in_group("enemies"):
@@ -729,7 +747,7 @@ func _on_sheathe_kill_reaping(epicenter: Vector3) -> void:
 		if e.is_in_group("boss"):
 			continue  # 보스 면역.
 		var marks: int = int(e.get_meta("slash_mark", 0))
-		if marks <= 0 or marks >= _MARK_CAP:
+		if marks <= 0 or marks >= cap:
 			continue  # 미만 표식만(표식0·만개 제외).
 		if (e as Node3D).global_position.distance_to(epicenter) > radius:
 			continue
@@ -743,7 +761,7 @@ func _on_sheathe_kill_reaping(epicenter: Vector3) -> void:
 		if e == null or not is_instance_valid(e) or not e.has_method("take_hit"):
 			continue
 		var marks: int = int(e.get_meta("slash_mark", 0))
-		if marks <= 0 or marks >= _MARK_CAP:
+		if marks <= 0 or marks >= cap:
 			continue  # 그새 상태 변동 시 재확인.
 		var pos: Vector3 = (e as Node3D).global_position
 		_spawn_perfect_flash(pos)  # 노랑→흰 호 더미(재사용).
@@ -795,6 +813,7 @@ func _on_sheathe_kill_contagion(epicenter: Vector3) -> void:
 	)
 	if not has_card or hops <= 0:
 		return
+	var cap: int = _mark_cap()  # M9-S12 만개 판정/전염 cap 폴링 1회.
 	var visited: Dictionary = {}
 	for _h in range(hops):
 		# epicenter 최근접 미방문 '표식 있는·비보스' 적 1마리.
@@ -808,7 +827,7 @@ func _on_sheathe_kill_contagion(epicenter: Vector3) -> void:
 			if visited.has(e.get_instance_id()):
 				continue
 			var marks: int = int(e.get_meta("slash_mark", 0))
-			if marks <= 0 or marks >= _MARK_CAP:
+			if marks <= 0 or marks >= cap:
 				continue  # 표식 있는(0<marks<cap) 적만 — 표식0·이미 만개 제외.
 			var d: float = (e as Node3D).global_position.distance_to(epicenter)
 			if d >= best_d:
@@ -817,7 +836,7 @@ func _on_sheathe_kill_contagion(epicenter: Vector3) -> void:
 			best = e
 		if best == null:
 			break  # 더 전염할 대상 없음.
-		best.set_meta("slash_mark", _MARK_CAP)  # 즉시 만개 전염(0뎀, 처형 안 함).
+		best.set_meta("slash_mark", cap)  # 즉시 만개 전염(0뎀, 처형 안 함).
 		visited[best.get_instance_id()] = true
 		_spawn_chain_arc(epicenter, (best as Node3D).global_position)  # 전염 호.
 
@@ -1034,7 +1053,7 @@ func _baseline_ripple(epicenter: Vector3) -> void:
 			continue
 		if e.is_in_group("boss"):
 			continue
-		if int(e.get_meta("slash_mark", 0)) < _MARK_CAP:
+		if int(e.get_meta("slash_mark", 0)) < _mark_cap():
 			continue  # 만개만.
 		var d: float = (e as Node3D).global_position.distance_to(epicenter)
 		if d > _BL_RIPPLE_RADIUS or d >= best_d:
@@ -1063,7 +1082,7 @@ func _baseline_mark_spread(epicenter: Vector3, tier: int) -> void:
 		if (e as Node3D).global_position.distance_to(epicenter) > _BL_MARK_RADIUS:
 			continue
 		var cur: int = int(e.get_meta("slash_mark", 0))
-		e.set_meta("slash_mark", min(cur + grant, _MARK_CAP))
+		e.set_meta("slash_mark", min(cur + grant, _mark_cap()))
 		any = true
 	if any:
 		_spawn_chain_arc(epicenter, epicenter)  # 제자리 청백 링(_make_disc_mesh 더미).

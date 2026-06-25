@@ -74,7 +74,9 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 ## 표식 '참(斬)' 표시 — 청백(冷光) 아이콘. 만개(5) 도달 시 _poll_status 에서 붉게 점멸('거둘 준비').
 const _MARK_COLOR := Color(0.67, 0.8, 1.0)
-const _MARK_CAP := 5.0
+## M9-S12: 만개 가시화 cap = 활성 스타일 cap. _mark_cap_value() 가 Player.get_mark_cap() 폴링(미연결 시 5.0=미들).
+## ★캐시 _player(이미 보유) 재사용 — 매 프레임 그룹 풀스캔 회피. SlashAttack 부여·BoonExecutor 정산과 같은 값.
+const _MARK_CAP_FALLBACK := 5.0
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -186,20 +188,30 @@ func _poll_status() -> void:
 		return
 	var marks := int(get_meta("slash_mark", 0))
 	if marks > 0:
-		var full: bool = marks >= int(_MARK_CAP)
+		var cap: float = _mark_cap_value()  # M9-S12 활성 스타일 cap(만개 판정 일관).
+		var full: bool = marks >= int(cap)
 		var col: Color = _MARK_COLOR
 		if full:
 			# 만개 — 붉게 점멸('거둘 준비'). _poll_status 가 매 프레임 도므로 시간펄스 색으로 표현.
 			var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 90.0)
 			col = Color(1.0, 0.25, 0.25).lerp(Color(1.0, 0.7, 0.7), pulse)
 		_status_strip.call("set_status", "slash_mark", {
-			"value": clampf(float(marks) / _MARK_CAP, 0.0, 1.0),
+			"value": clampf(float(marks) / cap, 0.0, 1.0),
 			"mode": 0,
 			"color": col,
 			"icon": null,
 		})
 	else:
 		_status_strip.call("clear_status", "slash_mark")
+
+## M9-S12 — 만개 가시화 cap = 활성 스타일 cap(Player.get_mark_cap). 캐시 _player 재사용(없으면 한 번 재취득).
+## 미연결/구버전 Player 면 _MARK_CAP_FALLBACK(5.0). SlashAttack 부여·BoonExecutor 정산과 같은 값을 써야 가시화가 일치한다.
+func _mark_cap_value() -> float:
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group("player")
+	if _player != null and is_instance_valid(_player) and _player.has_method("get_mark_cap"):
+		return float(_player.call("get_mark_cap"))
+	return _MARK_CAP_FALLBACK
 
 func _physics_process(delta: float) -> void:
 	if _dead:

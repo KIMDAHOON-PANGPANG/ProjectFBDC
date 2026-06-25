@@ -86,6 +86,29 @@ func _initialize() -> void:
 	assert(not cards.is_empty(), "draw_boons 빈 배열 (28장인데 비어 있음)")
 	assert(cards.size() <= 3, "draw_boons count 초과")
 
+	# ── M9-S12 첫 발도술 강제 1픽 — 미보유 첫 draw 는 '전부 style 카드(발도술)'여야 한다. ──
+	# build-up/universal 카드가 섞이면 첫 픽에서 스타일이 안 정해질 수 있어 cap/템포 축이 무너진다.
+	for c in cards:
+		assert(String(c.get("kind", "")) == "style", "미보유 첫 draw 가 style 카드 아님 — %s(kind=%s)" % [c.get("id", ""), c.get("kind", "")])
+	# 발도술 3종이 같은 slot('발도술')임에도 강제 픽에서는 셋 다 노출돼야 한다(slot 중복 가드 우회 확인).
+	# count=3 으로 뽑았으므로 발도/속발/일도양단 3종이 모두 노출될 것을 기대(풀이 정확히 style 3장).
+	var style_ids := {}
+	for c in cards:
+		style_ids[String(c.get("id", ""))] = true
+	print("미보유 첫 draw style ids: %s (size=%d)" % [style_ids.keys(), style_ids.size()])
+	assert(style_ids.size() == 3, "강제 첫 픽에서 발도술 3종이 모두 노출되지 않음(slot 중복 가드 우회 실패)")
+	assert(style_ids.has("iaido_draw") and style_ids.has("nuki_draw") and style_ids.has("charge_draw"),
+		"강제 첫 픽 style 3종(iaido/nuki/charge) 누락")
+
+	# ── M9-S12 스타일별 mark_cap params — 발도술 3종 params 에 cap(iaido5/nuki3/charge7) 노출 확인. ──
+	var iaido_p := _B.params_for("iaido_draw", "chosim", 0)
+	var nuki_p := _B.params_for("nuki_draw", "chosim", 0)
+	var charge_p := _B.params_for("charge_draw", "chosim", 0)
+	print("mark_cap — iaido:%s nuki:%s charge:%s" % [iaido_p.get("mark_cap", "?"), nuki_p.get("mark_cap", "?"), charge_p.get("mark_cap", "?")])
+	assert(int(iaido_p.get("mark_cap", -1)) == 5, "iaido mark_cap 5(미들) 아님")
+	assert(int(nuki_p.get("mark_cap", -1)) == 3, "nuki mark_cap 3(숏) 아님")
+	assert(int(charge_p.get("mark_cap", -1)) == 7, "charge mark_cap 7(롱) 아님")
+
 	# ── style_req 필터: 납도(iaido) 보유 시 → 연격(nuki) 카드 안 섞임. ──
 	var owned_iaido := ["iaido_draw"]
 	var iaido_run := _B.draw_boons(3, 5, owned_iaido)

@@ -12,11 +12,11 @@
           "trigger": "Passive",
           "effect": "STYLE_IAIDO",
           "params_by_rarity": {
-            "chosim": { "sheathe_range_bonus": 0.5, "sheathe_dmg_bonus": 0 },
-            "rare":   { "sheathe_range_bonus": 0.9, "sheathe_dmg_bonus": 0 },
-            "uniq":   { "sheathe_range_bonus": 1.2, "sheathe_dmg_bonus": 1 },
-            "legend": { "sheathe_range_bonus": 1.6, "sheathe_dmg_bonus": 1 },
-            "master": { "sheathe_range_bonus": 2.0, "sheathe_dmg_bonus": 2 }
+            "chosim": { "sheathe_range_bonus": 0.5, "sheathe_dmg_bonus": 0, "mark_cap": 5 },
+            "rare":   { "sheathe_range_bonus": 0.9, "sheathe_dmg_bonus": 0, "mark_cap": 5 },
+            "uniq":   { "sheathe_range_bonus": 1.2, "sheathe_dmg_bonus": 1, "mark_cap": 5 },
+            "legend": { "sheathe_range_bonus": 1.6, "sheathe_dmg_bonus": 1, "mark_cap": 5 },
+            "master": { "sheathe_range_bonus": 2.0, "sheathe_dmg_bonus": 2, "mark_cap": 5 }
           }
         }
       ]
@@ -390,11 +390,11 @@
           "trigger": "Passive",
           "effect": "STYLE_NUKI",
           "params_by_rarity": {
-            "chosim": { "nuki_window": 0.32, "nuki_max": 3, "sweet_frac": 0.4, "retap_charge_frac": 0.7 },
-            "rare":   { "nuki_window": 0.34, "nuki_max": 3, "sweet_frac": 0.42, "retap_charge_frac": 0.72 },
-            "uniq":   { "nuki_window": 0.36, "nuki_max": 3, "sweet_frac": 0.44, "retap_charge_frac": 0.75 },
-            "legend": { "nuki_window": 0.38, "nuki_max": 4, "sweet_frac": 0.46, "retap_charge_frac": 0.78 },
-            "master": { "nuki_window": 0.4, "nuki_max": 4, "sweet_frac": 0.5, "retap_charge_frac": 0.8 }
+            "chosim": { "nuki_window": 0.32, "nuki_max": 3, "sweet_frac": 0.4, "retap_charge_frac": 0.7, "mark_cap": 3 },
+            "rare":   { "nuki_window": 0.34, "nuki_max": 3, "sweet_frac": 0.42, "retap_charge_frac": 0.72, "mark_cap": 3 },
+            "uniq":   { "nuki_window": 0.36, "nuki_max": 3, "sweet_frac": 0.44, "retap_charge_frac": 0.75, "mark_cap": 3 },
+            "legend": { "nuki_window": 0.38, "nuki_max": 4, "sweet_frac": 0.46, "retap_charge_frac": 0.78, "mark_cap": 3 },
+            "master": { "nuki_window": 0.4, "nuki_max": 4, "sweet_frac": 0.5, "retap_charge_frac": 0.8, "mark_cap": 3 }
           }
         }
       ]
@@ -600,11 +600,11 @@
           "trigger": "Passive",
           "effect": "STYLE_CHARGE",
           "params_by_rarity": {
-            "chosim": { "tier_lo": 0.4, "tier_hi": 0.85, "pierce_range_mult": 1.1, "pierce_width_mult": 1.05, "dash_speed_mult": 1.1, "mark_depth_base": 1 },
-            "rare":   { "tier_lo": 0.4, "tier_hi": 0.85, "pierce_range_mult": 1.14, "pierce_width_mult": 1.08, "dash_speed_mult": 1.12, "mark_depth_base": 1 },
-            "uniq":   { "tier_lo": 0.38, "tier_hi": 0.82, "pierce_range_mult": 1.2, "pierce_width_mult": 1.12, "dash_speed_mult": 1.16, "mark_depth_base": 1 },
-            "legend": { "tier_lo": 0.36, "tier_hi": 0.8, "pierce_range_mult": 1.26, "pierce_width_mult": 1.16, "dash_speed_mult": 1.2, "mark_depth_base": 2 },
-            "master": { "tier_lo": 0.34, "tier_hi": 0.78, "pierce_range_mult": 1.34, "pierce_width_mult": 1.22, "dash_speed_mult": 1.26, "mark_depth_base": 2 }
+            "chosim": { "tier_lo": 0.4, "tier_hi": 0.85, "pierce_range_mult": 1.1, "pierce_width_mult": 1.05, "dash_speed_mult": 1.1, "mark_depth_base": 1, "mark_cap": 7 },
+            "rare":   { "tier_lo": 0.4, "tier_hi": 0.85, "pierce_range_mult": 1.14, "pierce_width_mult": 1.08, "dash_speed_mult": 1.12, "mark_depth_base": 1, "mark_cap": 7 },
+            "uniq":   { "tier_lo": 0.38, "tier_hi": 0.82, "pierce_range_mult": 1.2, "pierce_width_mult": 1.12, "dash_speed_mult": 1.16, "mark_depth_base": 1, "mark_cap": 7 },
+            "legend": { "tier_lo": 0.36, "tier_hi": 0.8, "pierce_range_mult": 1.26, "pierce_width_mult": 1.16, "dash_speed_mult": 1.2, "mark_depth_base": 2, "mark_cap": 7 },
+            "master": { "tier_lo": 0.34, "tier_hi": 0.78, "pierce_range_mult": 1.34, "pierce_width_mult": 1.22, "dash_speed_mult": 1.26, "mark_depth_base": 2, "mark_cap": 7 }
           }
         }
       ]
