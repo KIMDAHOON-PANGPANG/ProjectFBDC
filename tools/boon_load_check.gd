@@ -110,5 +110,18 @@ func _initialize() -> void:
 	var gold_master := _B.params_for("dokebi_gold", "master")
 	assert(float(gold_master.get("heat_refund", 0.0)) > 0.0, "dokebi_gold heat_refund 불량")
 
+	# 단일 요괴 스폿체크: draw_boons 10회 호출 시 각 호출 내 모든 카드가 동일 yokai
+	var seen_yokais: Array = []
+	for i in range(10):
+		var cards := _B.draw_boons(3, 5, [])
+		assert(cards.size() > 0, "draw_boons 반환 빈 배열 (호출 %d)" % i)
+		var first_yokai: String = String(cards[0].get("yokai", ""))
+		for c in cards:
+			assert(String(c.get("yokai", "")) == first_yokai,
+				"draw_boons 요괴 혼합 감지 (호출 %d): %s vs %s" % [i, first_yokai, c.get("yokai", "")])
+		if first_yokai not in seen_yokais:
+			seen_yokais.append(first_yokai)
+	print("draw_boons 단일요괴 스폿체크 통과. 등장 요괴: %s" % str(seen_yokais))
+
 	print("boon_load_check: 전체 통과 (15장 = 구미호8 + 도깨비7)")
 	quit()

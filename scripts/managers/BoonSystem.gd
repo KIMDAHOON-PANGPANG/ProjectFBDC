@@ -176,15 +176,7 @@ static func rarity_for_level(level: int) -> String:
 static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 	_ensure_loaded()
 	var pool := run_yokai_pool()
-
-	var candidates: Array = []
-	for yokai in pool:
-		var boons_for_yokai = _by_yokai.get(yokai, [])
-		for b in boons_for_yokai:
-			if b is Dictionary:
-				candidates.append(b)
-
-	if candidates.is_empty():
+	if pool.is_empty():
 		return []
 
 	var rarity_labels := {
@@ -192,56 +184,27 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 		"legend": "전설", "master": "마스터"
 	}
 
-	var result: Array = []
-	var used_slots: Array = []
-
-	# 미보유 후보, 보유 후보 분리
-	var unowned: Array = []
-	var owned_list: Array = []
-	for b in candidates:
-		var bid: String = String(b.get("id", ""))
-		if bid in owned_ids:
-			owned_list.append(b)
-		else:
-			unowned.append(b)
-
-	# 먼저 미보유 후보에서 1장 보장 (slot 중복 회피)
-	unowned.shuffle()
-	for b in unowned:
-		if result.size() >= count:
-			break
-		var slot: String = String(b.get("skill_type", ""))
-		if slot != "" and slot in used_slots:
-			continue
-		var rar := rarity_for_level(level)
-		result.append({
-			"id": String(b.get("id", "")),
-			"name": String(b.get("name", "")),
-			"desc": String(b.get("desc", "")),
-			"yokai": String(b.get("yokai", "")),
-			"skill_type": slot,
-			"rarity": rar,
-			"rarity_label": String(rarity_labels.get(rar, rar))
-		})
-		if slot != "":
-			used_slots.append(slot)
-
-	# 나머지는 전체 후보(미보유+보유)에서 채움
-	if result.size() < count:
-		var remaining: Array = []
-		for b in unowned:
+	# 요괴 순서 랜덤화 후 가용 카드가 있는 요괴를 첫 번째로 선택
+	var pool_copy := pool.duplicate()
+	pool_copy.shuffle()
+	for yokai in pool_copy:
+		var boons_for_yokai = _by_yokai.get(yokai, [])
+		# 미보유 카드만 추려 available 구성
+		var available: Array = []
+		for b in boons_for_yokai:
+			if not (b is Dictionary):
+				continue
 			var bid: String = String(b.get("id", ""))
-			var already := false
-			for r in result:
-				if r.get("id", "") == bid:
-					already = true
-					break
-			if not already:
-				remaining.append(b)
-		for b in owned_list:
-			remaining.append(b)
-		remaining.shuffle()
-		for b in remaining:
+			if bid in owned_ids:
+				continue
+			available.append(b)
+		if available.is_empty():
+			continue
+		# 이 요괴로 확정 — 이 요괴 카드만으로 뽑기
+		available.shuffle()
+		var result: Array = []
+		var used_slots: Array = []
+		for b in available:
 			if result.size() >= count:
 				break
 			var slot: String = String(b.get("skill_type", ""))
@@ -267,5 +230,6 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 			})
 			if slot != "":
 				used_slots.append(slot)
+		return result
 
-	return result
+	return []
