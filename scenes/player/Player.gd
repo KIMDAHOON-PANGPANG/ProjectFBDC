@@ -212,6 +212,11 @@ func _ready() -> void:
 	_collision_layer_default = collision_layer
 
 	_aim_arrow = get_node_or_null(aim_arrow_path) as AimArrow
+	if _aim_arrow != null and data != null:
+		if "min_slash_range" in data:
+			_aim_arrow.min_length = data.min_slash_range
+		if "instant_slash_distance" in data:
+			_aim_arrow.max_length = data.instant_slash_distance
 	_sprite_rig = get_node_or_null(sprite_rig_path)
 	if _sprite_rig != null:
 		_sprite_rig.fallback_color = Color(0.85, 0.9, 1.0)

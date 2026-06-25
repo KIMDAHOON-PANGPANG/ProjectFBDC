@@ -5,7 +5,7 @@ extends Node3D
 ## along the slash direction. Sized so the visible tip == the actual slash range.
 
 @export var min_length: float = 3.0
-@export var max_length: float = 11.0
+@export var max_length: float = 5.5
 @export var width: float = 1.2
 @export var color_min: Color = Color(1.0, 1.0, 1.0, 0.55)
 @export var color_max: Color = Color(1.0, 0.45, 0.25, 0.95)
