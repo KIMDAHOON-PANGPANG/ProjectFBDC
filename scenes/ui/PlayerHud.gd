@@ -42,6 +42,10 @@ var _level_label: Label
 var _status_strip_2d: Control = null
 ## key(String) -> StatusIcon2D(Control)
 var _status_icons_2d: Dictionary = {}
+## 굶주림 배너 — 굶주림 진입 시 HUD 위에 표시되는 경고 라벨.
+var _hunger_banner: Label = null
+## 굶주림 인디케이터 — 2D 작은 아이콘+툴팁(마우스오버 효과 설명).
+var _hunger_indicator: Control = null
 
 
 func _ready() -> void:
@@ -192,6 +196,40 @@ func _build() -> void:
 	_status_strip_2d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_status_strip_2d)
 
+	# --- 굶주림 배너(경고 텍스트, 굶주림 진입 시 표시) ---
+	_hunger_banner = Label.new()
+	_hunger_banner.position = Vector2(0.0, -70.0)
+	_hunger_banner.size = Vector2(484.0, 26.0)
+	_hunger_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hunger_banner.text = "⚠ 굶주림! 적을 처치해 허기를 채우세요 (HP 감소 중)"
+	_style_label(_hunger_banner, 16)
+	_hunger_banner.add_theme_color_override("font_color", Color(1.0, 0.5, 0.2))
+	_hunger_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hunger_banner.visible = false
+	add_child(_hunger_banner)
+
+	# --- 굶주림 인디케이터(작은 아이콘+툴팁, 마우스오버 설명) ---
+	_hunger_indicator = Control.new()
+	_hunger_indicator.position = Vector2(_HP_W - 30.0, -34.0)
+	_hunger_indicator.size = Vector2(28.0, 28.0)
+	_hunger_indicator.mouse_filter = Control.MOUSE_FILTER_STOP
+	_hunger_indicator.tooltip_text = "굶주림: 일정 시간 처치(흡혈)가 없으면 HP가 천천히 감소합니다. 적을 처치하면 즉시 해소돼요."
+	_hunger_indicator.visible = false
+	var ind_bg := ColorRect.new()
+	ind_bg.color = Color(0.80, 0.13, 0.0)
+	ind_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ind_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hunger_indicator.add_child(ind_bg)
+	var ind_lbl := Label.new()
+	ind_lbl.text = "허기"
+	ind_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ind_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ind_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_style_label(ind_lbl, 13)
+	ind_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hunger_indicator.add_child(ind_lbl)
+	add_child(_hunger_indicator)
+
 
 ## PC 상태 아이콘을 만들거나 갱신한다(공용 데이터 모델). d = {value, mode, color, icon}.
 ## 향후 PC 지속버프/디버프가 생기면 이 메서드로 즉시 표시된다(스캐폴드 노출).
@@ -277,10 +315,13 @@ func _process(_delta: float) -> void:
 	_poll_status_2d()
 
 
-## PC 버프/디버프 폴링(스캐폴드). 현재는 표시할 PC 지속버프가 없어 비어 있다.
-## 향후 PC 상태(meta/플래그)가 생기면 여기서 읽어 set_status("key", {...}) 로 표시.
+## PC 버프/디버프 폴링 — 굶주림 상태를 읽어 배너/인디케이터를 갱신.
 func _poll_status_2d() -> void:
-	pass
+	var starving := _player != null and _player.has_method("is_starving") and bool(_player.call("is_starving"))
+	if _hunger_banner != null:
+		_hunger_banner.visible = starving
+	if _hunger_indicator != null:
+		_hunger_indicator.visible = starving
 
 
 ## 열기(모드2) 또는 일섬 게이지(모드1) — 같은 자원이라 한 스택으로 표현.

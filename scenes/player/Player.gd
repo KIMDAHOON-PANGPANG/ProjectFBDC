@@ -103,8 +103,8 @@ var _status_strip: Node = null
 # ── 구미호 굶주림 리스크(6★-1 11절) ──
 ## 구미호 은혜 1개+ 장착 시 활성. 일정 시간 무처치(흡혈/처치 없음)면 굶주림 →
 ## 초당 미세 HP 감소. 1처치/흡혈로 즉시 리셋(boon_feed). god_mode 시 감소 스킵.
-const HUNGER_THRESHOLD: float = 7.0    # 무피드 누적 임계(초)
-const HUNGER_HP_DPS: float = 0.5       # 굶주림 중 초당 HP 감소(미세, accum 으로 정수화)
+const HUNGER_THRESHOLD: float = 9.0    # 무피드 누적 임계(초)
+const HUNGER_HP_DPS: float = 0.25      # 굶주림 중 초당 HP 감소(미세, accum 으로 정수화)
 var _hunger_t: float = 0.0
 var _is_starving: bool = false
 var _hunger_dmg_accum: float = 0.0
@@ -1087,6 +1087,11 @@ func has_gumiho_boon() -> bool:
 	return false
 
 
+## 굶주림(구미호 무처치 HP 감소) 진행 중 여부 — HUD 폴링용.
+func is_starving() -> bool:
+	return _is_starving
+
+
 ## 처치/흡혈 시 호출(BoonExecutor) — 굶주림 즉시 리셋/해소.
 func boon_feed() -> void:
 	_hunger_t = 0.0
@@ -1126,7 +1131,7 @@ func _update_hunger(delta: float) -> void:
 		_status_strip.call("set_status", "hunger", {
 			"value": 1.0 - over,
 			"mode": 1,
-			"color": Color(1.0, 0.37, 0.69, 1.0),
+			"color": Color(0.80, 0.13, 0.0, 1.0),
 			"icon": null,
 		})
 
