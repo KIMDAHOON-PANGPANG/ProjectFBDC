@@ -52,6 +52,32 @@ const _REAPING_CULL_RADIUS_DEFAULT := 2.5
 const _REAPING_PER_MARK_DEFAULT := 2
 ## 전파인(MARK_CONTAGION) — 처형 시 최근접 표식 적 1마리에 표식 만개 전염. 1처형당 hops 홉.
 const _CONTAGION_HOPS_DEFAULT := 1
+# ── M9-S9: 납도 연쇄 카드 2차 — 4 신규 카드 코드 1차값(boons.json params 우선). ★전부 0뎀·take_hit 미호출 ──
+## 낙화감(SLOW_FIELD) — 처치 epicenter 잔향 감속장(0뎀·수명 한정·동시≤2·집결만). ★자율 킬/영구 감속 절대 금지.
+const _SLOW_FIELD_MULT_DEFAULT := 0.55
+const _SLOW_FIELD_LIFETIME_DEFAULT := 1.2
+const _SLOW_FIELD_RADIUS_DEFAULT := 3.0
+const _SLOW_FIELD_DRIFT_DEFAULT := 0.7
+## 동시 활성 감속장 캡 — 초과 시 가장 오래된 것 queue_free(무한 누적/영구 감속 차단).
+const _SLOW_FIELD_MAX_ACTIVE := 2
+## 적 감속 메타 단명(ms) — 매 프레임 갱신, 장 만료 시 갱신 중단 = 적 메타 자동 정상화(영구 감속 불가).
+const _SLOW_FIELD_META_TTL := 150
+## 산화진(SCATTER_RING) — 처치 epicenter 척력 링 + 취약표식(vuln_mark, 0뎀).
+const _SCATTER_RADIUS_DEFAULT := 3.0
+const _SCATTER_SPEED_DEFAULT := 6.0
+const _SCATTER_VULN_DEFAULT := 1.3
+## 발도충전분출(GAUGE_BURST) — 처치 시 PC 일섬 자원 분출(tier 비례, 0뎀).
+const _GAUGE_BURST_BASE_DEFAULT := 0.12
+const _GAUGE_BURST_PER_TIER_DEFAULT := 0.06
+## 정기흡수(SPIRIT_STACK) — 처치 시 PC 흡수 스택 +1(엘리트/보스 tier_gain 가산, 0뎀).
+const _SPIRIT_PER_STACK_DEFAULT := 0.02
+const _SPIRIT_MAX_DEFAULT := 8
+const _SPIRIT_RELEASE_DEFAULT := 2.0
+const _SPIRIT_TIER_GAIN_DEFAULT := 1
+
+## 활성 감속장(낙화감) 노드 추적 — ≤_SLOW_FIELD_MAX_ACTIVE 캡. _process 가 매 프레임 만료/감속/드리프트 처리.
+## ★영구 감속 방지: 각 노드 meta('expire_msec') 지나면 free+erase, 비면 _process 즉시 return(평시 비용 0).
+var _slow_fields: Array = []
 
 ## baseline 6종 코드 1차값(카드 무관 항상 on — 강한 한정자로 약하게).
 const _BL_RIPPLE_RADIUS := 1.5     # 1 납도 파문 — 만개 적 1마리 흘려 처형
@@ -82,6 +108,11 @@ func _exit_tree() -> void:
 	# 영구 슬로우 방지 — 셧다운 중 납도 슬로우가 걸려 있었어도 강제 정상화.
 	if not is_equal_approx(Engine.time_scale, 1.0):
 		Engine.time_scale = 1.0
+	# M9-S9 낙화감 감속장 정리 — 셧다운 시 잔류 노드 free(누수/영구 감속 갱신원 차단). 적 메타는 150ms 단명이라 자동 정상화.
+	for f in _slow_fields:
+		if is_instance_valid(f):
+			f.queue_free()
+	_slow_fields.clear()
 
 
 # ══════════════ 납도(On_Sheathe) 정산 — slash_mark 거두기 ══════════════
@@ -236,13 +267,18 @@ func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 
 		# 안티-보스 처형선 — 보스 저HP(≤threshold)에서 거합+만개 납도면 처형.
 		e.call("take_hit", 9999)
 	else:
-		var dmg: int = int(round(float(marks * (_SHEATHE_DMG + dmg_bonus)) * dmg_mult))
-		e.call("take_hit", max(dmg, 1))  # 미만 + 보스(처형선 미달) = (표식×단가)×거합
+		# M9-S9 산화진 취약표식(vuln_mark) — 미만/보스(처형선 미달) 단가에만 ×vuln_mult 가산(만개 9999 처형은 무관).
+		var vuln: float = float(e.get_meta("vuln_mark", 1.0))
+		var dmg: int = int(round(float(marks * (_SHEATHE_DMG + dmg_bonus)) * dmg_mult * max(vuln, 1.0)))
+		e.call("take_hit", max(dmg, 1))  # 미만 + 보스(처형선 미달) = (표식×단가)×거합×취약
 	# ── take_hit '직후' 사망 판정(SlashAttack._target_is_dead 패턴 복제) ──
 	var died: bool = _enemy_is_dead(e)
 	# 죽었든 살았든 표식 소거(살아남은 보스는 다시 새겨야 함).
 	if is_instance_valid(e):
 		e.set_meta("slash_mark", 0)
+		# M9-S9 취약표식 1회 소비 — 이 납도에서만 적용(다음 납도엔 새 산화진이 다시 새겨야 함).
+		if e.has_meta("vuln_mark"):
+			e.remove_meta("vuln_mark")
 	# 정산 적마다 블러드 터짐(처형은 크게).
 	_spawn_blood(blood_pos, is_exec)
 	# ★ 무한연쇄 차단: 연쇄(도미노/baseline) 중에는 ON_SHEATHE_KILL 을 재발하지 않는다.
@@ -397,6 +433,13 @@ func _on_sheathe_kill(ctx) -> void:
 		_on_sheathe_kill_reaping(epicenter)                  # 2 참예수확
 		_on_sheathe_kill_overcharge(victim_marks)            # 3 폭심 충전
 		_on_sheathe_kill_contagion(epicenter)                # 4 전파인
+
+	# ── M9-S9: 납도 연쇄 카드 2차 4종(카드 보유 시에만). ★전부 was_full 무관 = 모든 처치에서 발동.
+	#   전부 0뎀·take_hit 미호출(감속·취약표식·자원·스택만) → ON_SHEATHE_KILL 재발 불가·_in_cascade 무관·무한연쇄 불성립. ──
+	_on_sheathe_kill_slow_field(epicenter)  # 1 낙화감(잔향 감속장 — 0뎀·수명 한정·동시≤2·집결만)
+	_on_sheathe_kill_scatter(epicenter)     # 2 산화진(척력 링 + 취약표식 — 0뎀)
+	_on_sheathe_kill_gauge(tier)            # 3 발도충전분출(PC 일섬 자원 분출 — 0뎀)
+	_on_sheathe_kill_spirit(tier)           # 4 정기흡수(PC 흡수 스택 — 0뎀)
 
 	# ── baseline 6종 — 항상(카드 무관). 자원 클램프는 각 호출/HealthComponent 가 보장. ──
 	_baseline_ripple(epicenter)        # 1 납도 파문
@@ -643,6 +686,207 @@ func _on_sheathe_kill_contagion(epicenter: Vector3) -> void:
 		best.set_meta("slash_mark", _MARK_CAP)  # 즉시 만개 전염(0뎀, 처형 안 함).
 		visited[best.get_instance_id()] = true
 		_spawn_chain_arc(epicenter, (best as Node3D).global_position)  # 전염 호.
+
+
+# ══════════════ M9-S9: 납도 연쇄 카드 2차 4종 — ★전부 0뎀·take_hit 미호출(무한연쇄 불성립) ══════════════
+
+## 1 낙화감(SLOW_FIELD) — epicenter 에 잔향 감속장 노드 1개 생성(수명 lifetime, 동시 ≤_SLOW_FIELD_MAX_ACTIVE).
+## ★자율-tick 경계 엄수: 적을 죽이지 않음(take_hit 미호출). _process 가 장 수명 동안만 반경 적에 감속 메타
+## (TTL 150ms 단명)를 매 프레임 갱신 + epicenter 쪽 미세 드리프트(집결). 장 만료 시 free → 갱신 중단 = 적 자동 정상화.
+## ★영구 감속 불가: 메타 단명 + 노드 expire_msec 수명 + 동시 ≤2 캡(초과 시 가장 오래된 것 free).
+func _on_sheathe_kill_slow_field(epicenter: Vector3) -> void:
+	var has_card: bool = false
+	var slow_mult: float = _SLOW_FIELD_MULT_DEFAULT
+	var lifetime: float = _SLOW_FIELD_LIFETIME_DEFAULT
+	var radius: float = _SLOW_FIELD_RADIUS_DEFAULT
+	var drift: float = _SLOW_FIELD_DRIFT_DEFAULT
+	_for_each_effect("On_Sheathe", "SLOW_FIELD", func(_i, params):
+		has_card = true
+		# slow_mult 는 작을수록 강함 — 최솟값(가장 강한 감속) 채택. 나머지는 최댓값.
+		slow_mult = min(slow_mult, float(params.get("slow_mult", _SLOW_FIELD_MULT_DEFAULT)))
+		lifetime = max(lifetime, float(params.get("lifetime", _SLOW_FIELD_LIFETIME_DEFAULT)))
+		radius = max(radius, float(params.get("radius", _SLOW_FIELD_RADIUS_DEFAULT)))
+		drift = max(drift, float(params.get("drift", _SLOW_FIELD_DRIFT_DEFAULT)))
+	)
+	if not has_card or radius <= 0.0 or lifetime <= 0.0:
+		return
+	slow_mult = clampf(slow_mult, 0.1, 1.0)
+	# ── 동시 활성 ≤_SLOW_FIELD_MAX_ACTIVE 캡 — 초과 시 가장 오래된 것 제거(무한 누적/영구 감속 차단). ──
+	while _slow_fields.size() >= _SLOW_FIELD_MAX_ACTIVE:
+		var old = _slow_fields.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+	var host := _effect_host()
+	if host == null:
+		return
+	# 감속장 노드(시각 더미 디스크 + 파라미터 메타). _process 가 메타 읽어 반경 적 감속+드리프트.
+	var field := Node3D.new()
+	field.top_level = true
+	field.global_position = epicenter
+	field.set_meta("slow_mult", slow_mult)
+	field.set_meta("radius", radius)
+	field.set_meta("drift", drift)
+	field.set_meta("expire_msec", Time.get_ticks_msec() + int(round(lifetime * 1000.0)))
+	# 보라/청 디스크 더미(_make_disc_mesh 재사용) — scale 펄스 후 페이드(노드 free 는 _process/타이머가).
+	var mi := MeshInstance3D.new()
+	mi.mesh = _make_disc_mesh(radius)
+	mi.position = Vector3(0, 0.05, 0)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(0.55, 0.5, 0.9, 0.35)  # 보라/청 잔향.
+	mat.emission_enabled = true
+	mat.emission = Color(0.6, 0.55, 1.0)
+	mat.emission_energy_multiplier = 1.2
+	mi.material_override = mat
+	field.add_child(mi)
+	host.add_child(field)
+	_slow_fields.append(field)
+	# 수명 타이머 — 만료 시 free+erase(이중 안전망: _process 도 expire_msec 로 정리). ignore_time_scale 로 슬로우 중에도 진행.
+	var tree := get_tree()
+	if tree != null:
+		tree.create_timer(lifetime, true, false, true).timeout.connect(func():
+			if is_instance_valid(field):
+				_slow_fields.erase(field)
+				field.queue_free()
+		)
+
+
+## 매 프레임 — 활성 감속장 만료 정리 + 반경 적 감속 메타(TTL 단명) + epicenter 쪽 미세 드리프트(집결).
+## ★평시 비용 0: _slow_fields 비면 즉시 return. ★영구 감속 불가: 적 메타는 _SLOW_FIELD_META_TTL(150ms) 단명이라
+## 장이 사라져 갱신이 멈추면 적이 자동 정상화. 드리프트는 epicenter 거리>0.3 일 때만(반경 밖으로 빨림/원점 발진 방지).
+func _process(delta: float) -> void:
+	if not is_inside_tree() or _slow_fields.is_empty():
+		return
+	var now: int = Time.get_ticks_msec()
+	var expire_at: int = now + _SLOW_FIELD_META_TTL
+	var i: int = _slow_fields.size() - 1
+	while i >= 0:
+		var field = _slow_fields[i]
+		if field == null or not is_instance_valid(field):
+			_slow_fields.remove_at(i)
+			i -= 1
+			continue
+		if int(field.get_meta("expire_msec", 0)) <= now:
+			_slow_fields.remove_at(i)
+			field.queue_free()
+			i -= 1
+			continue
+		var center: Vector3 = (field as Node3D).global_position
+		var radius: float = float(field.get_meta("radius", _SLOW_FIELD_RADIUS_DEFAULT))
+		var slow_mult: float = float(field.get_meta("slow_mult", _SLOW_FIELD_MULT_DEFAULT))
+		var drift: float = float(field.get_meta("drift", _SLOW_FIELD_DRIFT_DEFAULT))
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e == null or not is_instance_valid(e) or not (e is Node3D):
+				continue
+			if e.is_in_group("boss"):
+				continue  # 보스 면역(끌림/감속 없음).
+			var ep: Vector3 = (e as Node3D).global_position
+			var flat: Vector3 = Vector3(ep.x - center.x, 0.0, ep.z - center.z)
+			var dist: float = flat.length()
+			if dist > radius:
+				continue
+			# 감속 메타 — 단명(150ms). 적 _physics_process 가 읽어 이동속도 스케일(만료 지나면 자동 1.0).
+			e.set_meta("boon_slow_until_msec", expire_at)
+			e.set_meta("boon_slow_mult", slow_mult)
+			# epicenter 쪽 미세 집결 드리프트 — 너무 가까우면 스킵(원점 발진/반경 밖 빨림 방지). 0뎀.
+			if dist > 0.3:
+				var pull: Vector3 = -flat.normalized() * drift * delta
+				(e as Node3D).global_position += pull
+		i -= 1
+
+
+## 2 산화진(SCATTER_RING) — epicenter 바깥으로 척력 링 1회(levelup_pushback 패턴) + 취약표식(vuln_mark) 부여.
+## 비보스+apply_knockback 보유 → 수평 바깥 방향 밀침. 보스는 밀침 스킵(취약표식만). ★0뎀(척력+표식만, take_hit 미호출).
+## vuln_mark = _settle_enemy 가 다음 납도 정산 단가에 ×vuln_mult(1회 소비) — slash_mark 와 별개 메타.
+func _on_sheathe_kill_scatter(epicenter: Vector3) -> void:
+	var has_card: bool = false
+	var radius: float = _SCATTER_RADIUS_DEFAULT
+	var speed: float = _SCATTER_SPEED_DEFAULT
+	var vuln: float = _SCATTER_VULN_DEFAULT
+	_for_each_effect("On_Sheathe", "SCATTER_RING", func(_i, params):
+		has_card = true
+		radius = max(radius, float(params.get("push_radius", _SCATTER_RADIUS_DEFAULT)))
+		speed = max(speed, float(params.get("push_speed", _SCATTER_SPEED_DEFAULT)))
+		vuln = max(vuln, float(params.get("vuln_mult", _SCATTER_VULN_DEFAULT)))
+	)
+	if not has_card or radius <= 0.0:
+		return
+	var any: bool = false
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		var to_e: Vector3 = (e as Node3D).global_position - epicenter
+		to_e.y = 0.0
+		if to_e.length() > radius:
+			continue
+		# 취약표식 부여(이미 있으면 큰 값 유지) — 0뎀.
+		var cur: float = float(e.get_meta("vuln_mark", 1.0))
+		e.set_meta("vuln_mark", max(cur, vuln))
+		any = true
+		# 비보스 + apply_knockback 보유면 바깥으로 밀침(보스는 스킵 — 취약표식만).
+		if e.is_in_group("boss"):
+			continue
+		if to_e.length_squared() < 0.0001:
+			continue
+		if e.has_method("apply_knockback"):
+			e.call("apply_knockback", to_e.normalized(), speed)
+	if any:
+		_spawn_chain_arc(epicenter, epicenter)  # 제자리 청백 링 더미.
+
+
+## 3 발도충전분출(GAUGE_BURST) — 처치 시 PC 일섬 자원 분출(tier 비례). Player.boon_gauge_burst 위임(열 환급/쿨 단축).
+## ★0뎀 PC 자원만(take_hit 미호출). 황금 더미 = _spawn_perfect_flash(PC 위치).
+func _on_sheathe_kill_gauge(tier: int) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not _player.has_method("boon_gauge_burst"):
+		return
+	var has_card: bool = false
+	var base: float = _GAUGE_BURST_BASE_DEFAULT
+	var per_tier: float = _GAUGE_BURST_PER_TIER_DEFAULT
+	_for_each_effect("On_Sheathe", "GAUGE_BURST", func(_i, params):
+		has_card = true
+		base = max(base, float(params.get("base_frac", _GAUGE_BURST_BASE_DEFAULT)))
+		per_tier = max(per_tier, float(params.get("per_tier_frac", _GAUGE_BURST_PER_TIER_DEFAULT)))
+	)
+	if not has_card:
+		return
+	var frac: float = base + per_tier * float(tier)
+	_player.call("boon_gauge_burst", frac)
+	if _player is Node3D:
+		_spawn_perfect_flash((_player as Node3D).global_position)  # 황금 기류 더미(흰 섬광 재사용).
+
+
+## 4 정기흡수(SPIRIT_STACK) — 처치 시 PC 흡수 스택 +n(잡몹+1, 엘리트/보스 +1+tier_gain). Player.boon_add_spirit 위임.
+## ★PC 내부 자원만(0뎀·take_hit 미호출). 정기 구슬 더미 = _spawn_chain_arc(epicenter→PC, 호밍 느낌).
+func _on_sheathe_kill_spirit(tier: int) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not _player.has_method("boon_add_spirit"):
+		return
+	var has_card: bool = false
+	var per_stack: float = _SPIRIT_PER_STACK_DEFAULT
+	var max_stack: int = _SPIRIT_MAX_DEFAULT
+	var release_mult: float = _SPIRIT_RELEASE_DEFAULT
+	var tier_gain: int = _SPIRIT_TIER_GAIN_DEFAULT
+	_for_each_effect("On_Sheathe", "SPIRIT_STACK", func(_i, params):
+		has_card = true
+		per_stack = max(per_stack, float(params.get("per_stack", _SPIRIT_PER_STACK_DEFAULT)))
+		max_stack = max(max_stack, int(params.get("max_stack", _SPIRIT_MAX_DEFAULT)))
+		release_mult = max(release_mult, float(params.get("release_mult", _SPIRIT_RELEASE_DEFAULT)))
+		tier_gain = max(tier_gain, int(params.get("tier_gain", _SPIRIT_TIER_GAIN_DEFAULT)))
+	)
+	if not has_card:
+		return
+	# 잡몹(tier0) +1, 엘리트/보스(tier>0) +1+tier_gain.
+	var gain: int = 1 + (tier_gain if tier > 0 else 0)
+	_player.call("boon_add_spirit", gain, per_stack, max_stack, release_mult)
+	# 정기 구슬 더미 — PC 발밑 제자리 청백 링(호밍 느낌, ExpGem 실제 노드 불필요).
+	if _player is Node3D:
+		var p: Vector3 = (_player as Node3D).global_position
+		_spawn_chain_arc(p, p)
 
 
 # ══════════════ M9-S6: baseline 6종 (코드 상수·항상 on·0뎀 셋업/자원) ══════════════

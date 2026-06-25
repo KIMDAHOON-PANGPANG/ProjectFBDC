@@ -293,6 +293,90 @@
           }
         }
       ]
+    },
+    {
+      "id": "slow_field",
+      "name": "낙화감(落花減)",
+      "desc": "납도 처치 지점에 짧은 잔향 감속장이 펼쳐진다 — 장 안의 적은 느려지고 중심으로 끌려든다. 피해는 없다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "SLOW_FIELD",
+          "params_by_rarity": {
+            "chosim": { "slow_mult": 0.6, "lifetime": 1.0, "radius": 2.6, "drift": 0.5 },
+            "rare":   { "slow_mult": 0.57, "lifetime": 1.1, "radius": 2.8, "drift": 0.6 },
+            "uniq":   { "slow_mult": 0.55, "lifetime": 1.2, "radius": 3.0, "drift": 0.7 },
+            "legend": { "slow_mult": 0.52, "lifetime": 1.3, "radius": 3.2, "drift": 0.8 },
+            "master": { "slow_mult": 0.5, "lifetime": 1.4, "radius": 3.4, "drift": 0.9 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "scatter_ring",
+      "name": "산화진(散華陣)",
+      "desc": "납도 처치 지점에서 척력의 고리가 퍼져 주변 적을 밀어내고 '취약표식'을 새긴다 — 다음 납도가 그 적을 더 깊게 벤다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "SCATTER_RING",
+          "params_by_rarity": {
+            "chosim": { "push_radius": 2.6, "push_speed": 5.0, "vuln_mult": 1.25 },
+            "rare":   { "push_radius": 2.8, "push_speed": 5.5, "vuln_mult": 1.3 },
+            "uniq":   { "push_radius": 3.0, "push_speed": 6.0, "vuln_mult": 1.3 },
+            "legend": { "push_radius": 3.2, "push_speed": 6.5, "vuln_mult": 1.4 },
+            "master": { "push_radius": 3.4, "push_speed": 7.0, "vuln_mult": 1.5 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gauge_burst",
+      "name": "발도충전분출(拔刀充塡噴出)",
+      "desc": "납도 처치 때마다 일섬의 자원이 분출된다 — 열이 환급되거나 쿨이 단축된다. 강한 적일수록 크게 분출한다.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "GAUGE_BURST",
+          "params_by_rarity": {
+            "chosim": { "base_frac": 0.12, "per_tier_frac": 0.06 },
+            "rare":   { "base_frac": 0.14, "per_tier_frac": 0.07 },
+            "uniq":   { "base_frac": 0.16, "per_tier_frac": 0.08 },
+            "legend": { "base_frac": 0.18, "per_tier_frac": 0.09 },
+            "master": { "base_frac": 0.2, "per_tier_frac": 0.11 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "spirit_stack",
+      "name": "정기흡수(精氣吸收)",
+      "desc": "납도 처치마다 '정기 스택'을 쌓는다 — 스택이 쌓일수록 일섬과 납도가 강화되고, 만스택이면 다음 납도가 '정기 해방' 대정산이 된다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "SPIRIT_STACK",
+          "params_by_rarity": {
+            "chosim": { "per_stack": 0.02, "max_stack": 8, "release_mult": 1.8, "tier_gain": 1 },
+            "rare":   { "per_stack": 0.022, "max_stack": 8, "release_mult": 1.9, "tier_gain": 1 },
+            "uniq":   { "per_stack": 0.025, "max_stack": 8, "release_mult": 2.0, "tier_gain": 2 },
+            "legend": { "per_stack": 0.028, "max_stack": 8, "release_mult": 2.1, "tier_gain": 2 },
+            "master": { "per_stack": 0.03, "max_stack": 8, "release_mult": 2.2, "tier_gain": 3 }
+          }
+        }
+      ]
     }
   ]
 }

@@ -149,6 +149,15 @@ var _next_burst_t: float = 0.0
 var _zone_slow_t: float = 0.0
 var _zone_slow_mult: float = 1.0
 
+# ── M9-S9 정기흡수(SPIRIT_STACK): PC 내부 자원 — 납도 처치마다 +1, 스택당 일섬/납도 미세 강화 ──
+## ★전부 런타임 인스턴스 변수(_ready 리셋). 공유 .tres 미변형 — 적 직접 안 죽임(0뎀).
+## 만스택(_spirit_max) 도달 시 _spirit_release_pending=true → 다음 납도가 '정기 해방' 대정산 후 0 리셋.
+var _spirit_stacks: int = 0
+var _spirit_per_stack: float = 0.0
+var _spirit_max: int = 8
+var _spirit_release_mult: float = 2.0
+var _spirit_release_pending: bool = false
+
 ## M8 — 컨트롤은 일섬 단일로 통합됐다. 이 플래그는 항상 true 로 고정(_ready 에서
 ## 세팅). 수십 개 분기·게터(is_instant_slash_mode, add_heat/add_slash_gauge 가드,
 ## _is_cooldown_resource 등)가 이 변수를 읽으므로 변수 자체는 보존한다. 옛 근접
@@ -271,6 +280,9 @@ func _ready() -> void:
 	_build_dust_emitter()
 
 	active_boons.clear()
+	# M9-S9 정기흡수 런타임 자원 리셋(런마다 0부터 — 공유 .tres 미변형).
+	_spirit_stacks = 0
+	_spirit_release_pending = false
 	_boon_executor = _BoonExecutorScript.new()
 	_boon_executor.name = "BoonExecutor"
 	add_child(_boon_executor)
@@ -509,9 +521,16 @@ func is_sheathe_ready() -> bool:
 func _sheathe_restore(total_marks: int, heat_extra_per: float = 0.0, hp_extra_per: float = 0.0, refund_mult: float = 1.0) -> void:
 	if total_marks <= 0:
 		return
-	var heat_per: float = (_SHEATHE_HEAT_REFUND_PER_MARK + heat_extra_per) * float(total_marks) * refund_mult
+	# M9-S9 정기흡수 '정기 해방' — 만스택(_spirit_release_pending) 도달 후 이 납도 정산이 ×release_mult 대정산.
+	# ★1회만(pending 소비) + 스택 0 리셋. release_mult 는 refund_mult 와 곱해 열/HP 환급 모두 증폭.
+	var release: float = 1.0
+	if _spirit_release_pending:
+		release = _spirit_release_mult
+		_spirit_release_pending = false
+		_spirit_stacks = 0
+	var heat_per: float = (_SHEATHE_HEAT_REFUND_PER_MARK + heat_extra_per) * float(total_marks) * refund_mult * release
 	_refund_heat(heat_per)
-	var hp_per: float = (_SHEATHE_HP_PER_MARK + hp_extra_per) * float(total_marks) * refund_mult
+	var hp_per: float = (_SHEATHE_HP_PER_MARK + hp_extra_per) * float(total_marks) * refund_mult * release
 	var hp_amt: int = int(round(hp_per))
 	if hp_amt > 0 and _health != null:
 		_health.heal(hp_amt)
@@ -897,7 +916,10 @@ func _spawn_slash_attack_node(start: Vector3, end: Vector3, extents: Vector3 = V
 	var ext: Vector3 = extents if extents.length_squared() > 0.0001 else data.slash_hit_extents
 	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
-	attack.attack_power = attack_power
+	# M9-S9 정기흡수: 스택당 일섬 피해 +per_stack%. (spawn_echo_slash 의 mark_only 경로는 호출 후
+	# attack_power=0 으로 덮으므로 영향 없음 — 0 유지.) ★런타임 변수만, 공유 .tres 미변형.
+	var spirit_mult: float = 1.0 + _spirit_per_stack * float(_spirit_stacks)
+	attack.attack_power = int(round(float(attack_power) * spirit_mult))
 	return attack
 
 ## 거합일도(IAIDO_FINISHER) — BoonExecutor 가 거합+만개 처형 시 호출. 마지막 일섬 방향(_aim_dir)으로
@@ -960,6 +982,34 @@ func apply_iaido_haste(haste_pct: float, dash_bonus: float) -> void:
 	boon_haste_charge_mult = max(boon_haste_charge_mult, haste_pct)
 	boon_dash_dist_bonus = max(boon_dash_dist_bonus, dash_bonus)
 	boon_haste_t = 4.0  # 다음 일섬까지의 가속 유효 시간(넉넉히 — 일섬 발사 시 즉시 종료).
+
+
+## M9-S9 정기흡수(SPIRIT_STACK) — BoonExecutor 가 납도 처치마다 호출. PC '흡수 스택' +n(잡몹1/엘리트·보스 tier_gain 가산).
+## ★PC 내부 자원만 — 적 직접 안 죽임(0뎀). 해방 대기 중(_spirit_release_pending)엔 더 안 쌓는다(다음 납도 정산을 기다림).
+## 만스택 도달 시 _spirit_release_pending=true → 다음 _sheathe_restore 가 '정기 해방' 대정산 후 스택 0 리셋.
+func boon_add_spirit(n: int, per_stack: float, max_stack: int, release_mult: float) -> void:
+	_spirit_per_stack = per_stack
+	_spirit_max = max(max_stack, 1)
+	_spirit_release_mult = max(release_mult, 1.0)
+	if _spirit_release_pending:
+		return  # 해방 예약 중엔 다음 납도에서 소비될 때까지 더 안 쌓음.
+	_spirit_stacks = min(_spirit_stacks + max(n, 1), _spirit_max)
+	if _spirit_stacks >= _spirit_max:
+		_spirit_release_pending = true
+
+
+## M9-S9 발도충전분출(GAUGE_BURST) — BoonExecutor 가 납도 처치마다 호출. 일섬 자원을 frac 만큼 분출.
+## 쿨 자원 모드면 다음 일섬 쿨을 frac 비례 단축(0 클램프), 열 모드면 열을 frac 비례 환급(_refund_heat 가드).
+## ★0뎀 PC 자원만(공유 .tres 미변형).
+func boon_gauge_burst(frac: float) -> void:
+	frac = clampf(frac, 0.0, 1.0)
+	if frac <= 0.0:
+		return
+	if _is_cooldown_resource():
+		var cd: float = max(data.slash_fixed_cooldown, 0.0001)
+		_slash_fixed_cd_t = maxf(_slash_fixed_cd_t - frac * cd, 0.0)
+	else:
+		_refund_heat(frac * data.heat_overheat_threshold)
 
 
 ## 일섬연장(SLASH_EXTEND) — BoonExecutor 가 add_boon 직후 호출(패시브 재계산). 누적 아님(세팅).

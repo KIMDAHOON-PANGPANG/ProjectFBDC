@@ -292,8 +292,12 @@ func _physics_process(delta: float) -> void:
 		var blended := chase_dir + sep * separation_weight
 		if blended.length() > 0.001:
 			move_dir = blended.normalized()
-	velocity.x = move_dir.x * data.move_speed * time_scale_mult
-	velocity.z = move_dir.z * data.move_speed * time_scale_mult
+	# M9-S9 낙화감(SLOW_FIELD) — 감속장 메타가 살아 있으면 이동속도 스케일(만료 시각 지나면 자동 1.0=영구 감속 불가).
+	var slow: float = 1.0
+	if int(get_meta("boon_slow_until_msec", 0)) > Time.get_ticks_msec():
+		slow = clampf(float(get_meta("boon_slow_mult", 1.0)), 0.1, 1.0)
+	velocity.x = move_dir.x * data.move_speed * time_scale_mult * slow
+	velocity.z = move_dir.z * data.move_speed * time_scale_mult * slow
 	velocity.y = 0.0
 	move_and_slide()
 	if _sprite_rig != null:

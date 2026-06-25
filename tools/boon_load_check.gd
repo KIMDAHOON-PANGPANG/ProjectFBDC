@@ -1,21 +1,22 @@
 extends SceneTree
 
-## M9-S7: 납도류 풀세트(스타일 1 + 13 = 14장) 로드 검증.
-## boons.json 14카드가 로드되고 draw_boons 가 유효 카드를 반환하는지 확인.
+## M9-S9: 납도류 풀세트(스타일 1 + 17 = 18장) 로드 검증.
+## boons.json 18카드가 로드되고 draw_boons 가 유효 카드를 반환하는지 확인.
 
 func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 14)" % all.size())
-	assert(all.size() == 14, "all_boons 크기 불일치 (M9-S7 14장 기대)")
+	print("all_boons size: %d (기대: 18)" % all.size())
+	assert(all.size() == 18, "all_boons 크기 불일치 (M9-S9 18장 기대)")
 
-	# 14개 id 전부 존재 확인.
+	# 18개 id 전부 존재 확인.
 	var ids := [
 		"iaido_draw", "iaido_perfect", "deep_mark", "sheathe_refund",
 		"wide_blade", "no_sheathe", "chain_sheathe", "reverse_grip",
 		"slash_extend", "iaido_finisher",
 		"iai_domino", "reaping_cull", "epicenter_overcharge", "mark_contagion",
+		"slow_field", "scatter_ring", "gauge_burst", "spirit_stack",
 	]
 	for id in ids:
 		var card = _B.by_id(id)
@@ -41,6 +42,10 @@ func _initialize() -> void:
 		"reaping_cull": "REAPING_CULL",
 		"epicenter_overcharge": "EPICENTER_OVERCHARGE",
 		"mark_contagion": "MARK_CONTAGION",
+		"slow_field": "SLOW_FIELD",
+		"scatter_ring": "SCATTER_RING",
+		"gauge_burst": "GAUGE_BURST",
+		"spirit_stack": "SPIRIT_STACK",
 	}
 	for id in effect_for.keys():
 		var card = _B.by_id(id)
@@ -66,5 +71,5 @@ func _initialize() -> void:
 		assert(String(c.get("id", "")) != "iaido_draw", "보유 카드 재노출")
 		assert(String(c.get("kind", "")) != "style", "style exclusive 위반 — style 카드 재노출")
 
-	print("boon_load_check: 전체 통과 (M9-S7 14장)")
+	print("boon_load_check: 전체 통과 (M9-S9 18장)")
 	quit()
