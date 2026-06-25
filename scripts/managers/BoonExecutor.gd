@@ -19,6 +19,11 @@ var _player: Node = null
 var _tb: Node = null
 ## DEEP_MARK(심도) per_hits 게이팅용 — boon_index → 누적 적중 카운터.
 var _hit_counters: Dictionary = {}
+## 무납(IAIDO_CHAIN) 거합 미터 — 연속 납도 단계(0~max). _last_chain_msec 로 combo_window 판정.
+var _chain_stage: int = 0
+var _last_chain_msec: int = 0
+## 안티-보스 처형선 — 보스 HP 가 max_hp 의 이 비율 이하면 거합+만개 납도로 처형(코드 1차값).
+const _BOSS_EXECUTE_THRESHOLD := 0.25
 
 
 func setup(player: Node) -> void:
@@ -66,6 +71,7 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 		dmg_bonus += int(params.get("sheathe_dmg_bonus", 0))
 	)
 	# 거합(IAIDO_PERFECT) — 일섬 착지 직후 perfect 윈도우 안 납도면 증폭.
+	var is_perfect: bool = false
 	_for_each_effect("On_Sheathe", "IAIDO_PERFECT", func(_i, params):
 		var window: float = float(params.get("perfect_window", 0.25))
 		if _is_perfect_sheathe(window):
@@ -73,6 +79,7 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 			dmg_mult *= float(params.get("settle_mult", 1.0))
 			refund_mult *= float(params.get("refund_mult", 1.0))
 			do_perfect_fx = true
+			is_perfect = true
 	)
 	# 환원(SHEATHE_REFUND) — 환급량 증폭 + 만개 회수 환원 가중.
 	_for_each_effect("On_Sheathe", "SHEATHE_REFUND", func(_i, params):
@@ -80,8 +87,16 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 		hp_extra += float(params.get("hp_per_mark_extra", 0.0))
 		full_collect_mult = max(full_collect_mult, float(params.get("full_collect_mult", 1.0)))
 	)
+	# 무납(IAIDO_CHAIN) — 거합 미터: combo_window 안 연속 납도면 단계↑, 단계당 회수범위/환원 누진.
+	_apply_iaido_chain(func(stage_mult):
+		range_eff *= stage_mult
+		refund_mult *= stage_mult
+	)
 
+	# ── 1차 정산 패스: sheathe_range 내 표식 적 거두기. 처형(만개·비보스) 적은 위치 기록(도미노/피니셔). ──
 	var total_marks: int = 0
+	var executed_pts: Array = []   # SHEATHE_DOMINO 전파 기점 + FINISHER 발동 게이트
+	var settled: Array = []        # 이미 거둔 적(도미노 중복 방지)
 	# 'enemies' 그룹에 보스 포함(Boss._ready 가 enemies+boss 둘 다 가입) — 단일 순회로 충분.
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e == null or not is_instance_valid(e) or not (e is Node3D):
@@ -95,12 +110,33 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 		var is_full: bool = marks >= _MARK_CAP and not e.is_in_group("boss")
 		if is_full:
 			total_marks += int(round(float(marks) * full_collect_mult))
+			executed_pts.append((e as Node3D).global_position)
 		else:
 			total_marks += marks
-		_settle_enemy(e, marks, dmg_mult, dmg_bonus)
-	# 거둔 표식이 있으면 PC 자원 환급(열/HP — 환원·거합 배율 반영).
+		settled.append(e)
+		_settle_enemy(e, marks, dmg_mult, dmg_bonus, is_perfect)
+
+	# ── 연환납도(SHEATHE_DOMINO): 처형 기점 주변 chain_radius 내 (아직 안 거둔) 표식 적도 함께 거둠. ──
+	if not executed_pts.is_empty():
+		total_marks += _apply_sheathe_domino(executed_pts, settled, dmg_mult, dmg_bonus, full_collect_mult)
+
+	# 거둔 표식이 있으면 PC 자원 환급(열/HP — 환원·거합·미터 배율 반영).
 	if total_marks > 0 and _player.has_method("_sheathe_restore"):
 		_player.call("_sheathe_restore", total_marks, heat_extra, hp_extra, refund_mult)
+
+	# 역수(IAIDO_HASTE) — 납도 성공(표식 거둠) 시 다음 일섬 가속 + 대시 거리.
+	if total_marks > 0:
+		_for_each_effect("On_Sheathe", "IAIDO_HASTE", func(_i, params):
+			if _player.has_method("apply_iaido_haste"):
+				_player.call("apply_iaido_haste", float(params.get("haste_pct", 0.0)), float(params.get("dash_bonus", 0.0)))
+		)
+
+	# 거합일도(IAIDO_FINISHER) — 거합+만개 처형이 있었던 납도면 _aim_dir 로 추가 일섬 발사.
+	if is_perfect and not executed_pts.is_empty():
+		_for_each_effect("On_Sheathe", "IAIDO_FINISHER", func(_i, params):
+			if _player.has_method("spawn_finisher_slash"):
+				_player.call("spawn_finisher_slash", max(1, int(params.get("extra_slashes", 1))))
+		)
 
 	# 거합 성공 연출 — 흰 섬광 + 미세 슬로우(데미지 파이프와 독립).
 	if do_perfect_fx:
@@ -119,21 +155,39 @@ func _is_perfect_sheathe(window: float) -> bool:
 	return dt_ms >= 0 and dt_ms <= int(round(window * 1000.0))
 
 
-## 표식 적 1마리 정산 — 만개+비보스=처형(즉사), 그 외(미만 또는 보스 만개)=marks×피해. 정산 후 표식 0.
+## 표식 적 1마리 정산 — 만개+비보스=처형(즉사), 그 외(미만 또는 보스)=marks×피해. 정산 후 표식 0.
 ## dmg_bonus = 발도 단가 가산, dmg_mult = 거합 정산 곱(만개 처형엔 미적용).
-func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 0) -> void:
+## is_perfect = 거합 납도 여부 — 보스 안티-보스 처형선(저HP+거합+만개) 게이트.
+func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 0, is_perfect: bool = false) -> void:
 	if not e.has_method("take_hit"):
 		e.set_meta("slash_mark", 0)
 		return
 	var is_boss: bool = e.is_in_group("boss")
 	if marks >= _MARK_CAP and not is_boss:
 		e.call("take_hit", 9999)  # 만개 처형 — 잡몹/엘리트/주술사 즉사
+	elif is_boss and marks >= _MARK_CAP and is_perfect and _boss_below_execute_threshold(e):
+		# 안티-보스 처형선 — 보스 저HP(≤threshold)에서 거합+만개 납도면 처형.
+		e.call("take_hit", 9999)
 	else:
 		var dmg: int = int(round(float(marks * (_SHEATHE_DMG + dmg_bonus)) * dmg_mult))
-		e.call("take_hit", max(dmg, 1))  # 미만 + 보스(만개 면역) = (표식×단가)×거합
+		e.call("take_hit", max(dmg, 1))  # 미만 + 보스(처형선 미달) = (표식×단가)×거합
 	# 죽었든 살았든 표식 소거(살아남은 보스는 다시 새겨야 함).
 	if is_instance_valid(e):
 		e.set_meta("slash_mark", 0)
+
+
+## 보스 현재 HP 가 max_hp 의 처형선 비율 이하인가 — HealthComponent(hp/max_hp) 읽기. 못 읽으면 false(보수적).
+func _boss_below_execute_threshold(e: Node) -> bool:
+	if e == null or not is_instance_valid(e):
+		return false
+	var hc = e.get_node_or_null("HealthComponent")
+	if hc == null:
+		return false
+	var mx: int = int(hc.get("max_hp")) if "max_hp" in hc else 0
+	var cur: int = int(hc.get("hp")) if "hp" in hc else 0
+	if mx <= 0:
+		return false
+	return float(cur) <= float(mx) * _BOSS_EXECUTE_THRESHOLD
 
 
 # ══════════════ 심도(DEEP_MARK) — 일섬 적중 시 표식 추가 ══════════════
@@ -161,6 +215,118 @@ func _on_slash_hit_deepmark(ctx: Dictionary) -> void:
 		else:
 			_hit_counters[i] = c
 	)
+	# 광인(MARK_SPREAD) — 적중 적 주변 미표식 적 1~2에 표식 1 전파(엘리트 호위 군집 번짐).
+	_for_each_effect("On_Slash_Hit", "MARK_SPREAD", func(_i, params):
+		_spread_marks_from(target as Node3D, int(params.get("spread_count", 1)), float(params.get("spread_radius", 2.5)))
+	)
+
+
+# ══════════════ 광인(MARK_SPREAD) — 표식 전파 ══════════════
+
+## src 주변 radius 내 '미표식'(slash_mark<=0) 적 count 마리에 표식 1 부여(0뎀). 보스 포함(표식만).
+func _spread_marks_from(src: Node3D, count: int, radius: float) -> void:
+	if src == null or not is_instance_valid(src) or count <= 0 or radius <= 0.0:
+		return
+	var origin: Vector3 = src.global_position
+	var given: int = 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if given >= count:
+			break
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if e == src:
+			continue
+		if int(e.get_meta("slash_mark", 0)) > 0:
+			continue  # 이미 표식 있으면 스킵(미표식에만 전파).
+		if (e as Node3D).global_position.distance_to(origin) > radius:
+			continue
+		e.set_meta("slash_mark", 1)
+		given += 1
+
+
+# ══════════════ 무납(IAIDO_CHAIN) — 거합 미터 ══════════════
+
+## 연속 납도 단계 갱신 + 단계 보너스 적용. apply_cb.call(stage_mult) 로 회수범위/환원 곱 전달.
+## combo_window 안에 다시 납도하면 단계+1(max_stage cap), 넘기면 1단으로 리셋. 단계당 per_stage 누진.
+func _apply_iaido_chain(apply_cb: Callable) -> void:
+	var has_chain: bool = false
+	var per_stage: float = 0.0
+	var max_stage: int = 0
+	var window_ms: int = 0
+	_for_each_effect("On_Sheathe", "IAIDO_CHAIN", func(_i, params):
+		has_chain = true
+		per_stage = max(per_stage, float(params.get("per_stage", 0.12)))
+		max_stage = max(max_stage, int(params.get("max_stage", 4)))
+		window_ms = max(window_ms, int(round(float(params.get("combo_window", 2.0)) * 1000.0)))
+	)
+	if not has_chain:
+		return
+	var now: int = Time.get_ticks_msec()
+	if _last_chain_msec > 0 and (now - _last_chain_msec) <= window_ms:
+		_chain_stage = min(_chain_stage + 1, max_stage)
+	else:
+		_chain_stage = 1  # 창 밖/첫 납도 — 1단부터 시작.
+	_last_chain_msec = now
+	# 단계 보너스 = 1 + per_stage × (stage-1). 1단=무보너스, 단계마다 per_stage 누진.
+	var stage_mult: float = 1.0 + per_stage * float(max(_chain_stage - 1, 0))
+	if stage_mult > 1.0:
+		apply_cb.call(stage_mult)
+
+
+# ══════════════ 연환납도(SHEATHE_DOMINO) — 처형 전파 ══════════════
+
+## 처형 기점(executed_pts) 주변 chain_radius 내, 아직 안 거둔(settled 에 없는) 표식 적도 함께 거둔다.
+## 비보스만(보스는 도미노 처형 면역 — 표식 유지). 거둔 표식 합을 반환(환급 가중).
+func _apply_sheathe_domino(executed_pts: Array, settled: Array, dmg_mult: float, dmg_bonus: int, full_collect_mult: float) -> int:
+	var radius: float = 0.0
+	_for_each_effect("On_Sheathe", "SHEATHE_DOMINO", func(_i, params):
+		radius = max(radius, float(params.get("chain_radius", 0.0)))
+	)
+	if radius <= 0.0 or executed_pts.is_empty():
+		return 0
+	var extra_marks: int = 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if e.is_in_group("boss"):
+			continue  # 보스는 도미노 면역.
+		if e in settled:
+			continue  # 1차 패스에서 이미 거둠.
+		var marks: int = int(e.get_meta("slash_mark", 0))
+		if marks <= 0:
+			continue
+		var pos: Vector3 = (e as Node3D).global_position
+		var near: bool = false
+		for p in executed_pts:
+			if pos.distance_to(p) <= radius:
+				near = true
+				break
+		if not near:
+			continue
+		var is_full: bool = marks >= _MARK_CAP
+		if is_full:
+			extra_marks += int(round(float(marks) * full_collect_mult))
+		else:
+			extra_marks += marks
+		settled.append(e)
+		_settle_enemy(e, marks, dmg_mult, dmg_bonus, false)
+	return extra_marks
+
+
+# ══════════════ 일섬연장(SLASH_EXTEND) — 패시브 재계산 ══════════════
+
+## add_boon 직후 Player 가 호출 — active_boons 의 SLASH_EXTEND 를 스캔해 최댓값으로 런타임 보너스 세팅.
+func refresh_passives() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var range_mult: float = 1.0
+	var width_mult: float = 1.0
+	_for_each_effect("Passive", "SLASH_EXTEND", func(_i, params):
+		range_mult = max(range_mult, float(params.get("range_mult", 1.0)))
+		width_mult = max(width_mult, float(params.get("width_mult", 1.0)))
+	)
+	if _player.has_method("set_slash_extend"):
+		_player.call("set_slash_extend", range_mult, width_mult)
 
 
 # ══════════════ 공통 순회 헬퍼 (디스패치 엔진 — 보존) ══════════════

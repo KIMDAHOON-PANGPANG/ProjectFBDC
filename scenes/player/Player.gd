@@ -121,6 +121,16 @@ var _status_strip: Node = null
 ## On_Slash_Charged 시 BoonExecutor 가 세팅 → 다음 _fire_slash 가 폭 확장에 소비 후 1.0 리셋.
 var boon_slash_fan_width_mult: float = 1.0
 var boon_slash_fan_arc_bonus: float = 0.0
+
+# ── 납도류(M9-S4) 런타임 보너스(런마다 _ready 재인스턴스로 리셋 — 공유 .tres 미변형) ──
+## 일섬연장(SLASH_EXTEND) — 패시브 일섬 사거리/폭 배수(_fire_slash 가 매 발사 적용). 1.0=무효.
+var boon_slash_range_mult: float = 1.0
+var boon_slash_width_mult: float = 1.0
+## 역수(IAIDO_HASTE) — 납도 성공 직후 다음 일섬까지 충전/쿨 가속 + 대시 거리 가산.
+## _t > 0 동안 충전·쿨 ×(1+_charge_mult), 일섬 발사 시 소멸. dash_bonus 는 영구(런타임).
+var boon_haste_t: float = 0.0
+var boon_haste_charge_mult: float = 0.0
+var boon_dash_dist_bonus: float = 0.0
 ## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
 ## 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속. _zone_slow_t > 0 이면 _handle_move 적용.
@@ -273,6 +283,11 @@ func _physics_process(delta: float) -> void:
 	# 납도(RB) 쿨다운.
 	if _sheathe_cd_t > 0.0:
 		_sheathe_cd_t -= delta
+	# 역수(IAIDO_HASTE) 윈도우 타이머 — 다음 일섬 발사 또는 시간 경과로 종료.
+	if boon_haste_t > 0.0:
+		boon_haste_t -= delta
+	# 쿨 가속 — 역수 윈도우 중이면 쿨다운이 ×(1+haste) 속도로 닳는다.
+	var _cd_step: float = delta * (1.0 + boon_haste_charge_mult) if boon_haste_t > 0.0 else delta
 	# 회피 스택 리필 — 가득 차지 않았으면 한 칸씩 차오른다(칸당 evade_refill_time 초).
 	if _evade_stacks < data.evade_max_stacks:
 		if _evade_refill_t <= 0.0:
@@ -294,7 +309,7 @@ func _physics_process(delta: float) -> void:
 			_check_sheathe()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
-				_cooldown_t -= delta
+				_cooldown_t -= _cd_step
 		State.AIMING:
 			# 일섬 단일 — 차징하며 이동 가능.
 			_handle_move(delta)
@@ -306,7 +321,7 @@ func _physics_process(delta: float) -> void:
 			_handle_move(delta)
 			_check_sheathe()
 			_check_evade_start()
-			_cooldown_t -= delta
+			_cooldown_t -= _cd_step
 			if _cooldown_t <= 0.0:
 				_set_state(State.IDLE)
 		State.EVADING:
@@ -544,7 +559,8 @@ func _update_heat(delta: float) -> void:
 	# 고정 쿨다운 자원 모드 — 열기 시스템 완전 비활성. 재발사 락만 깎는다.
 	if _is_cooldown_resource():
 		if _slash_fixed_cd_t > 0.0:
-			_slash_fixed_cd_t -= delta
+			# 역수(IAIDO_HASTE) — 윈도우 중이면 고정 쿨도 ×(1+haste) 가속.
+			_slash_fixed_cd_t -= delta * (1.0 + boon_haste_charge_mult) if boon_haste_t > 0.0 else delta
 			if _slash_fixed_cd_t <= 0.0:
 				_slash_fixed_cd_t = 0.0
 				_play_sfx("cooldown_ready")
@@ -649,7 +665,11 @@ func _check_attack_release() -> void:
 
 func _update_aim(delta: float) -> void:
 	# 충전 속도 배수 — charge_speed_mult(기본 0.5)만큼 천천히 차오른다(데이터 제어).
-	_charge_t = min(_charge_t + delta * data.charge_speed_mult, data.max_charge_time)
+	# 역수(IAIDO_HASTE) 윈도우 중이면 충전 가속 ×(1+haste).
+	var charge_mult: float = data.charge_speed_mult
+	if boon_haste_t > 0.0:
+		charge_mult *= (1.0 + boon_haste_charge_mult)
+	_charge_t = min(_charge_t + delta * charge_mult, data.max_charge_time)
 	# 최대 차지 도달 후 오버차지 누적 — instant_overcharge_hold 초 버틴 뒤 자동 발사.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
@@ -692,13 +712,20 @@ func _fire_slash() -> void:
 		_tb_charged.call("emit", _TriggerBusScript.ON_SLASH_CHARGED, {"source": self, "position": global_position, "charge_frac": charge_frac})
 	# 사거리 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 풀차지 사거리 증가.
 	var slash_range: float = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
+	# 일섬연장(SLASH_EXTEND) — 패시브 사거리 배수(공유 .tres 미변형, 런타임 변수).
+	slash_range *= boon_slash_range_mult
 	var ext: Vector3 = data.slash_hit_extents
+	# 일섬연장(SLASH_EXTEND) — 패시브 폭/관통 배수. x=폭, z=전방 길이 가산 모두 확장.
+	if boon_slash_width_mult > 1.0:
+		ext = Vector3(ext.x * boon_slash_width_mult, ext.y, ext.z * boon_slash_width_mult)
 	# 직전(또는 방금 발행된 ON_SLASH_CHARGED)에서 세팅된 부채 폭 확장 보너스를 이번 일섬에 소비.
 	# 공유 PlayerData.tres 를 변형하지 않도록 로컬 복사본의 x(폭)만 키운다(런마다 리셋되는 런타임 변수).
 	if boon_slash_fan_width_mult > 1.0:
 		ext = Vector3(ext.x * boon_slash_fan_width_mult, ext.y, ext.z + boon_slash_fan_arc_bonus)
 		boon_slash_fan_width_mult = 1.0
 		boon_slash_fan_arc_bonus = 0.0
+	# 역수(IAIDO_HASTE) — 다음 일섬을 소비하면 가속 윈도우 종료.
+	boon_haste_t = 0.0
 	_dash_start = global_position
 	_dash_end = global_position + _aim_dir.normalized() * slash_range
 	_dash_elapsed = 0.0
@@ -783,6 +810,39 @@ func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector
 	attack.configure(start, end, ext)
 	attack.lifetime = data.slash_hit_lifetime
 	attack.attack_power = attack_power
+
+## 거합일도(IAIDO_FINISHER) — BoonExecutor 가 거합+만개 처형 시 호출. 마지막 일섬 방향(_aim_dir)으로
+## 추가 일섬 본체를 count 줄 발사한다. 본체는 SlashAttack 라 _try_kill(데미지)·_apply_slash_mark(새 표식)
+## 가 그대로 돌아 — 보스에 표식 재충전 + 잡몹 처치를 일으킨다. 공유 .tres 미변형(로컬 ext 만 확장).
+func spawn_finisher_slash(count: int = 1) -> void:
+	if count <= 0:
+		return
+	var dir: Vector3 = _aim_dir.normalized()
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(1, 0, 0)
+	var rng: float = data.instant_slash_distance * boon_slash_range_mult
+	var ext: Vector3 = data.slash_hit_extents
+	if boon_slash_width_mult > 1.0:
+		ext = Vector3(ext.x * boon_slash_width_mult, ext.y, ext.z * boon_slash_width_mult)
+	for _i in range(count):
+		var s: Vector3 = global_position
+		var e: Vector3 = global_position + dir * rng
+		_spawn_slash_attack(s, e, ext)
+
+
+## 역수(IAIDO_HASTE) — BoonExecutor 가 납도 성공 시 호출. 다음 일섬까지 가속 윈도우 켜고
+## 대시 거리 가산을 갱신(누적 아님 — 항상 최댓값으로 세팅, 런마다 리셋).
+func apply_iaido_haste(haste_pct: float, dash_bonus: float) -> void:
+	boon_haste_charge_mult = max(boon_haste_charge_mult, haste_pct)
+	boon_dash_dist_bonus = max(boon_dash_dist_bonus, dash_bonus)
+	boon_haste_t = 4.0  # 다음 일섬까지의 가속 유효 시간(넉넉히 — 일섬 발사 시 즉시 종료).
+
+
+## 일섬연장(SLASH_EXTEND) — BoonExecutor 가 add_boon 직후 호출(패시브 재계산). 누적 아님(세팅).
+func set_slash_extend(range_mult: float, width_mult: float) -> void:
+	boon_slash_range_mult = max(1.0, range_mult)
+	boon_slash_width_mult = max(1.0, width_mult)
+
 
 func _set_state(s: int) -> void:
 	_state = s
@@ -915,7 +975,8 @@ func _check_evade_start() -> void:
 	dir = dir.normalized()
 	_evade_dir = dir
 	_evade_start = global_position
-	_evade_end = global_position + dir * data.evade_distance
+	# 역수(IAIDO_HASTE) — 대시 거리 가산(런타임 변수, 공유 .tres 미변형).
+	_evade_end = global_position + dir * (data.evade_distance + boon_dash_dist_bonus)
 	_evade_elapsed = 0.0
 	_evade_cd = data.evade_cooldown
 	# 스택 1 소비 — 부족해지면 _physics_process 의 charge 리필이 한 칸씩 채운다
@@ -1166,3 +1227,6 @@ func add_boon(id: String, rarity: String) -> void:
 	var comps = b.get("components", [])
 	var params: Dictionary = _BoonSystemScript.params_for(id, rarity, 0)
 	active_boons.append({"id": id, "rarity": rarity, "components": comps, "params": params})
+	# 패시브(SLASH_EXTEND 등) 효과 재계산 — BoonExecutor 가 active_boons 스캔해 런타임 보너스 갱신.
+	if _boon_executor != null and is_instance_valid(_boon_executor) and _boon_executor.has_method("refresh_passives"):
+		_boon_executor.call("refresh_passives")

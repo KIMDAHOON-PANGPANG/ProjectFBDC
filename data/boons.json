@@ -83,6 +83,132 @@
           }
         }
       ]
+    },
+    {
+      "id": "wide_blade",
+      "name": "광인(廣刃)",
+      "desc": "일섬이 적중한 적 주변의 미표식 적에게 표식이 전파된다. 엘리트 호위 군집에 표식이 번진다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "MARK_SPREAD",
+          "params_by_rarity": {
+            "chosim": { "spread_count": 1, "spread_radius": 2.5 },
+            "rare":   { "spread_count": 1, "spread_radius": 2.8 },
+            "uniq":   { "spread_count": 2, "spread_radius": 3.0 },
+            "legend": { "spread_count": 2, "spread_radius": 3.4 },
+            "master": { "spread_count": 2, "spread_radius": 3.8 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "no_sheathe",
+      "name": "무납(無納)",
+      "desc": "납도 직후 짧은 시간 안에 일섬→납도를 이으면 '거합 미터'가 1단 오른다. 회수 범위·환원이 누진 증가한다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "IAIDO_CHAIN",
+          "params_by_rarity": {
+            "chosim": { "combo_window": 2.0, "per_stage": 0.12, "max_stage": 4 },
+            "rare":   { "combo_window": 2.0, "per_stage": 0.12, "max_stage": 4 },
+            "uniq":   { "combo_window": 2.2, "per_stage": 0.14, "max_stage": 5 },
+            "legend": { "combo_window": 2.4, "per_stage": 0.16, "max_stage": 5 },
+            "master": { "combo_window": 2.6, "per_stage": 0.18, "max_stage": 6 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chain_sheathe",
+      "name": "연환납도(連環納刀)",
+      "desc": "납도가 만개 적을 처형할 때 인접한 표식 적에게 '거둠'이 전파되어 함께 베인다. 엘리트 무리를 동시 처형.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "SHEATHE_DOMINO",
+          "params_by_rarity": {
+            "chosim": { "chain_radius": 3.0 },
+            "rare":   { "chain_radius": 3.4 },
+            "uniq":   { "chain_radius": 3.8 },
+            "legend": { "chain_radius": 4.2 },
+            "master": { "chain_radius": 4.8 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "reverse_grip",
+      "name": "역수(逆手)",
+      "desc": "납도 성공 직후 다음 일섬의 충전·쿨이 가속되고 대시 거리가 늘어난다. 보스전 표식 재축적이 빨라진다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "IAIDO_HASTE",
+          "params_by_rarity": {
+            "chosim": { "haste_pct": 0.35, "dash_bonus": 1.0 },
+            "rare":   { "haste_pct": 0.4, "dash_bonus": 1.0 },
+            "uniq":   { "haste_pct": 0.45, "dash_bonus": 1.5 },
+            "legend": { "haste_pct": 0.5, "dash_bonus": 1.5 },
+            "master": { "haste_pct": 0.6, "dash_bonus": 2.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "slash_extend",
+      "name": "일섬연장(一閃延長)",
+      "desc": "일섬의 사거리·폭·관통이 늘어난다. 보스의 큰 히트박스에 표식을 더 많이 새긴다.",
+      "kind": "slash",
+      "skill_type": "일섬",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "SLASH_EXTEND",
+          "params_by_rarity": {
+            "chosim": { "range_mult": 1.25, "width_mult": 1.2 },
+            "rare":   { "range_mult": 1.3, "width_mult": 1.24 },
+            "uniq":   { "range_mult": 1.38, "width_mult": 1.3 },
+            "legend": { "range_mult": 1.45, "width_mult": 1.36 },
+            "master": { "range_mult": 1.55, "width_mult": 1.45 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "iaido_finisher",
+      "name": "거합일도(居合一刀)",
+      "desc": "거합(퍼펙트 납도)으로 만개 적을 처형하면 그 방향으로 추가 일섬을 발사한다. 보스전 화룡점정.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "IAIDO_FINISHER",
+          "params_by_rarity": {
+            "chosim": { "extra_slashes": 1 },
+            "rare":   { "extra_slashes": 1 },
+            "uniq":   { "extra_slashes": 1 },
+            "legend": { "extra_slashes": 2 },
+            "master": { "extra_slashes": 2 }
+          }
+        }
+      ]
     }
   ]
 }
