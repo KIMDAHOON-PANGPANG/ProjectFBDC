@@ -34,6 +34,8 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
+## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
+const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -125,6 +127,20 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "holrim")
+	# ── 도깨비 불씨(dokebi_ember) — bool 플래그. 활성 시 빨강 디버프 아이콘(별개 슬롯) +
+	# 스프라이트 빨강 펄스. 해제(CHAIN_BURST 전파/소비)·사망 시 사라짐.
+	var ember: bool = bool(get_meta("dokebi_ember", false))
+	if ember:
+		_status_strip.call("set_status", "ember", {
+			"value": 1.0,
+			"mode": 0,
+			"color": _EMBER_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "ember")
+	if _sprite_rig != null and _sprite_rig.has_method("set_ember"):
+		_sprite_rig.call("set_ember", ember)
 
 func _physics_process(delta: float) -> void:
 	if _dead:

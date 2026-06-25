@@ -63,6 +63,15 @@ var _blink_tween: Tween
 var _flash_tween: Tween
 var _animated: bool = false
 
+## 도깨비 불씨(dokebi_ember) 펄스 — 외부(적 _poll_status)가 set_ember(bool) 로 상태만 토글.
+## 펄스는 _process 에서 매 프레임 직접 modulate 대입(트윈 아님 → flash/blink 트윈과 안 싸움).
+## 우선순위: flash/blink 트윈 진행 중·DEATH 중엔 스킵(그것들이 우선). 끝나면 펄스 재개.
+## ember 가 막 꺼지면(was true → false) 안전 조건에서 _base_modulate 1회 복원.
+const _EMBER_TINT := Color(1.0, 0.35, 0.2)
+var _ember_active: bool = false
+var _ember_t: float = 0.0
+var _ember_was: bool = false
+
 # 현재 재생 중인 애니 구간.
 var _from: int = 0
 var _to: int = 6
@@ -132,6 +141,18 @@ func _process(delta: float) -> void:
 		# 살아있는데 노드가 숨겨져 있으면(외부 실수 등) 다시 보이게.
 		if not _sprite.visible:
 			_sprite.visible = true
+		# ── 도깨비 불씨 펄스 ── flash/blink 트윈 미진행 시에만(그것들이 우선). 은은한
+		# 빨강 맥동을 _base_modulate 에 lerp(알파 유지 → 안전망과 무간섭). 꺼지면 1회 복원.
+		if not blinking and not flashing:
+			if _ember_active:
+				_ember_t += delta * maxf(time_scale_mult, 0.0)
+				var pulse: float = 0.5 + 0.5 * sin(_ember_t * 6.0)
+				var red := Color(_EMBER_TINT.r, _EMBER_TINT.g, _EMBER_TINT.b, _base_modulate.a)
+				_sprite.modulate = _base_modulate.lerp(red, pulse * 0.55)
+				_ember_was = true
+			elif _ember_was:
+				_sprite.modulate = _base_modulate
+				_ember_was = false
 	_anim_t += delta * maxf(time_scale_mult, 0.0) * _fps
 	var span: int = _to - _from + 1
 	if span <= 0:
@@ -345,6 +366,16 @@ func _restore_base_modulate() -> void:
 		_sprite.modulate = _base_modulate
 
 
+## 도깨비 불씨 펄스 토글(적 _poll_status 가 매 프레임 set_ember(bool) 호출 — 상태만 세팅,
+## 실제 modulate 변경은 _process 가 처리해 flash/blink 트윈과 충돌 안 함).
+func set_ember(active: bool) -> void:
+	if active == _ember_active:
+		return
+	_ember_active = active
+	if active:
+		_ember_t = 0.0
+
+
 ## 다층 방어 C 의 질의 지점 — 이 리그의 스프라이트가 실제로 화면에 보일 상태인가.
 ## HpBar3D 가 매 프레임 호출해, 안 보이는(투명/숨김/텍스처 없음) 몹 위엔 바를 숨긴다.
 ## DEATH(사망 페이드) 중이면 false(어차피 사라지는 중이라 바도 안 띄움).
@@ -362,6 +393,9 @@ func is_sprite_rendering() -> bool:
 	return true
 
 func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
+	# 사망 페이드가 modulate 를 독점한다 — ember 펄스 강제 해제(페이드 우선).
+	_ember_active = false
+	_ember_was = false
 	set_state(State.DEATH)
 	# Kill any in-flight blink tween first — its callback restores
 	# _base_modulate (alpha 1) and would fight / undo the death fade, and a

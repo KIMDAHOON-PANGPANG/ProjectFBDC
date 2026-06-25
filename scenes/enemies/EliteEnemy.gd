@@ -55,6 +55,8 @@ const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
+## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
+const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -72,6 +74,12 @@ var _sprite: Sprite3D
 var _kb = _KnockbackScript.new()
 ## 머리 위 상태 아이콘 스트립(표식/버프 폴링 표시). _ready 에서 인스턴스.
 var _status_strip: Node = null
+## 도깨비 불씨 펄스(직접 modulate 모델). _on_damaged 의 untracked 플래시 트윈(0.16s)과
+## 충돌 방지용 _hitflash_t 타이머가 남은 동안 펄스 스킵(피격 플래시 우선).
+var _ember_on: bool = false
+var _ember_pulse_t: float = 0.0
+var _ember_was: bool = false
+var _hitflash_t: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -143,11 +151,44 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "holrim")
+	# ── 도깨비 불씨(dokebi_ember) — bool 플래그. 빨강 디버프 아이콘(별개 슬롯) + 몸 펄스.
+	var ember: bool = bool(get_meta("dokebi_ember", false))
+	_ember_on = ember
+	if ember:
+		_status_strip.call("set_status", "ember", {
+			"value": 1.0,
+			"mode": 0,
+			"color": _EMBER_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "ember")
+
+
+## 도깨비 불씨 몸 펄스(직접 modulate). 피격 플래시 타이머(_hitflash_t)·사망 중엔 스킵.
+## 타입색(_color_for_type) 기준 빨강 맥동, 해제 시 1회 타입색 복원.
+func _apply_ember_pulse(delta: float) -> void:
+	if _sprite == null or _dead:
+		return
+	if _hitflash_t > 0.0:
+		_hitflash_t -= delta
+		return
+	var base: Color = _color_for_type(effect_type)
+	if _ember_on:
+		_ember_pulse_t += delta
+		var pulse: float = 0.5 + 0.5 * sin(_ember_pulse_t * 6.0)
+		var red := Color(1.0, 0.35, 0.2, base.a)
+		_sprite.modulate = base.lerp(red, pulse * 0.55)
+		_ember_was = true
+	elif _ember_was:
+		_sprite.modulate = base
+		_ember_was = false
 
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
 	_poll_status()
+	_apply_ember_pulse(delta)
 	# Bullet-time: slow our perception of time uniformly.
 	delta *= time_scale_mult
 	if _attack_cd > 0.0:
@@ -264,12 +305,17 @@ func _on_damaged(_amount: int) -> void:
 		return
 	if _health.hp <= 0:
 		return
-	var original: Color = _sprite.modulate
+	# 피격 플래시는 타입색 기준으로 복귀 — ember 펄스가 modulate 를 빨강으로 바꿔 둔
+	# 상태라도 원래 타입색으로 끝나, 펄스가 플래시 끝값을 오염시키지 않게.
+	var original: Color = _color_for_type(effect_type)
 	# 과하게 밝게 번쩍 → 원래 타입색으로 복귀(알파 유지).
 	var flash: Color = Color(2.5, 2.5, 2.5, original.a)
 	var t := create_tween()
 	t.tween_property(_sprite, "modulate", flash, 0.04)
 	t.tween_property(_sprite, "modulate", original, 0.12)
+	# 플래시 트윈(0.16s) 동안 ember 펄스 양보(피격 플래시 우선). 끝나면 재적용되게 was 리셋.
+	_hitflash_t = 0.18
+	_ember_was = false
 
 func _on_died() -> void:
 	if _dead:

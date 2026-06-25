@@ -75,6 +75,8 @@ const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 ## 구미호 홀림 표식 — 핑크 디버프 아이콘 색/상한.
 const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
+## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
+const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -194,6 +196,20 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "holrim")
+	# ── 도깨비 불씨(dokebi_ember) — bool 플래그. 활성 시 빨강 디버프 아이콘(별개 슬롯) +
+	# 스프라이트 빨강 펄스. 해제(CHAIN_BURST 전파/소비)·사망 시 사라짐.
+	var ember: bool = bool(get_meta("dokebi_ember", false))
+	if ember:
+		_status_strip.call("set_status", "ember", {
+			"value": 1.0,
+			"mode": 0,
+			"color": _EMBER_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "ember")
+	if _sprite_rig != null and _sprite_rig.has_method("set_ember"):
+		_sprite_rig.call("set_ember", ember)
 
 func _physics_process(delta: float) -> void:
 	if _dead:
