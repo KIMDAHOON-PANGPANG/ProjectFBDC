@@ -1711,8 +1711,33 @@ func _great_wraith(ctx: Dictionary, params: Dictionary) -> void:
 	var threshold := int(params.get("execute_threshold", 3))
 	var root_dur := float(params.get("root_duration", 0.6))
 	# 원귀 포위 솟구침 연출.
-	_spawn_burst_particles(center + Vector3(0, 0.4, 0), 34, 2.0, CRIMSON)
-	_spawn_burst_particles(center + Vector3(0, 1.0, 0), 18, 1.4, CRIMSON)
+	# (A) 바닥 진홍 링/디스크 — 포위 범위 시각화.
+	var _host_a := _effect_host()
+	if _host_a != null:
+		var mi := MeshInstance3D.new()
+		mi.mesh = _make_disc_mesh(radius)
+		var mat_a := StandardMaterial3D.new()
+		mat_a.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat_a.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat_a.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat_a.albedo_color = Color(CRIMSON.r, CRIMSON.g, CRIMSON.b, 0.45)
+		mat_a.emission_enabled = true
+		mat_a.emission = CRIMSON
+		mat_a.emission_energy_multiplier = 1.8
+		mi.material_override = mat_a
+		_host_a.add_child(mi)
+		mi.global_position = center + Vector3(0, 0.07, 0)
+		mi.scale = Vector3(0.2, 1.0, 0.2)
+		var t_a := mi.create_tween()
+		t_a.set_parallel(true)
+		t_a.tween_property(mi, "scale", Vector3(1, 1, 1), 0.18)
+		t_a.tween_property(mat_a, "albedo_color:a", 0.0, 0.45)
+		t_a.chain().tween_callback(mi.queue_free)
+	# (B) 상승 컬럼 — 원귀 솟구침.
+	_spawn_wraith_columns(center, radius, 8)
+	# (C) 중앙 폭발 버스트 상향 — 2단.
+	_spawn_burst_particles(center + Vector3(0, 0.5, 0), 60, 3.0, CRIMSON)
+	_spawn_burst_particles(center + Vector3(0, 1.2, 0), 28, 1.8, CRIMSON)
 	# 반경 적 처리.
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
@@ -1729,7 +1754,47 @@ func _great_wraith(ctx: Dictionary, params: Dictionary) -> void:
 	# 카메라 쉐이크.
 	var rig := get_tree().get_first_node_in_group("camera_rig")
 	if rig != null and is_instance_valid(rig) and rig.has_method("shake"):
-		rig.call("shake", 0.12, 0.3)
+		rig.call("shake", 0.18, 0.35)
+
+
+## 원귀 솟구침 컬럼 헬퍼 — center 주변 원형으로 count 개 CPUParticles3D 위로 솟구침.
+func _spawn_wraith_columns(center: Vector3, radius: float, count: int) -> void:
+	var host := _effect_host()
+	if host == null:
+		return
+	for i in count:
+		var ang: float = TAU * float(i) / float(count)
+		var rr: float = radius * 0.7
+		var cpos := center + Vector3(cos(ang) * rr, 0.1, sin(ang) * rr)
+		var p := CPUParticles3D.new()
+		host.add_child(p)
+		p.global_position = cpos
+		p.one_shot = true
+		p.emitting = true
+		p.amount = 10
+		p.lifetime = 0.6
+		p.local_coords = false
+		p.explosiveness = 0.6
+		p.direction = Vector3(0, 1, 0)
+		p.spread = 12.0
+		p.initial_velocity_min = 4.0
+		p.initial_velocity_max = 7.0
+		p.gravity = Vector3(0, -1.0, 0)
+		p.scale_amount_min = 0.06
+		p.scale_amount_max = 0.16
+		var qm := QuadMesh.new()
+		qm.size = Vector2(0.16, 0.16)
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		mat.albedo_color = Color(CRIMSON.r, CRIMSON.g, CRIMSON.b, 0.9)
+		mat.emission_enabled = true
+		mat.emission = CRIMSON
+		mat.emission_energy_multiplier = 2.0
+		qm.material = mat
+		p.mesh = qm
+		p.get_tree().create_timer(p.lifetime + 0.3).timeout.connect(p.queue_free)
 
 
 # ══════════════ 처녀귀신 — CURVE_SLASH(회포일섬) ══════════════
