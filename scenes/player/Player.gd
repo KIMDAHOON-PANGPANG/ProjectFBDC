@@ -378,6 +378,8 @@ func _check_instant_slash() -> void:
 		_set_state(State.AIMING)
 		_charge_t = 0.0
 		_overcharge_t = 0.0
+		if _sprite_rig != null and _sprite_rig.has_method("set_charge_glow"):
+			_sprite_rig.call("set_charge_glow", false)
 		if _aim_arrow != null:
 			_aim_arrow.show_arrow()
 			_aim_arrow.set_charge(0.0)
@@ -565,6 +567,8 @@ func _update_aim(delta: float) -> void:
 	# 최대 차지 도달 후 오버차지 누적 — instant_overcharge_hold 초 버틴 뒤 자동 발사.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
+		if _sprite_rig != null and _sprite_rig.has_method("set_charge_glow"):
+			_sprite_rig.call("set_charge_glow", true)
 		if _overcharge_t >= data.instant_overcharge_hold:
 			_fire_slash()
 			return
@@ -590,6 +594,8 @@ func _apply_charge_zoom(active: bool) -> void:
 
 
 func _fire_slash() -> void:
+	if _sprite_rig != null and _sprite_rig.has_method("set_charge_glow"):
+		_sprite_rig.call("set_charge_glow", false)
 	# 4안 — 일섬 발동 → 게이지 0으로 리셋.
 	_slash_gauge = 0.0
 	var charge_frac: float = clamp(_charge_t / max(data.max_charge_time, 0.0001), 0.0, 1.0)

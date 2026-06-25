@@ -49,7 +49,7 @@ extends Resource
 @export var slash_dash_speed: float = 55.0
 ## 모드2(게임 시작 2) 일섬의 풀차지 사거리 (m). 차징 0→1 에 따라 min_slash_range
 ## ~ 이 값으로 늘어난다(AimArrow 가 시각화). 모드1 의 max_slash_range 와 독립.
-@export var instant_slash_distance: float = 11.0
+@export var instant_slash_distance: float = 5.5
 ## 모드2 — 최대 차지 도달 후 자동 발사까지 버틸 수 있는 오버차지 시간(초).
 ## 이 안에 버튼을 떼면 그때 발사, 넘기면 강제 발사된다(모드1 fizzle 과 달리 불발 아님).
 @export var instant_overcharge_hold: float = 2.0

@@ -60,6 +60,8 @@ var _oneshot: String = ""
 var _oneshot_t: float = 0.0
 var _base_modulate: Color = Color.WHITE
 var _blink_tween: Tween
+var _glow_on: bool = false
+var _glow_tween: Tween
 ## 사망 연출 트윈 + 부활 복원용 원위치(이어서 하기 — revive_reset 이 트윈 kill 후 복원).
 var _death_tween: Tween
 var _home_pos: Vector3
@@ -182,10 +184,45 @@ func flash(duration: float = 0.16) -> void:
 	t.tween_property(self, "modulate", _base_modulate, duration * 0.8)
 
 
+## 풀차지 글로우 — 풀차지 도달 동안 PC 몸이 따뜻하게 빛난다(emission 대용 modulate 펄스).
+## iframe 깜빡임/사망 트윈보다 우선순위가 낮다: blink 가 도는 동안엔 글로우 펄스를 멈추고
+## (_glow_on 만 유지), blink 종료(_restore_base_modulate)에서 아직 켜져 있으면 자동 재개.
+func set_charge_glow(on: bool) -> void:
+	if on == _glow_on:
+		return
+	_glow_on = on
+	if on:
+		_start_glow_pulse()
+	else:
+		if _glow_tween != null and _glow_tween.is_valid():
+			_glow_tween.kill()
+		_glow_tween = null
+		# blink 가 modulate 를 점유 중이면 건드리지 않는다(blink 끝에 base 로 복원됨).
+		if _blink_tween == null or not _blink_tween.is_valid():
+			modulate = _base_modulate
+
+func _start_glow_pulse() -> void:
+	# blink 가 도는 동안엔 펄스를 시작하지 않는다(우선순위: blink > glow). _glow_on 은 유지되어
+	# blink 종료 시 _restore_base_modulate 가 재개한다.
+	if _blink_tween != null and _blink_tween.is_valid():
+		return
+	if _glow_tween != null and _glow_tween.is_valid():
+		_glow_tween.kill()
+	var warm: Color = Color(2.2, 2.0, 1.4, _base_modulate.a)
+	var half: float = 0.35
+	_glow_tween = create_tween()
+	_glow_tween.set_loops()
+	_glow_tween.tween_property(self, "modulate", warm, half)
+	_glow_tween.tween_property(self, "modulate", _base_modulate, half)
+
+
 ## i-frame 깜빡임 — 밝게/투명 교차로 무적을 시각화.
 func start_iframe_blink(duration: float = 1.0) -> void:
 	if _blink_tween != null and _blink_tween.is_valid():
 		_blink_tween.kill()
+	if _glow_tween != null and _glow_tween.is_valid():
+		_glow_tween.kill()
+		_glow_tween = null
 	var bright: Color = Color(2.5, 2.5, 2.5, 1.0)
 	var invisible: Color = Color(_base_modulate.r, _base_modulate.g, _base_modulate.b, 0.0)
 	var half_cycle: float = 0.08
@@ -198,9 +235,13 @@ func start_iframe_blink(duration: float = 1.0) -> void:
 
 func _restore_base_modulate() -> void:
 	modulate = _base_modulate
+	# blink 종료 후에도 풀차지가 유지 중이면 글로우 펄스를 재개(우선순위 복귀).
+	if _glow_on:
+		_start_glow_pulse()
 
 
 func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
+	set_charge_glow(false)
 	_home_pos = position
 	_home_rot = rotation
 	set_state(State.DEATH)
@@ -216,6 +257,9 @@ func play_death_then_free(parent_to_free: Node, duration: float = 0.45) -> void:
 func revive_reset() -> void:
 	if _death_tween != null and _death_tween.is_valid():
 		_death_tween.kill()
+	_glow_on = false
+	if _glow_tween != null and _glow_tween.is_valid():
+		_glow_tween.kill()
 	modulate = _base_modulate
 	position = _home_pos
 	rotation = _home_rot
