@@ -301,6 +301,9 @@ func award_exp_for_kill(enemy: Node) -> void:
 	# 4안 — 처치 시 일섬 게이지 (mirror).
 	if _player != null and is_instance_valid(_player) and _player.has_method("gain_gauge_on_kill"):
 		_player.call("gain_gauge_on_kill")
+	# M9-S10 연격류 — 콤보 중 처치 카운트(연쇄가락 — Main 미러). 미보유면 no-op.
+	if _player != null and is_instance_valid(_player) and _player.has_method("nuki_note_kill"):
+		_player.call("nuki_note_kill")
 	# 잡몹 처치 시 열기 -5(엘리트/보스 제외) — Main 미러.
 	var is_minor: bool = not (enemy.is_in_group("elites") or enemy.is_in_group("boss"))
 	if is_minor and _player != null and is_instance_valid(_player) and _player.has_method("add_heat"):

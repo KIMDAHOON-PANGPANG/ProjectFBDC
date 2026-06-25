@@ -47,6 +47,8 @@ var _status_strip_2d: Control = null
 ## key(String) -> StatusIcon2D(Control)
 var _status_icons_2d: Dictionary = {}
 var _sheathe_clock: Control = null
+## M9-S10 연격류 콤보/가속 티어 미니 표식(속발 보유 시에만 노출). 과한 신규 UI 금지 — 작은 라벨 1개.
+var _nuki_label: Label = null
 
 
 func _ready() -> void:
@@ -208,6 +210,18 @@ func _build() -> void:
 	_status_strip_2d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_status_strip_2d)
 
+	# --- M9-S10 연격류 콤보/티어 미니 라벨(속발 보유 시에만 보임) ---
+	# HP 바 우측 상단 바깥에 작은 텍스트("연격 x2 ▲1"). 기본 숨김 — _process 가 _nuki_active 면 노출.
+	_nuki_label = Label.new()
+	_nuki_label.position = Vector2(_HP_X + _HP_W - 96.0, -34.0)
+	_nuki_label.size = Vector2(96.0, 28.0)
+	_nuki_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_nuki_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	_nuki_label.add_theme_font_size_override("font_size", 16)
+	_nuki_label.visible = false
+	_nuki_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_nuki_label)
+
 
 ## PC 상태 아이콘을 만들거나 갱신한다(공용 데이터 모델). d = {value, mode, color, icon}.
 ## 향후 PC 지속버프/디버프가 생기면 이 메서드로 즉시 표시된다(스캐폴드 노출).
@@ -288,6 +302,23 @@ func _process(_delta: float) -> void:
 	# 레벨 뱃지
 	if _level_label != null and exp_system != null and is_instance_valid(exp_system) and "level" in exp_system:
 		_level_label.text = str(exp_system.level)
+	# M9-S10 연격류 콤보/가속 티어 — 속발 보유 시에만 노출(미보유면 라벨 숨김).
+	if _nuki_label != null:
+		var nuki_on: bool = _player.has_method("is_nuki_active") and bool(_player.call("is_nuki_active"))
+		_nuki_label.visible = nuki_on
+		if nuki_on:
+			var combo := 0
+			var tier := 0
+			if _player.has_method("get_nuki_combo"):
+				combo = int(_player.call("get_nuki_combo"))
+			if _player.has_method("get_nuki_accel_tier"):
+				tier = int(_player.call("get_nuki_accel_tier"))
+			var t := "연격"
+			if combo > 0:
+				t += " x%d" % combo
+			if tier > 0:
+				t += "  ▲%d" % tier
+			_nuki_label.text = t
 	# 버프/디버프 스트립 폴링(스캐폴드) — 현재 PC 지속버프 없음이라 set_status 미호출.
 	# PC 표식/버프가 생기면 여기서 _player meta 등을 읽어 set_status 로 채운다.
 

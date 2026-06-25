@@ -377,6 +377,216 @@
           }
         }
       ]
+    },
+    {
+      "id": "nuki_draw",
+      "name": "속발(速拔)",
+      "desc": "연격류 스타일 확정. 일섬 직후 짧은 재입력 윈도우가 열려 LB 연타로 더 빠른 발도가 이어진다.",
+      "kind": "style",
+      "skill_type": "발도술",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "STYLE_NUKI",
+          "params_by_rarity": {
+            "chosim": { "nuki_window": 0.32, "nuki_max": 3, "sweet_frac": 0.4, "retap_charge_frac": 0.7 },
+            "rare":   { "nuki_window": 0.34, "nuki_max": 3, "sweet_frac": 0.42, "retap_charge_frac": 0.72 },
+            "uniq":   { "nuki_window": 0.36, "nuki_max": 3, "sweet_frac": 0.44, "retap_charge_frac": 0.75 },
+            "legend": { "nuki_window": 0.38, "nuki_max": 4, "sweet_frac": 0.46, "retap_charge_frac": 0.78 },
+            "master": { "nuki_window": 0.4, "nuki_max": 4, "sweet_frac": 0.5, "retap_charge_frac": 0.8 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "triple_draw",
+      "name": "삼절연격(三節連擊)",
+      "desc": "연타 콤보 상한이 늘어난다. 한 콤보로 더 많은 발도를 이을 수 있다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "NUKI_COMBO_EXT",
+          "params_by_rarity": {
+            "chosim": { "max_bonus": 1 },
+            "rare":   { "max_bonus": 1 },
+            "uniq":   { "max_bonus": 2 },
+            "legend": { "max_bonus": 2 },
+            "master": { "max_bonus": 3 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "beat_accel",
+      "name": "박자가속(拍子加速)",
+      "desc": "재입력을 윈도우 후반 '스윗 스폿'에 맞추면 '퍼펙트 연타' — 다음 발도의 충전·쿨·대시가 가속된다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "NUKI_ACCEL",
+          "params_by_rarity": {
+            "chosim": { "haste_pct": 0.35, "dash_bonus": 0.8, "max_tier": 2 },
+            "rare":   { "haste_pct": 0.4, "dash_bonus": 0.9, "max_tier": 2 },
+            "uniq":   { "haste_pct": 0.45, "dash_bonus": 1.0, "max_tier": 2 },
+            "legend": { "haste_pct": 0.5, "dash_bonus": 1.2, "max_tier": 3 },
+            "master": { "haste_pct": 0.6, "dash_bonus": 1.4, "max_tier": 3 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "rhythm_beat",
+      "name": "연참의박(連斬律)",
+      "desc": "퍼펙트 연타를 연속으로 성공하면 '리듬 게이지'가 차오른다 — 윈도우가 넓어지고 연격 마무리 회수가 가중된다. 끊기면 식는다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "NUKI_RHYTHM",
+          "params_by_rarity": {
+            "chosim": { "need": 3, "window_bonus": 0.06, "settle_mult": 1.3 },
+            "rare":   { "need": 3, "window_bonus": 0.07, "settle_mult": 1.35 },
+            "uniq":   { "need": 3, "window_bonus": 0.08, "settle_mult": 1.45 },
+            "legend": { "need": 2, "window_bonus": 0.09, "settle_mult": 1.55 },
+            "master": { "need": 2, "window_bonus": 0.1, "settle_mult": 1.7 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "draw_mark",
+      "name": "발도표식(拔刀標識)",
+      "desc": "모든 일섬 적중에 표식이 추가로 새겨진다. 숏 발도라 표식이 빠르게 쌓인다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "DEEP_MARK",
+          "params_by_rarity": {
+            "chosim": { "extra": 1, "per_hits": 1 },
+            "rare":   { "extra": 1, "per_hits": 1 },
+            "uniq":   { "extra": 1, "per_hits": 1 },
+            "legend": { "extra": 1, "per_hits": 1 },
+            "master": { "extra": 2, "per_hits": 1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "flurry_trace",
+      "name": "난타의흔적(亂打痕跡)",
+      "desc": "퍼펙트 연타의 적중은 표식을 더 깊게 새기고 주변으로 전파한다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "MARK_SPREAD",
+          "params_by_rarity": {
+            "chosim": { "spread_count": 1, "spread_radius": 2.5 },
+            "rare":   { "spread_count": 1, "spread_radius": 2.8 },
+            "uniq":   { "spread_count": 2, "spread_radius": 3.0 },
+            "legend": { "spread_count": 2, "spread_radius": 3.4 },
+            "master": { "spread_count": 2, "spread_radius": 3.8 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "nuki_settle",
+      "name": "납도결산(納刀決算)",
+      "desc": "연타 마지막 타가 표식 적을 가르면 그 자리에서 '거둠'이 정산된다 — 만개는 처형, 미만은 표식만큼 베인다.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "NUKI_SETTLE",
+          "params_by_rarity": {
+            "chosim": { "enabled": 1 },
+            "rare":   { "enabled": 1 },
+            "uniq":   { "enabled": 1 },
+            "legend": { "enabled": 1 },
+            "master": { "enabled": 1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "draw_refund",
+      "name": "환원의박(還元律)",
+      "desc": "연타 콤보의 마무리가 적을 처치하면 자원이 환급되고 다음 한 발이 가속된다.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "IAIDO_HASTE",
+          "params_by_rarity": {
+            "chosim": { "haste_pct": 0.3, "dash_bonus": 0.8 },
+            "rare":   { "haste_pct": 0.35, "dash_bonus": 0.9 },
+            "uniq":   { "haste_pct": 0.4, "dash_bonus": 1.0 },
+            "legend": { "haste_pct": 0.45, "dash_bonus": 1.2 },
+            "master": { "haste_pct": 0.55, "dash_bonus": 1.4 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chain_cadence",
+      "name": "연쇄가락(連鎖律)",
+      "desc": "한 콤보로 적 2명 이상을 처치하면 가속 티어가 다음 콤보까지 보존된다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "NUKI_CADENCE",
+          "params_by_rarity": {
+            "chosim": { "kills_need": 2 },
+            "rare":   { "kills_need": 2 },
+            "uniq":   { "kills_need": 2 },
+            "legend": { "kills_need": 2 },
+            "master": { "kills_need": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dash_draw",
+      "name": "질주발도(疾走拔刀)",
+      "desc": "일섬의 대시 거리·폭·관통이 늘어난다. 연격이 더 넓게 휩쓴다.",
+      "kind": "slash",
+      "skill_type": "일섬",
+      "style_req": "nuki",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "SLASH_EXTEND",
+          "params_by_rarity": {
+            "chosim": { "range_mult": 1.25, "width_mult": 1.2 },
+            "rare":   { "range_mult": 1.3, "width_mult": 1.24 },
+            "uniq":   { "range_mult": 1.38, "width_mult": 1.3 },
+            "legend": { "range_mult": 1.45, "width_mult": 1.36 },
+            "master": { "range_mult": 1.55, "width_mult": 1.45 }
+          }
+        }
+      ]
     }
   ]
 }

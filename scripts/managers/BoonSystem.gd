@@ -154,13 +154,20 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 		"legend": "전설", "master": "마스터"
 	}
 
-	# 스타일 exclusive: 이미 style 카드를 보유 중이면 다른 style 카드를 풀에서 제외.
-	# (현재 납도류 1종이라 사실상 '발도 보유 시 발도 미노출' — 프레임만 깔아 둠.)
+	# 스타일 exclusive(S3 프레임) + style_req 필터(M9-S10): 한 판에 한 발도술 풀만 노출한다.
+	# - 플레이어가 style 카드를 이미 보유하면 그 카드의 style_req(예: 'iaido'/'nuki')를 '활성 스타일'로 본다.
+	#   → 같은 style_req 카드 + style_req 빈값(universal) 카드만 draw(다른 발도술 카드는 풀에서 제외).
+	#   → 동시에 style 카드(발도술)는 더 노출하지 않는다(1픽 exclusive 유지).
+	# - style 미보유면 active_style 빈값 → 모든 style_req 통과(첫 픽에서 발도술 style 카드들이 노출됨).
 	var owns_style := false
+	var active_style := ""
 	for oid in owned_ids:
 		var ob = _by_id.get(String(oid), null)
 		if ob is Dictionary and String(ob.get("kind", "")) == "style":
 			owns_style = true
+			var sr := String(ob.get("style_req", ""))
+			if sr != "":
+				active_style = sr
 			break
 
 	# 미보유 카드만 추려 available 구성.
@@ -173,6 +180,10 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 			continue
 		# style 카드는 1픽 exclusive — 이미 스타일 보유면 제외.
 		if owns_style and String(b.get("kind", "")) == "style":
+			continue
+		# style_req 필터 — 활성 스타일이 정해졌으면 그 스타일 + universal(빈값)만 노출(다른 발도술 카드 섞임 방지).
+		var card_style := String(b.get("style_req", ""))
+		if active_style != "" and card_style != "" and card_style != active_style:
 			continue
 		available.append(b)
 	if available.is_empty():

@@ -158,6 +158,47 @@ var _spirit_max: int = 8
 var _spirit_release_mult: float = 2.0
 var _spirit_release_pending: bool = false
 
+# ── M9-S10 연격류(STYLE_NUKI): LB 연타 control mechanic ──
+## ★전부 런타임 인스턴스 변수(_ready 리셋). 공유 .tres 미변형. 연타 윈도우는 _nuki_active(속발 보유) 게이트라
+##   미보유(납도류 등)면 전부 no-op — 기존 일섬 거동 그대로(회귀 0).
+## 속발(STYLE_NUKI) 카드 보유 여부 — add_boon 에서 감지해 세팅. true 일 때만 연타 윈도우/가속/리듬 동작.
+var _nuki_active: bool = false
+## 재입력 윈도우 잔여(초). 일섬 발도 직후 nuki_window 로 열림, _physics_process 가 깎음.
+## > 0 동안 LB(fire) 재입력이면 추가 일섬(콤보+1)을 즉발. 만료/미입력 시 콤보 0 리셋.
+var _nuki_window_t: float = 0.0
+## 이번 윈도우 총 길이(초) — sweet spot(후반 sweet_frac 구간) 판정 기준(잔여/총길이 비율).
+var _nuki_window_total: float = 0.0
+## 현재 콤보 타수(0=콤보 없음, 1=첫 일섬, 2=2타…). _nuki_max 도달 시 윈도우 안 열고 마무리.
+var _nuki_combo: int = 0
+## 가속 티어(0~max_tier). 스윗 스폿 퍼펙트 연타마다 +1, 콤보 끊김 시 0(연쇄가락 보존 예외).
+var _nuki_accel_tier: int = 0
+## 리듬 게이지(퍼펙트 연속 카운트) — need 도달 시 충전 상태(윈도우 폭↑·마무리 회수 가중). 끊기면 0.
+var _nuki_rhythm: int = 0
+## 이번 콤보가 낸 처치 수(연쇄가락 — 2명+ 처치 시 가속 티어 보존). 새 콤보 시작 시 0.
+var _nuki_combo_kills: int = 0
+# 속발 params(런마다 add_boon 에서 세팅 — 보유 시. 코드 1차값 기본).
+var _nuki_window_base: float = 0.32     # nuki_window
+var _nuki_max: int = 3                  # 콤보 상한(삼절연격으로 확장)
+var _nuki_sweet_frac: float = 0.4       # 윈도우 후반 sweet spot 비율
+var _nuki_retap_charge_frac: float = 0.7  # 연타 일섬 충전 프랙(숏 발도 = 풀차지 미만 즉발)
+# 박자가속(NUKI_ACCEL) params — 보유 시 add_boon 에서 세팅(미보유면 가속 0).
+var _nuki_accel_has: bool = false
+var _nuki_accel_haste: float = 0.0
+var _nuki_accel_dash: float = 0.0
+var _nuki_accel_max_tier: int = 0
+# 연참의박(NUKI_RHYTHM) params — 보유 시 세팅.
+var _nuki_rhythm_has: bool = false
+var _nuki_rhythm_need: int = 3
+var _nuki_rhythm_window_bonus: float = 0.0
+var _nuki_rhythm_settle_mult: float = 1.0
+# 납도결산(NUKI_SETTLE) — 연타 마지막 타가 자동 납도 정산(ON_SHEATHE)을 발동.
+var _nuki_settle_has: bool = false
+## 연격 마무리 정산 1회 환급 부스트(리듬 충전 시 _nuki_rhythm_settle_mult). _sheathe_restore 가 소비 후 1.0 리셋.
+var _nuki_settle_refund_boost: float = 1.0
+# 연쇄가락(NUKI_CADENCE) — 한 콤보 kills_need 처치 시 가속 티어 보존.
+var _nuki_cadence_has: bool = false
+var _nuki_cadence_kills_need: int = 2
+
 ## M8 — 컨트롤은 일섬 단일로 통합됐다. 이 플래그는 항상 true 로 고정(_ready 에서
 ## 세팅). 수십 개 분기·게터(is_instant_slash_mode, add_heat/add_slash_gauge 가드,
 ## _is_cooldown_resource 등)가 이 변수를 읽으므로 변수 자체는 보존한다. 옛 근접
@@ -283,6 +324,17 @@ func _ready() -> void:
 	# M9-S9 정기흡수 런타임 자원 리셋(런마다 0부터 — 공유 .tres 미변형).
 	_spirit_stacks = 0
 	_spirit_release_pending = false
+	# M9-S10 연격류 런타임 리셋(런마다 — 속발 미보유면 _nuki_active=false 로 비활성).
+	_nuki_active = false
+	_nuki_window_t = 0.0
+	_nuki_combo = 0
+	_nuki_accel_tier = 0
+	_nuki_rhythm = 0
+	_nuki_combo_kills = 0
+	_nuki_accel_has = false
+	_nuki_rhythm_has = false
+	_nuki_settle_has = false
+	_nuki_cadence_has = false
 	_boon_executor = _BoonExecutorScript.new()
 	_boon_executor.name = "BoonExecutor"
 	add_child(_boon_executor)
@@ -311,6 +363,13 @@ func _physics_process(delta: float) -> void:
 	# 다음 일반 납도 시작 시 리셋(추격 1회 cap 유지).
 	if _sheathe_follow_t > 0.0:
 		_sheathe_follow_t -= delta
+	# M9-S10 연격류 연타 윈도우 — 미입력 시 시간 경과로 닫힘. 닫히면 콤보 마무리(자동 정산+리셋).
+	# ★_nuki_active(속발 보유) 일 때만 윈도우가 열려 있으므로, 미보유면 항상 0 = no-op(회귀 0).
+	if _nuki_window_t > 0.0:
+		_nuki_window_t -= delta
+		if _nuki_window_t <= 0.0:
+			_nuki_window_t = 0.0
+			_nuki_end_combo()
 	# M9-S7 폭심 충전 예약 윈도우 — 만료 시 예약 소멸(다음 일섬에 적용 안 됨).
 	if _next_burst_t > 0.0:
 		_next_burst_t -= delta
@@ -341,6 +400,7 @@ func _physics_process(delta: float) -> void:
 	match _state:
 		State.IDLE:
 			_handle_move(delta)
+			_check_nuki_retap()
 			_check_instant_slash()
 			_check_sheathe()
 			_check_evade_start()
@@ -355,6 +415,7 @@ func _physics_process(delta: float) -> void:
 			_update_dash(delta)
 		State.COOLDOWN:
 			_handle_move(delta)
+			_check_nuki_retap()
 			_check_sheathe()
 			_check_evade_start()
 			_cooldown_t -= _cd_step
@@ -528,9 +589,12 @@ func _sheathe_restore(total_marks: int, heat_extra_per: float = 0.0, hp_extra_pe
 		release = _spirit_release_mult
 		_spirit_release_pending = false
 		_spirit_stacks = 0
-	var heat_per: float = (_SHEATHE_HEAT_REFUND_PER_MARK + heat_extra_per) * float(total_marks) * refund_mult * release
+	# M9-S10 연격 마무리 리듬 부스트 — 1회 소비(연격류 자동 정산에서만 >1.0).
+	var nuki_boost: float = _nuki_settle_refund_boost
+	_nuki_settle_refund_boost = 1.0
+	var heat_per: float = (_SHEATHE_HEAT_REFUND_PER_MARK + heat_extra_per) * float(total_marks) * refund_mult * release * nuki_boost
 	_refund_heat(heat_per)
-	var hp_per: float = (_SHEATHE_HP_PER_MARK + hp_extra_per) * float(total_marks) * refund_mult * release
+	var hp_per: float = (_SHEATHE_HP_PER_MARK + hp_extra_per) * float(total_marks) * refund_mult * release * nuki_boost
 	var hp_amt: int = int(round(hp_per))
 	if hp_amt > 0 and _health != null:
 		_health.heal(hp_amt)
@@ -894,7 +958,113 @@ func _complete_slash_action() -> void:
 	var _tb_end := _trigger_bus()
 	if _tb_end != null:
 		_tb_end.call("emit", _TriggerBusScript.ON_SLASH_END, {"source": self, "position": global_position})
+	# M9-S10 연격류 — 이 일섬 직후 재입력 윈도우를 연다(콤보 상한 미달일 때만). 미보유면 no-op.
+	_nuki_open_window()
 	_set_state(State.COOLDOWN if data.slash_cooldown > 0.0 else State.IDLE)
+
+
+# ══════════════ M9-S10 연격류(STYLE_NUKI) — LB 연타 control mechanic ══════════════
+
+## 일섬 발도 직후 호출(_complete_slash_action) — 재입력 윈도우를 연다.
+## ★_nuki_active(속발 보유) 일 때만 동작. 콤보 상한(_nuki_max) 도달이면 윈도우 안 열고 콤보 마무리.
+## 콤보가 0이면 이 일섬이 새 콤보의 1타 — 콤보=1·처치카운트 리셋(연쇄가락 보존이 아니면 티어도 0).
+func _nuki_open_window() -> void:
+	if not _nuki_active:
+		return
+	# 새 콤보 시작(이 일섬이 첫 타) — 콤보/처치 카운트 초기화. 가속 티어는 연쇄가락 보존분만 유지.
+	if _nuki_combo <= 0:
+		_nuki_combo = 1
+		_nuki_combo_kills = 0
+	# 콤보 상한 도달 — 더 못 잇는다. 마무리(자동 정산+리셋).
+	if _nuki_combo >= _nuki_max:
+		_nuki_end_combo()
+		return
+	# 윈도우 길이 = base + 리듬 충전 보너스(연참의박 need 도달 시 폭↑).
+	var win: float = _nuki_window_base
+	if _nuki_rhythm_has and _nuki_rhythm >= _nuki_rhythm_need:
+		win += _nuki_rhythm_window_bonus
+	_nuki_window_total = max(win, 0.05)
+	_nuki_window_t = _nuki_window_total
+
+
+## 연타 윈도우 재입력 체크 — IDLE/COOLDOWN 에서 매 프레임. 윈도우가 열려 있고 콤보 상한 미달이면
+## 쿨다운 게이트를 무시하고(연타 윈도우 자체가 페이스 제한) LB 재입력 시 즉발 연격. 탈진 중엔 봉인.
+## ★_nuki_active(속발 보유) 게이트라 미보유면 항상 즉시 return = 회귀 0.
+func _check_nuki_retap() -> void:
+	if not _nuki_active:
+		return
+	if _nuki_window_t <= 0.0 or _nuki_combo >= _nuki_max:
+		return
+	if _overheated:
+		return  # 탈진 중엔 연타도 봉인.
+	if not Input.is_action_just_pressed("fire"):
+		return
+	if _is_pointer_over_ui():
+		return
+	_nuki_retap()
+
+
+## 윈도우 열린 중 LB 재입력 — 콤보+1, sweet spot 판정으로 가속 티어/리듬 갱신 후 즉발 일섬.
+## 충전 단계(AIMING) 없이 숏 발도(retap_charge_frac 의 충전 프랙)로 즉시 _fire_slash.
+func _nuki_retap() -> void:
+	# sweet spot = 윈도우 후반 sweet_frac 구간(잔여/총 ≤ sweet_frac).
+	var frac_left: float = _nuki_window_t / max(_nuki_window_total, 0.0001)
+	var is_sweet: bool = frac_left <= _nuki_sweet_frac
+	_nuki_combo += 1
+	if is_sweet:
+		# 퍼펙트 연타 — 가속 티어 +1(max), 리듬 +1, 다음 발도 가속(역수 haste 변수 재사용).
+		if _nuki_accel_has:
+			_nuki_accel_tier = min(_nuki_accel_tier + 1, max(_nuki_accel_max_tier, 0))
+			apply_iaido_haste(_nuki_accel_haste * float(_nuki_accel_tier), _nuki_accel_dash * float(_nuki_accel_tier))
+		if _nuki_rhythm_has:
+			_nuki_rhythm += 1
+	else:
+		# 일반 적중 — 콤보만 유지, 티어 가산 없음. 퍼펙트 사슬 끊김 → 리듬 식음.
+		if _nuki_rhythm_has:
+			_nuki_rhythm = 0
+	# 윈도우는 닫고(이 입력 소비) — 발도 후 _nuki_open_window 가 다시 연다.
+	_nuki_window_t = 0.0
+	# 숏 발도 — 충전 프랙을 retap_charge_frac 로 세팅해 즉발(풀차지 미만 = 더 빠른 발도).
+	_charge_t = data.max_charge_time * clampf(_nuki_retap_charge_frac, 0.1, 1.0)
+	_overcharge_t = 0.0
+	_fire_slash()
+
+
+## 콤보 종료 — 윈도우 만료/상한 도달 시. 납도결산 보유면 자동 납도 정산(ON_SHEATHE) 1회 발동.
+## 그 후 콤보/티어 리셋(연쇄가락 — 이번 콤보 2명+ 처치 시 가속 티어 보존). ★자율 킬 없음(정산은 기존 _on_sheathe 경로 재사용).
+func _nuki_end_combo() -> void:
+	if _nuki_combo <= 0:
+		return
+	# 납도결산 — 연타 마지막 타 직후 자동 납도 정산(표식 적 거둠). 기존 ON_SHEATHE 경로 재사용(_in_cascade 가드 포함).
+	if _nuki_settle_has:
+		# 리듬 충전(need 도달) 중이면 이 마무리 정산 환급을 settle_mult 만큼 가중(1회 소비).
+		if _nuki_rhythm_has and _nuki_rhythm >= _nuki_rhythm_need:
+			_nuki_settle_refund_boost = max(1.0, _nuki_rhythm_settle_mult)
+		var tb := _trigger_bus()
+		if tb != null:
+			tb.call("emit", _TriggerBusScript.ON_SHEATHE, {"source": self, "position": global_position})
+	# 연쇄가락 — 이번 콤보가 kills_need 이상 처치했으면 가속 티어 보존, 아니면 0.
+	if not (_nuki_cadence_has and _nuki_combo_kills >= _nuki_cadence_kills_need):
+		_nuki_accel_tier = 0
+	_nuki_combo = 0
+	_nuki_combo_kills = 0
+
+
+## BoonExecutor/킬 배선 — 연격류 콤보 중 처치가 일어날 때 호출(연쇄가락 처치 카운트).
+func nuki_note_kill() -> void:
+	if _nuki_active and _nuki_combo > 0:
+		_nuki_combo_kills += 1
+
+
+# 연격류 getter(HUD/디버그용).
+func is_nuki_active() -> bool:
+	return _nuki_active
+
+func get_nuki_combo() -> int:
+	return _nuki_combo
+
+func get_nuki_accel_tier() -> int:
+	return _nuki_accel_tier
 
 func _spawn_slash_attack(start: Vector3, end: Vector3, extents: Vector3 = Vector3.ZERO) -> void:
 	_spawn_slash_attack_node(start, end, extents)
@@ -1404,3 +1574,67 @@ func add_boon(id: String, rarity: String) -> void:
 	# 패시브(SLASH_EXTEND 등) 효과 재계산 — BoonExecutor 가 active_boons 스캔해 런타임 보너스 갱신.
 	if _boon_executor != null and is_instance_valid(_boon_executor) and _boon_executor.has_method("refresh_passives"):
 		_boon_executor.call("refresh_passives")
+	# M9-S10 연격류 — active_boons 스캔해 _nuki_active + 연타 params 재계산(보유 시에만 윈도우 동작).
+	_nuki_refresh_from_boons()
+
+
+## M9-S10 — active_boons 를 스캔해 연격류 런타임 상태를 재계산한다.
+## STYLE_NUKI 보유 시에만 _nuki_active=true(연타 윈도우 게이트). 각 연격 카드 params 를 런타임 변수로 흡수.
+## ★전부 런타임 변수만 갱신(공유 .tres 미변형). add_boon 마다 호출 — 중복 보유는 더 강한 값(max) 채택.
+func _nuki_refresh_from_boons() -> void:
+	# ★기본값으로 리셋 후 보유 카드로 다시 누적한다. add_boon 마다 active_boons 전체를 재스캔하므로,
+	#   여기서 리셋하지 않으면 NUKI_COMBO_EXT 의 '+=' 가산이 매 픽마다 중복 누적된다(상한 폭증 버그).
+	#   런마다 _ready 가 별도로 0/false 로 리셋(여긴 인게임 재계산용 베이스).
+	_nuki_window_base = 0.32
+	_nuki_max = 3
+	_nuki_sweet_frac = 0.4
+	_nuki_retap_charge_frac = 0.7
+	_nuki_accel_has = false
+	_nuki_accel_haste = 0.0
+	_nuki_accel_dash = 0.0
+	_nuki_accel_max_tier = 0
+	_nuki_rhythm_has = false
+	_nuki_rhythm_need = 3
+	_nuki_rhythm_window_bonus = 0.0
+	_nuki_rhythm_settle_mult = 1.0
+	_nuki_settle_has = false
+	_nuki_cadence_has = false
+	_nuki_cadence_kills_need = 2
+	var has_style := false
+	for boon in active_boons:
+		if not (boon is Dictionary):
+			continue
+		var comps = boon.get("components", [])
+		if not (comps is Array):
+			continue
+		var p: Dictionary = boon.get("params", {})
+		if not (p is Dictionary):
+			p = {}
+		for comp in comps:
+			if not (comp is Dictionary):
+				continue
+			match String(comp.get("effect", "")):
+				"STYLE_NUKI":
+					has_style = true
+					_nuki_window_base = max(0.1, float(p.get("nuki_window", _nuki_window_base)))
+					_nuki_max = max(_nuki_max, int(p.get("nuki_max", _nuki_max)))
+					_nuki_sweet_frac = clampf(float(p.get("sweet_frac", _nuki_sweet_frac)), 0.05, 0.9)
+					_nuki_retap_charge_frac = clampf(float(p.get("retap_charge_frac", _nuki_retap_charge_frac)), 0.1, 1.0)
+				"NUKI_COMBO_EXT":
+					_nuki_max += max(0, int(p.get("max_bonus", 0)))
+				"NUKI_ACCEL":
+					_nuki_accel_has = true
+					_nuki_accel_haste = max(_nuki_accel_haste, float(p.get("haste_pct", 0.0)))
+					_nuki_accel_dash = max(_nuki_accel_dash, float(p.get("dash_bonus", 0.0)))
+					_nuki_accel_max_tier = max(_nuki_accel_max_tier, int(p.get("max_tier", 2)))
+				"NUKI_RHYTHM":
+					_nuki_rhythm_has = true
+					_nuki_rhythm_need = max(1, int(p.get("need", _nuki_rhythm_need)))
+					_nuki_rhythm_window_bonus = max(_nuki_rhythm_window_bonus, float(p.get("window_bonus", 0.0)))
+					_nuki_rhythm_settle_mult = max(_nuki_rhythm_settle_mult, float(p.get("settle_mult", 1.0)))
+				"NUKI_SETTLE":
+					_nuki_settle_has = true
+				"NUKI_CADENCE":
+					_nuki_cadence_has = true
+					_nuki_cadence_kills_need = max(1, int(p.get("kills_need", _nuki_cadence_kills_need)))
+	_nuki_active = has_style
