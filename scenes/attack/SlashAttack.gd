@@ -24,6 +24,10 @@ const _SLASH_MARK_CAP := 5
 ## 참향(잔향 일섬, baseline) 전용 — true 면 데미지/킬 없이 표식만 새긴다(_try_kill 우회).
 ## Player.spawn_echo_slash 가 스폰 후 세팅. 발사체 격추도 스킵.
 var mark_only: bool = false
+## M9-S11 충전류(일도양단) — 풀차지 관통 표식 깊이. >0 면 _apply_slash_mark 가 한 번에
+## (1 + charge_mark_depth) 만큼 표식을 누적(티어/심자 깊이 주입). Player._spawn_slash_attack_node
+## 가 스폰 후 1발 한정으로 set(미설정/0 = 기존 +1 거동, 회귀 0). 참향(mark_only) 은 0 유지라 무관.
+var charge_mark_depth: int = 0
 var _length: float = 1.0
 var _width: float = 1.4
 ## 범위 Vector3 분해 — _width=x(폭) · _height=y(높이) · _len_pad=z(전방 길이 가산).
@@ -184,7 +188,9 @@ func _apply_slash_mark(target: Node, ctx: Dictionary) -> void:
 	if target == null or not is_instance_valid(target):
 		return
 	var cur: int = int(target.get_meta("slash_mark", 0))
-	var nv: int = min(cur + 1, _SLASH_MARK_CAP)
+	# M9-S11 충전류 — charge_mark_depth>0 면 한 번에 (1 + depth) 만큼 누적(티어/심자 깊이). 기본 +1.
+	var inc: int = 1 + max(charge_mark_depth, 0)
+	var nv: int = min(cur + inc, _SLASH_MARK_CAP)
 	target.set_meta("slash_mark", nv)
 	if cur < _SLASH_MARK_CAP and nv == _SLASH_MARK_CAP:
 		var tb := _trigger_bus()

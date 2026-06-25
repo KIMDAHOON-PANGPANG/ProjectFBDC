@@ -199,6 +199,33 @@ var _nuki_settle_refund_boost: float = 1.0
 var _nuki_cadence_has: bool = false
 var _nuki_cadence_kills_need: int = 2
 
+# ── M9-S11 충전류(STYLE_CHARGE): LB 충전→풀차지 관통 control mechanic ──
+## ★전부 런타임 인스턴스 변수(_ready 리셋). 공유 .tres 미변형. 모든 분기는 _charge_active(일도양단 보유) 게이트라
+##   미보유(납도/연격/무스타일)면 전부 no-op — 기존 일섬/연타 거동 그대로(회귀 0).
+## 일도양단(STYLE_CHARGE) 카드 보유 여부 — add_boon 에서 감지해 세팅. true 일 때만 차징 경로 강제.
+var _charge_active: bool = false
+## 충전 티어 경계(약/중/풀) — frac<lo=0(약), <hi=1(중), 그 외=2(풀).
+var _charge_tier_lo: float = 0.4
+var _charge_tier_hi: float = 0.85
+## 풀차지 관통 일섬 배수(꿰뚫는일직선 SLASH_EXTEND 와 별개 — 충전류 자체 보너스). 1.0=무효.
+var _charge_pierce_range_mult: float = 1.0
+var _charge_pierce_width_mult: float = 1.0
+var _charge_dash_speed_mult: float = 1.0
+## 티어별 표식 깊이 — base + per_tier×tier. _fire_slash 가 산출해 _charge_pending_mark_depth 로 다음 1발에 주입.
+var _charge_mark_depth_base: int = 1
+var _charge_mark_depth_per_tier: int = 0
+## 심호흡(CHARGE_HASTE) — 차징 가속 배수(_update_aim charge_mult 에 곱). 0=무효.
+var _charge_haste_mult: float = 0.0
+## 발도완극(CHARGE_PERFECT) — 풀차지 후 오버차지 자동발사 윈도우 연장(퍼펙트 릴리즈) + 깊이/사거리 보강.
+var _charge_perfect_has: bool = false
+var _charge_perfect_window: float = 0.0
+## 다음 일섬 1발에 주입할 표식 깊이(SlashAttack.charge_mark_depth). _fire_slash 가 세팅·소비(1발 한정).
+var _charge_pending_mark_depth: int = 0
+## 발도회천(CHARGE_DASH_CANCEL) — 차징 중 회피 시 재차지 가속/대시 가산. 보유 시 add_boon 에서 세팅.
+var _charge_dash_cancel_has: bool = false
+var _charge_dash_cancel_haste: float = 0.0
+var _charge_dash_cancel_dash: float = 0.0
+
 ## M8 — 컨트롤은 일섬 단일로 통합됐다. 이 플래그는 항상 true 로 고정(_ready 에서
 ## 세팅). 수십 개 분기·게터(is_instant_slash_mode, add_heat/add_slash_gauge 가드,
 ## _is_cooldown_resource 등)가 이 변수를 읽으므로 변수 자체는 보존한다. 옛 근접
@@ -335,6 +362,11 @@ func _ready() -> void:
 	_nuki_rhythm_has = false
 	_nuki_settle_has = false
 	_nuki_cadence_has = false
+	# M9-S11 충전류 런타임 리셋(런마다 — 일도양단 미보유면 _charge_active=false 로 비활성, 기존 경로 회귀 0).
+	_charge_active = false
+	_charge_pending_mark_depth = 0
+	_charge_perfect_has = false
+	_charge_mark_depth_per_tier = 0
 	_boon_executor = _BoonExecutorScript.new()
 	_boon_executor.name = "BoonExecutor"
 	add_child(_boon_executor)
@@ -409,6 +441,10 @@ func _physics_process(delta: float) -> void:
 		State.AIMING:
 			# 일섬 단일 — 차징하며 이동 가능.
 			_handle_move(delta)
+			# M9-S11 발도회천(CHARGE_DASH_CANCEL) — 충전류 활성 시 차징 중 회피 입력이면 차지 버리고 회피(우선 체크).
+			# 회피로 전환되면 이번 프레임 _update_aim/release 는 스킵(상태가 EVADING 으로 바뀜).
+			if _charge_active and _check_charge_dash_cancel():
+				return
 			_update_aim(delta)
 			_check_attack_release()
 		State.DASHING:
@@ -494,7 +530,8 @@ func _check_instant_slash() -> void:
 		if _is_pointer_over_ui():
 			return
 		# ── 에임 분기 ──
-		if _is_instant_aim():
+		# M9-S11 충전류 — 일도양단 보유 시 GameConfig.slash_aim_mode 무관하게 차징 경로 강제(즉발 스킵).
+		if _is_instant_aim() and not _charge_active:
 			# 즉발 — 차징 단계(AIMING)를 건너뛰고 풀거리(instant_slash_distance)로 즉시 발사.
 			# _fire_slash 가 charge_frac=1 을 읽도록 _charge_t 를 최대로 세팅.
 			_charge_t = data.max_charge_time
@@ -818,13 +855,20 @@ func _update_aim(delta: float) -> void:
 	var charge_mult: float = data.charge_speed_mult
 	if boon_haste_t > 0.0:
 		charge_mult *= (1.0 + boon_haste_charge_mult)
+	# M9-S11 심호흡(CHARGE_HASTE) — 충전류 활성 시 차징 가속(미보유면 0 = 무효).
+	if _charge_active and _charge_haste_mult > 0.0:
+		charge_mult *= (1.0 + _charge_haste_mult)
 	_charge_t = min(_charge_t + delta * charge_mult, data.max_charge_time)
 	# 최대 차지 도달 후 오버차지 누적 — instant_overcharge_hold 초 버틴 뒤 자동 발사.
 	if _charge_t >= data.max_charge_time:
 		_overcharge_t += delta
 		if _sprite_rig != null and _sprite_rig.has_method("set_charge_glow"):
 			_sprite_rig.call("set_charge_glow", true)
-		if _overcharge_t >= data.instant_overcharge_hold:
+		# M9-S11 발도완극(CHARGE_PERFECT) — 충전류+퍼펙트 보유 시 자동발사 임계를 윈도우만큼 연장(퍼펙트 릴리즈 여유).
+		var auto_hold: float = data.instant_overcharge_hold
+		if _charge_active and _charge_perfect_has:
+			auto_hold = max(auto_hold, _charge_perfect_window)
+		if _overcharge_t >= auto_hold:
 			_fire_slash()
 			return
 	var dir := _mouse_to_world_dir()
@@ -854,6 +898,15 @@ func _fire_slash() -> void:
 	# 4안 — 일섬 발동 → 게이지 0으로 리셋.
 	_slash_gauge = 0.0
 	var charge_frac: float = clamp(_charge_t / max(data.max_charge_time, 0.0001), 0.0, 1.0)
+	# ── M9-S11 충전류(일도양단) — 티어 산출 → 다음 일섬 1발 표식 깊이 예약 + 풀차지 관통 배수. ──
+	# ★_charge_active 미보유면 전부 스킵(1발 깊이 0·배수 1.0 = 기존 거동, 회귀 0).
+	if _charge_active:
+		var tier: int = 0 if charge_frac < _charge_tier_lo else (1 if charge_frac < _charge_tier_hi else 2)
+		# 퍼펙트 릴리즈 판정 — 풀차지(tier2)에서 오버차지가 윈도우 안(아직 자동발사 임계 미만)인 릴리즈.
+		var was_perfect: bool = _charge_perfect_has and charge_frac >= 1.0
+		_charge_pending_mark_depth = _charge_mark_depth_base + _charge_mark_depth_per_tier * tier
+		if was_perfect:
+			_charge_pending_mark_depth += 1
 	# 구미낙화(SLASH_FAN) — 풀차지면 ON_SLASH_CHARGED 를 *먼저* 발행해 BoonExecutor 가
 	# 부채 폭 확장 플래그를 세팅하게 하고, 같은 일섬이 그 플래그를 ext 에 소비한다.
 	var _tb_charged := _trigger_bus()
@@ -863,6 +916,9 @@ func _fire_slash() -> void:
 	var slash_range: float = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
 	# 일섬연장(SLASH_EXTEND) — 패시브 사거리 배수(공유 .tres 미변형, 런타임 변수).
 	slash_range *= boon_slash_range_mult
+	# M9-S11 충전류 — 풀차지 관통 사거리 배수(충전류 자체 보너스, SLASH_EXTEND 와 곱셈 누적). 미보유=1.0.
+	if _charge_active:
+		slash_range *= _charge_pierce_range_mult
 	# M9-S7 폭심 충전(EPICENTER_OVERCHARGE) — 예약된 다음 일섬 1발이면 사거리 대버스트.
 	var burst_active: bool = _next_burst_t > 0.0
 	if burst_active:
@@ -871,6 +927,9 @@ func _fire_slash() -> void:
 	# 일섬연장(SLASH_EXTEND) — 패시브 폭/관통 배수. x=폭, z=전방 길이 가산 모두 확장.
 	if boon_slash_width_mult > 1.0:
 		ext = Vector3(ext.x * boon_slash_width_mult, ext.y, ext.z * boon_slash_width_mult)
+	# M9-S11 충전류 — 풀차지 관통 폭 배수(충전류 자체 보너스, 곱셈 누적). 미보유=1.0.
+	if _charge_active and _charge_pierce_width_mult > 1.0:
+		ext = Vector3(ext.x * _charge_pierce_width_mult, ext.y, ext.z * _charge_pierce_width_mult)
 	# M9-S7 폭심 충전 — 예약된 다음 일섬 1발이면 폭 대버스트(x=폭, z=전방 길이 모두 확장).
 	if burst_active and boon_next_slash_width_mult > 1.0:
 		ext = Vector3(ext.x * boon_next_slash_width_mult, ext.y, ext.z * boon_next_slash_width_mult)
@@ -886,7 +945,11 @@ func _fire_slash() -> void:
 	_dash_end = global_position + _aim_dir.normalized() * slash_range
 	_dash_elapsed = 0.0
 	# 돌진 속도(m/s) → 동적 대시 시간 = 거리 ÷ 속도(거리가 멀어도 체감 일정).
-	_dash_dur = max(slash_range / max(data.slash_dash_speed, 0.01), 0.02)
+	# M9-S11 충전류 — 풀차지 관통은 대시 속도 ×_charge_dash_speed_mult(빠른 관통). 미보유=1.0.
+	var dash_speed: float = data.slash_dash_speed
+	if _charge_active:
+		dash_speed *= _charge_dash_speed_mult
+	_dash_dur = max(slash_range / max(dash_speed, 0.01), 0.02)
 	# 일섬 대시 중 적 관통 — PC 를 Player 레이어에서 빼 적의 디펜트레이션 솔버가
 	# 대시를 막지 못하게(종료 시 _complete_slash_action 에서 복원).
 	collision_layer = 0
@@ -1090,6 +1153,12 @@ func _spawn_slash_attack_node(start: Vector3, end: Vector3, extents: Vector3 = V
 	# attack_power=0 으로 덮으므로 영향 없음 — 0 유지.) ★런타임 변수만, 공유 .tres 미변형.
 	var spirit_mult: float = 1.0 + _spirit_per_stack * float(_spirit_stacks)
 	attack.attack_power = int(round(float(attack_power) * spirit_mult))
+	# M9-S11 충전류 — 예약된 표식 깊이를 이 일섬 본체에 주입(SlashAttack 가 적중마다 1+depth 누적).
+	# ★1발 한정 소비 — 주입 후 즉시 0 리셋(finisher/echo 재호출에 안 묻음). 참향(mark_only) 경로는 호출 후
+	#   attack_power=0 으로 덮지만 깊이 0 이라 무관. 미보유(_charge_pending_mark_depth==0)면 set 안 함(기존 +1).
+	if _charge_pending_mark_depth > 0:
+		attack.set("charge_mark_depth", _charge_pending_mark_depth)
+		_charge_pending_mark_depth = 0
 	return attack
 
 ## 거합일도(IAIDO_FINISHER) — BoonExecutor 가 거합+만개 처형 시 호출. 마지막 일섬 방향(_aim_dir)으로
@@ -1576,6 +1645,8 @@ func add_boon(id: String, rarity: String) -> void:
 		_boon_executor.call("refresh_passives")
 	# M9-S10 연격류 — active_boons 스캔해 _nuki_active + 연타 params 재계산(보유 시에만 윈도우 동작).
 	_nuki_refresh_from_boons()
+	# M9-S11 충전류 — active_boons 스캔해 _charge_active + 충전 params 재계산(보유 시에만 차징 경로 강제).
+	_charge_refresh_from_boons()
 
 
 ## M9-S10 — active_boons 를 스캔해 연격류 런타임 상태를 재계산한다.
@@ -1638,3 +1709,117 @@ func _nuki_refresh_from_boons() -> void:
 					_nuki_cadence_has = true
 					_nuki_cadence_kills_need = max(1, int(p.get("kills_need", _nuki_cadence_kills_need)))
 	_nuki_active = has_style
+
+
+# ══════════════ M9-S11 충전류(STYLE_CHARGE) — LB 충전→풀차지 관통 control mechanic ══════════════
+
+## 일도양단(STYLE_CHARGE) 보유 시에만 _charge_active=true. true 면 _check_instant_slash 가
+## GameConfig.slash_aim_mode 와 무관하게 차징 경로(State.AIMING)를 강제 사용한다.
+## ★미보유(납도/연격/무스타일)면 _charge_active=false → 기존 일섬/연타 경로 그대로(회귀 0).
+## ★_nuki_active 와 상호배타(둘 다 kind='style' 게이트 — 한 판 1 style 카드).
+## 모든 충전류 분기는 if _charge_active 가드. 전부 런타임 변수(_ready 리셋, 공유 .tres 미변형).
+func _charge_refresh_from_boons() -> void:
+	# 기본값 리셋 후 보유 카드로 재누적(add_boon 마다 active_boons 전체 재스캔 — 중복 누적 방지).
+	_charge_tier_lo = 0.4
+	_charge_tier_hi = 0.85
+	_charge_pierce_range_mult = 1.0
+	_charge_pierce_width_mult = 1.0
+	_charge_dash_speed_mult = 1.0
+	_charge_mark_depth_base = 1
+	_charge_mark_depth_per_tier = 0
+	_charge_haste_mult = 0.0
+	_charge_perfect_has = false
+	_charge_perfect_window = 0.0
+	_charge_dash_cancel_has = false
+	_charge_dash_cancel_haste = 0.0
+	_charge_dash_cancel_dash = 0.0
+	var has_style := false
+	for boon in active_boons:
+		if not (boon is Dictionary):
+			continue
+		var comps = boon.get("components", [])
+		if not (comps is Array):
+			continue
+		var p: Dictionary = boon.get("params", {})
+		if not (p is Dictionary):
+			p = {}
+		for comp in comps:
+			if not (comp is Dictionary):
+				continue
+			match String(comp.get("effect", "")):
+				"STYLE_CHARGE":
+					has_style = true
+					_charge_tier_lo = clampf(float(p.get("tier_lo", _charge_tier_lo)), 0.05, 0.9)
+					_charge_tier_hi = clampf(float(p.get("tier_hi", _charge_tier_hi)), _charge_tier_lo + 0.05, 0.99)
+					_charge_pierce_range_mult = max(_charge_pierce_range_mult, float(p.get("pierce_range_mult", 1.0)))
+					_charge_pierce_width_mult = max(_charge_pierce_width_mult, float(p.get("pierce_width_mult", 1.0)))
+					_charge_dash_speed_mult = max(_charge_dash_speed_mult, float(p.get("dash_speed_mult", 1.0)))
+					_charge_mark_depth_base = max(_charge_mark_depth_base, int(p.get("mark_depth_base", 1)))
+				"CHARGE_HASTE":
+					_charge_haste_mult = max(_charge_haste_mult, float(p.get("haste_pct", 0.0)))
+				"CHARGE_PERFECT":
+					_charge_perfect_has = true
+					_charge_perfect_window = max(_charge_perfect_window, float(p.get("window", 0.0)))
+					_charge_pierce_range_mult = max(_charge_pierce_range_mult, float(p.get("range_mult", 1.0)))
+					_charge_mark_depth_per_tier += 1  # 퍼펙트 보유 시 티어당 표식 깊이 +1.
+				"DEEP_CHARGE_MARK":
+					_charge_mark_depth_per_tier += max(0, int(p.get("per_tier", 1)))
+				"CHARGE_DASH_CANCEL":
+					_charge_dash_cancel_has = true
+					_charge_dash_cancel_haste = max(_charge_dash_cancel_haste, float(p.get("haste_pct", 0.0)))
+					_charge_dash_cancel_dash = max(_charge_dash_cancel_dash, float(p.get("dash_bonus", 0.0)))
+				# SLASH_EXTEND 는 refresh_passives(BoonExecutor) 가 set_slash_extend 로 처리 — 여기 불필요.
+				# CHARGE_ALIGN/AFTERGLOW/PIERCE_REAP/THUNDER 는 BoonExecutor 에서 처리.
+	_charge_active = has_style
+
+
+## M9-S11 충전류 getter — HUD/디버그용(차징 UI/AimArrow 가 메인, 라벨은 최소).
+func is_charge_active() -> bool:
+	return _charge_active
+
+## 현재 차징 프랙(0~1). AIMING 이 아니면 0.
+func get_charge_frac() -> float:
+	if _state != State.AIMING:
+		return 0.0
+	return clampf(_charge_t / max(data.max_charge_time, 0.0001), 0.0, 1.0)
+
+## 현재 충전 티어(0=약·1=중·2=풀). AIMING 이 아니면 0.
+func get_charge_tier() -> int:
+	if _state != State.AIMING:
+		return 0
+	var f: float = get_charge_frac()
+	if f < _charge_tier_lo:
+		return 0
+	if f < _charge_tier_hi:
+		return 1
+	return 2
+
+
+## 발도회천(CHARGE_DASH_CANCEL) — 차징(AIMING) 중 회피 입력이면 차지를 버리고 회피한다.
+## 회피 시작이 성공하면 재차지 가속(apply_iaido_haste 재사용)을 켜고 true 반환(이번 프레임 _update_aim/release 스킵).
+## ★카드 미보유면 항상 false(회귀 0). 회피 시작 게이트(_check_evade_start)가 쿨/스택을 검사하므로
+##   여기선 입력만 보고 실제 회피는 _check_evade_start 에 위임 — 회피가 못 시작되면 차징 유지.
+func _check_charge_dash_cancel() -> bool:
+	if not _charge_dash_cancel_has:
+		return false
+	if not Input.is_action_just_pressed("dash"):
+		return false
+	# 쿨/스택 부족이면 회피 못 함 → 차징 유지(false).
+	if _evade_cd > 0.0 or _evade_stacks <= 0:
+		return false
+	# 차지 버림 — AIMING 상태/차지 타이머 정리 후 회피 시작.
+	_charge_t = 0.0
+	_overcharge_t = 0.0
+	_charge_pending_mark_depth = 0
+	if _aim_arrow != null:
+		_aim_arrow.hide_arrow()
+	if _sprite_rig != null and _sprite_rig.has_method("set_charge_glow"):
+		_sprite_rig.call("set_charge_glow", false)
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null and rig.has_method("set_charge_zoom"):
+		rig.call("set_charge_zoom", false)
+	_set_state(State.IDLE)  # _check_evade_start 가 EVADING 으로 전환.
+	_check_evade_start()
+	# 재차지 가속 + 대시 거리 가산(역수 윈도우 재사용 — 다음 일섬 발사 시 소멸).
+	apply_iaido_haste(_charge_dash_cancel_haste, _charge_dash_cancel_dash)
+	return _state == State.EVADING

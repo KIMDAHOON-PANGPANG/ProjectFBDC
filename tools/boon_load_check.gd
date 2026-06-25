@@ -1,14 +1,14 @@
 extends SceneTree
 
-## M9-S10: 납도류(18) + 연격류(10) = 28장 로드 검증.
-## boons.json 28카드가 로드되고, style_req 필터가 두 발도술 풀을 안 섞는지 확인.
+## M9-S11: 납도류(18) + 연격류(10) + 충전류(10) = 38장 로드 검증.
+## boons.json 38카드가 로드되고, style_req 필터가 세 발도술 풀을 안 섞는지 확인.
 
 func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 28)" % all.size())
-	assert(all.size() == 28, "all_boons 크기 불일치 (M9-S10 28장 기대)")
+	print("all_boons size: %d (기대: 38)" % all.size())
+	assert(all.size() == 38, "all_boons 크기 불일치 (M9-S11 38장 기대)")
 
 	# 납도류 18개 id 전부 존재 + style_req='iaido'.
 	var iaido_ids := [
@@ -38,7 +38,19 @@ func _initialize() -> void:
 		assert(String(card.get("skill_type", "")) != "", "skill_type 비어 있음 — %s" % id)
 		assert(String(card.get("style_req", "")) == "nuki", "style_req 불일치(nuki) — %s" % id)
 
-	# 연격류 신규 효과 키 검증.
+	# 충전류 10개 id 전부 존재 + style_req='charge'.
+	var charge_ids := [
+		"charge_draw", "deep_breath", "draw_master", "pierce_reap", "deep_charge",
+		"pierce_line", "dual_align", "charge_whirl", "afterglow_draw", "pierce_thunder",
+	]
+	for id in charge_ids:
+		var card = _B.by_id(id)
+		print("by_id(%s): %s" % [id, "OK" if card != null else "null"])
+		assert(card != null, "by_id(%s) null — 충전 카드 누락" % id)
+		assert(String(card.get("skill_type", "")) != "", "skill_type 비어 있음 — %s" % id)
+		assert(String(card.get("style_req", "")) == "charge", "style_req 불일치(charge) — %s" % id)
+
+	# 연격류 + 충전류 신규 효과 키 검증.
 	var effect_for := {
 		"nuki_draw": "STYLE_NUKI",
 		"triple_draw": "NUKI_COMBO_EXT",
@@ -46,6 +58,15 @@ func _initialize() -> void:
 		"rhythm_beat": "NUKI_RHYTHM",
 		"nuki_settle": "NUKI_SETTLE",
 		"chain_cadence": "NUKI_CADENCE",
+		"charge_draw": "STYLE_CHARGE",
+		"deep_breath": "CHARGE_HASTE",
+		"draw_master": "CHARGE_PERFECT",
+		"pierce_reap": "PIERCE_REAP",
+		"deep_charge": "DEEP_CHARGE_MARK",
+		"dual_align": "CHARGE_ALIGN",
+		"charge_whirl": "CHARGE_DASH_CANCEL",
+		"afterglow_draw": "CHARGE_AFTERGLOW",
+		"pierce_thunder": "PIERCE_THUNDER",
 	}
 	for id in effect_for.keys():
 		var card = _B.by_id(id)
@@ -85,5 +106,15 @@ func _initialize() -> void:
 		var sr := String(rc.get("style_req", "")) if rc is Dictionary else ""
 		assert(sr == "" or sr == "nuki", "nuki 런에 iaido 카드 섞임 — %s(%s)" % [c.get("id", ""), sr])
 
-	print("boon_load_check: 전체 통과 (M9-S10 28장 + style_req 필터)")
+	# ── style_req 필터: 충전(charge) 보유 시 → 납도/연격 카드 안 섞임 + style 재노출 안 됨(3풀 분리). ──
+	var owned_charge := ["charge_draw"]
+	var charge_run := _B.draw_boons(3, 5, owned_charge)
+	for c in charge_run:
+		assert(String(c.get("id", "")) != "charge_draw", "보유 카드 재노출")
+		assert(String(c.get("kind", "")) != "style", "style exclusive 위반 — charge 런에 style 카드 노출")
+		var rc = _B.by_id(String(c.get("id", "")))
+		var sr := String(rc.get("style_req", "")) if rc is Dictionary else ""
+		assert(sr == "" or sr == "charge", "charge 런에 iaido/nuki 카드 섞임 — %s(%s)" % [c.get("id", ""), sr])
+
+	print("boon_load_check: 전체 통과 (M9-S11 38장 + style_req 3풀 필터)")
 	quit()

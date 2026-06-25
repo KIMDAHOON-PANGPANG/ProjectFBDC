@@ -305,7 +305,9 @@ func _process(_delta: float) -> void:
 	# M9-S10 연격류 콤보/가속 티어 — 속발 보유 시에만 노출(미보유면 라벨 숨김).
 	if _nuki_label != null:
 		var nuki_on: bool = _player.has_method("is_nuki_active") and bool(_player.call("is_nuki_active"))
-		_nuki_label.visible = nuki_on
+		# M9-S11 충전류 — 일도양단 보유 시 같은 라벨을 '충전 T2' 식으로 재사용(라벨 신규 없이 최소 표시).
+		var charge_on: bool = _player.has_method("is_charge_active") and bool(_player.call("is_charge_active"))
+		_nuki_label.visible = nuki_on or charge_on
 		if nuki_on:
 			var combo := 0
 			var tier := 0
@@ -319,6 +321,12 @@ func _process(_delta: float) -> void:
 			if tier > 0:
 				t += "  ▲%d" % tier
 			_nuki_label.text = t
+		elif charge_on:
+			# 차징 중에만 티어 표시(AIMING 아니면 T0). AimArrow 가 frac 게이지를 그리므로 라벨은 티어만.
+			var ctier := 0
+			if _player.has_method("get_charge_tier"):
+				ctier = int(_player.call("get_charge_tier"))
+			_nuki_label.text = "충전 T%d" % ctier
 	# 버프/디버프 스트립 폴링(스캐폴드) — 현재 PC 지속버프 없음이라 set_status 미호출.
 	# PC 표식/버프가 생기면 여기서 _player meta 등을 읽어 set_status 로 채운다.
 

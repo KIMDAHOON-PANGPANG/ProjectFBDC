@@ -79,6 +79,16 @@ const _SPIRIT_TIER_GAIN_DEFAULT := 1
 ## ★영구 감속 방지: 각 노드 meta('expire_msec') 지나면 free+erase, 비면 _process 즉시 return(평시 비용 0).
 var _slow_fields: Array = []
 
+# ── M9-S11 충전류(STYLE_CHARGE) 관통 처형 — 일섬 본체 적중에 편승(자동딜 아님). ★_in_cascade 가드 필수 ──
+## 관통천참(PIERCE_REAP) — 풀차지 관통이 적중한 임계 깊이 이상 표식 적을 marks×per_mark 추가피해로 처형.
+const _PIERCE_REAP_THRESHOLD_DEFAULT := 3
+const _PIERCE_REAP_PER_MARK_DEFAULT := 3
+## 천뢰관통(PIERCE_THUNDER) — 적중 적 주변 라인 인접 표식 적까지 같은 판정 흡수 처형(max_targets cap).
+const _PIERCE_THUNDER_THRESHOLD_DEFAULT := 2
+const _PIERCE_THUNDER_PER_MARK_DEFAULT := 3
+const _PIERCE_THUNDER_RADIUS_DEFAULT := 2.5
+const _PIERCE_THUNDER_MAX_TARGETS_DEFAULT := 2
+
 ## baseline 6종 코드 1차값(카드 무관 항상 on — 강한 한정자로 약하게).
 const _BL_RIPPLE_RADIUS := 1.5     # 1 납도 파문 — 만개 적 1마리 흘려 처형
 const _BL_MARK_RADIUS := 3.0       # 2 참결 — 표식 살포
@@ -98,6 +108,8 @@ func setup(player: Node) -> void:
 	_tb.call("subscribe", _TriggerBusScript.ON_SLASH_HIT, _on_slash_hit_deepmark)
 	# M9-S6: 납도 정산 사망(epicenter) → 도미노 재정렬 + baseline 6종.
 	_tb.call("subscribe", _TriggerBusScript.ON_SHEATHE_KILL, _on_sheathe_kill)
+	# M9-S11: 충전류 여운일섬(CHARGE_AFTERGLOW) — 일섬 처치 시 다음 차지 가속 + 자원 환급.
+	_tb.call("subscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, _on_kill_via_slash_charge)
 
 
 func _exit_tree() -> void:
@@ -105,6 +117,7 @@ func _exit_tree() -> void:
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SHEATHE, _on_sheathe)
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_HIT, _on_slash_hit_deepmark)
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SHEATHE_KILL, _on_sheathe_kill)
+		_tb.call("unsubscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, _on_kill_via_slash_charge)
 	# 영구 슬로우 방지 — 셧다운 중 납도 슬로우가 걸려 있었어도 강제 정상화.
 	if not is_equal_approx(Engine.time_scale, 1.0):
 		Engine.time_scale = 1.0
@@ -352,6 +365,127 @@ func _on_slash_hit_deepmark(ctx: Dictionary) -> void:
 	_for_each_effect("On_Slash_Hit", "MARK_SPREAD", func(_i, params):
 		_spread_marks_from(target as Node3D, int(params.get("spread_count", 1)), float(params.get("spread_radius", 2.5)))
 	)
+	# ── M9-S11 충전류 관통 처형 — 일섬 본체 적중에 편승(자동딜 아님). ★_in_cascade 가드로 ON_SHEATHE_KILL 재발 차단. ──
+	_charge_pierce_reap(target as Node)
+	_charge_pierce_thunder(target as Node)
+
+
+## 관통천참(PIERCE_REAP) — 풀차지 관통이 적중한 적의 slash_mark 가 임계 깊이 이상이면 marks×per_mark
+## 추가 피해를 take_hit 으로 가산(처형 의도). ★_in_cascade=true 로 감싸 그 사망이 ON_SHEATHE_KILL 을
+## 재발하지 않게(무한연쇄 차단). 일섬 본체가 이미 1차 데미지/표식을 냈으므로 여기선 가산만.
+func _charge_pierce_reap(target: Node) -> void:
+	if target == null or not is_instance_valid(target) or not target.has_method("take_hit"):
+		return
+	var has_card: bool = false
+	var threshold: int = _PIERCE_REAP_THRESHOLD_DEFAULT
+	var per_mark: int = _PIERCE_REAP_PER_MARK_DEFAULT
+	_for_each_effect("On_Slash_Hit", "PIERCE_REAP", func(_i, params):
+		has_card = true
+		threshold = min(threshold, max(1, int(params.get("threshold", _PIERCE_REAP_THRESHOLD_DEFAULT))))
+		per_mark = max(per_mark, int(params.get("per_mark", _PIERCE_REAP_PER_MARK_DEFAULT)))
+	)
+	if not has_card:
+		return
+	var marks: int = int(target.get_meta("slash_mark", 0))
+	if marks < threshold:
+		return  # 임계 깊이 미달 — 처형 안 함(약표식 적은 일반 일섬으로만).
+	# ★연쇄 진입 — take_hit 사망이 ON_SHEATHE_KILL 재발 안 함.
+	var prev: bool = _in_cascade
+	_in_cascade = true
+	var pos: Vector3 = (target as Node3D).global_position if (target is Node3D) else Vector3.ZERO
+	_spawn_perfect_flash(pos)
+	target.call("take_hit", max(marks * per_mark, 1))
+	# 살아남았으면(보스 등) 표식 0 리셋 — 이중 가산 방지.
+	if is_instance_valid(target):
+		target.set_meta("slash_mark", 0)
+	_in_cascade = prev
+
+
+## 천뢰관통(PIERCE_THUNDER) — 적중 적 주변 radius 내 라인 인접 '임계 표식·비보스' 적까지 max_targets 마리
+## 같은 take_hit 판정에 흡수해 처형(marks×per_mark). ★_in_cascade=true 가드 + 마릿수 cap(무한연쇄 차단).
+func _charge_pierce_thunder(target: Node) -> void:
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return
+	var has_card: bool = false
+	var threshold: int = _PIERCE_THUNDER_THRESHOLD_DEFAULT
+	var per_mark: int = _PIERCE_THUNDER_PER_MARK_DEFAULT
+	var radius: float = _PIERCE_THUNDER_RADIUS_DEFAULT
+	var max_targets: int = _PIERCE_THUNDER_MAX_TARGETS_DEFAULT
+	_for_each_effect("On_Slash_Hit", "PIERCE_THUNDER", func(_i, params):
+		has_card = true
+		threshold = min(threshold, max(1, int(params.get("threshold", _PIERCE_THUNDER_THRESHOLD_DEFAULT))))
+		per_mark = max(per_mark, int(params.get("per_mark", _PIERCE_THUNDER_PER_MARK_DEFAULT)))
+		radius = max(radius, float(params.get("radius", _PIERCE_THUNDER_RADIUS_DEFAULT)))
+		max_targets = max(max_targets, int(params.get("max_targets", _PIERCE_THUNDER_MAX_TARGETS_DEFAULT)))
+	)
+	if not has_card or radius <= 0.0 or max_targets <= 0:
+		return
+	var origin: Vector3 = (target as Node3D).global_position
+	# 후보 수집 — 적중 적 제외, radius 내 '임계 표식·비보스' 적 가까운 순(사전 수집 — take_hit 중 free 대비).
+	var cands: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if e == target:
+			continue
+		if e.is_in_group("boss"):
+			continue  # 보스 면역.
+		if int(e.get_meta("slash_mark", 0)) < threshold:
+			continue
+		var d: float = (e as Node3D).global_position.distance_to(origin)
+		if d > radius:
+			continue
+		cands.append({"e": e, "d": d})
+	if cands.is_empty():
+		return
+	cands.sort_custom(func(a, b): return a["d"] < b["d"])
+	# ★연쇄 진입 — take_hit 사망이 ON_SHEATHE_KILL 재발 안 함.
+	var prev: bool = _in_cascade
+	_in_cascade = true
+	var hit: int = 0
+	for c in cands:
+		if hit >= max_targets:
+			break
+		var e = c["e"]
+		if e == null or not is_instance_valid(e) or not e.has_method("take_hit"):
+			continue
+		var marks: int = int(e.get_meta("slash_mark", 0))
+		if marks < threshold:
+			continue
+		var p: Vector3 = (e as Node3D).global_position
+		_spawn_chain_arc(origin, p)  # 라인 흡수 아크(청백).
+		e.call("take_hit", max(marks * per_mark, 1))
+		if is_instance_valid(e):
+			e.set_meta("slash_mark", 0)
+		hit += 1
+	_in_cascade = prev
+
+
+## 여운일섬(CHARGE_AFTERGLOW) — 일섬 처치(ON_KILL_via_Slash) 시 다음 차지 가속 + 자원 환급.
+## 충전류 Player 훅(apply_iaido_haste + boon_gauge_burst) 재사용. ★0뎀 PC 자원만(take_hit 미호출).
+func _on_kill_via_slash_charge(ctx) -> void:
+	if not is_inside_tree() or _player == null or not is_instance_valid(_player):
+		return
+	if not (ctx is Dictionary):
+		return
+	var has_card: bool = false
+	var haste: float = 0.0
+	var dash_bonus: float = 0.0
+	var gauge_frac: float = 0.0
+	_for_each_effect("On_Kill_via_Slash", "CHARGE_AFTERGLOW", func(_i, params):
+		has_card = true
+		haste = max(haste, float(params.get("haste_pct", 0.0)))
+		dash_bonus = max(dash_bonus, float(params.get("dash_bonus", 0.0)))
+		gauge_frac = max(gauge_frac, float(params.get("gauge_frac", 0.0)))
+	)
+	if not has_card:
+		return
+	if _player.has_method("apply_iaido_haste"):
+		_player.call("apply_iaido_haste", haste, dash_bonus)
+	if gauge_frac > 0.0 and _player.has_method("boon_gauge_burst"):
+		_player.call("boon_gauge_burst", gauge_frac)
+	if _player is Node3D:
+		_spawn_perfect_flash((_player as Node3D).global_position)
 
 
 # ══════════════ 광인(MARK_SPREAD) — 표식 전파 ══════════════
