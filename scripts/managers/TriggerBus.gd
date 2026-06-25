@@ -7,20 +7,20 @@ extends Node
 
 # ── 이벤트 키 상수 ──
 const ON_SLASH_START           := "On_Slash_Start"
-const ON_SLASH_CHARGED         := "On_Slash_Charged"
 const ON_SLASH_END             := "On_Slash_End"
 const ON_SLASH_HIT             := "On_Slash_Hit"
 const ON_DASH_START            := "On_Dash_Start"
 ## 회피(대시) '종료' 1회 — t>=1.0 도달 시. ON_DASH_START(시작)와 명확히 구분.
-## 물귀신 발목잡는손(GRASP_ROOT) 등 회피-종료 발밑 광역 트리거.
+## Player._update_dash 가 emit. 현재 BoonExecutor 구독자 없음(회피-종료 발밑 광역 보은용 예약 키).
 const ON_DASH                  := "On_Dash"
 const ON_DASH_PASS_ENEMY       := "On_Dash_Pass_Enemy"
 const ON_JUST_DODGE            := "On_Just_Dodge"
 const ON_SLASH_RIGHT_AFTER_DASH := "On_Slash_Right_After_Dash"
 const ON_KILL_VIA_SLASH        := "On_Kill_via_Slash"
 const ON_HIT_MARKED_ENEMY      := "On_Hit_Marked_Enemy"
-## 표식(slash_mark)이 cap 에 도달하는 '전이 순간' 1회 — 여우불세례(HOMING_PROJECTILE) 트리거.
-## SlashAttack._apply_slash_mark 가 cur<cap → nv==cap 전이에서 emit(매 적중 재발화 금지).
+## 표식(slash_mark/참)이 cap(만개)에 도달하는 '전이 순간' 1회. SlashAttack 이 cur<cap → nv==cap
+## 전이에서 emit(매 적중 재발화 금지). 현재 BoonExecutor 구독자 없음(만개 전이 보은용 예약 키) —
+## 만개 처형은 납도 정산(_settle_enemy)이 marks==cap 으로 판정하므로 이 키 없이도 동작.
 const ON_MARK_FULL             := "On_Mark_Full"
 ## 납도(RB) — slash_mark 정산 트리거. Player._do_sheathe 가 emit, BoonExecutor._on_sheathe 가 구독.
 const ON_SHEATHE               := "On_Sheathe"

@@ -144,7 +144,7 @@ static func rarity_for_level(level: int) -> String:
 
 static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 	_ensure_loaded()
-	# M9-S1: 요괴 그룹핑 제거 — 전체 BOONS 풀에서 직접 뽑는다.
+	# M9: 요괴 그룹핑 없음 — 전체 BOONS 풀(발도술/표식/납도/연쇄/제어 kind)에서 직접 뽑는다.
 	# 빈 풀(boons.json == [])이면 [] 반환 → 레벨업 오버레이 graceful 스킵(크래시 금지).
 	if BOONS.is_empty():
 		return []

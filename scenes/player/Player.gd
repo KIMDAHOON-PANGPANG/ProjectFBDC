@@ -115,11 +115,6 @@ var last_slash_end_msec: int = 0
 ## 머리 위 상태 아이콘 스트립(굶주림 등) — _ready 에서 코드 인스턴스.
 var _status_strip: Node = null
 
-# ── 구미낙화(SLASH_FAN) — 풀차지 일섬 부채 폭 확장 일회성 보너스(BoonExecutor 가 세팅) ──
-## On_Slash_Charged 시 BoonExecutor 가 세팅 → 다음 _fire_slash 가 폭 확장에 소비 후 1.0 리셋.
-var boon_slash_fan_width_mult: float = 1.0
-var boon_slash_fan_arc_bonus: float = 0.0
-
 # ── 납도류(M9-S4) 런타임 보너스(런마다 _ready 재인스턴스로 리셋 — 공유 .tres 미변형) ──
 ## 일섬연장(SLASH_EXTEND) — 패시브 일섬 사거리/폭 배수(_fire_slash 가 매 발사 적용). 1.0=무효.
 var boon_slash_range_mult: float = 1.0
@@ -915,11 +910,6 @@ func _fire_slash() -> void:
 		_charge_pending_mark_depth = _charge_mark_depth_base + _charge_mark_depth_per_tier * tier
 		if was_perfect:
 			_charge_pending_mark_depth += 1
-	# 구미낙화(SLASH_FAN) — 풀차지면 ON_SLASH_CHARGED 를 *먼저* 발행해 BoonExecutor 가
-	# 부채 폭 확장 플래그를 세팅하게 하고, 같은 일섬이 그 플래그를 ext 에 소비한다.
-	var _tb_charged := _trigger_bus()
-	if charge_frac >= 1.0 and _tb_charged != null:
-		_tb_charged.call("emit", _TriggerBusScript.ON_SLASH_CHARGED, {"source": self, "position": global_position, "charge_frac": charge_frac})
 	# 사거리 — 차징 0→1 에 따라 min ~ instant_slash_distance 로 풀차지 사거리 증가.
 	var slash_range: float = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
 	# 일섬연장(SLASH_EXTEND) — 패시브 사거리 배수(공유 .tres 미변형, 런타임 변수).
@@ -941,12 +931,6 @@ func _fire_slash() -> void:
 	# M9-S7 폭심 충전 — 예약된 다음 일섬 1발이면 폭 대버스트(x=폭, z=전방 길이 모두 확장).
 	if burst_active and boon_next_slash_width_mult > 1.0:
 		ext = Vector3(ext.x * boon_next_slash_width_mult, ext.y, ext.z * boon_next_slash_width_mult)
-	# 직전(또는 방금 발행된 ON_SLASH_CHARGED)에서 세팅된 부채 폭 확장 보너스를 이번 일섬에 소비.
-	# 공유 PlayerData.tres 를 변형하지 않도록 로컬 복사본의 x(폭)만 키운다(런마다 리셋되는 런타임 변수).
-	if boon_slash_fan_width_mult > 1.0:
-		ext = Vector3(ext.x * boon_slash_fan_width_mult, ext.y, ext.z + boon_slash_fan_arc_bonus)
-		boon_slash_fan_width_mult = 1.0
-		boon_slash_fan_arc_bonus = 0.0
 	# 역수(IAIDO_HASTE) — 다음 일섬을 소비하면 가속 윈도우 종료.
 	boon_haste_t = 0.0
 	_dash_start = global_position
@@ -986,7 +970,6 @@ func _fire_slash() -> void:
 	var _tb := _trigger_bus()
 	if _tb != null:
 		_tb.call("emit", _TriggerBusScript.ON_SLASH_START, {"source": self, "position": global_position, "charge_frac": charge_frac})
-		# ON_SLASH_CHARGED 는 위에서 이미 발행됨(SLASH_FAN 동일-일섬 적용 위해 spawn 전).
 		if Time.get_ticks_msec() - _last_evade_end_msec <= 500:
 			_tb.call("emit", _TriggerBusScript.ON_SLASH_RIGHT_AFTER_DASH, {"source": self, "position": global_position})
 	# 일섬 자원 처리 — 고정 쿨다운(락 세팅) 또는 열기(누적+탈진).
@@ -1445,7 +1428,7 @@ func _update_evade(delta: float) -> void:
 				_tb_pass.call("emit", _TriggerBusScript.ON_DASH_PASS_ENEMY, {"source": self, "target": _e, "position": (_e as Node3D).global_position})
 	if t >= 1.0:
 		_last_evade_end_msec = Time.get_ticks_msec()
-		# On_Dash(회피 종료) 발행 — 물귀신 발목잡는손(GRASP_ROOT) 등 발밑 광역 트리거.
+		# On_Dash(회피 종료) 발행 — 현재 구독자 없음(회피-종료 발밑 광역 보은용 예약 키).
 		var _tb_de := _trigger_bus()
 		if _tb_de != null:
 			_tb_de.call("emit", _TriggerBusScript.ON_DASH, {"source": self, "position": global_position})

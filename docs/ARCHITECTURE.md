@@ -327,6 +327,48 @@ Player.take_hit (HP → 0)
 자동 reload). 디버그 씬이 best-record를 오염시키지 않기 위한 의도적 차이 —
 동기화 규칙에서 명시적으로 빠지는 한 케이스.
 
+### 2.13 ⚔️ M9 발도술 / 표식 '참' / 납도 처치 연쇄 (2026-06)
+
+**한 줄**: 일섬 본체가 적에게 0뎀 '표식(참)'을 누적 → 납도(RB)가 그 표식을 거둬 정산(처형/환금) → 정산 처치가 연쇄를 점화. **주인공 규칙 = 모든 처치는 일섬 본체·납도 정산·연쇄 중 하나로만 일어난다**(자율 FX 는 절대 죽이지 않는다).
+
+**TriggerBus 이벤트 흐름** (`scripts/managers/TriggerBus.gd` = autoload 단일 인스턴스, `BoonExecutor` 가 유일 구독자):
+
+```
+일섬 적중 SlashAttack
+  → emit ON_SLASH_HIT  ──→ BoonExecutor._on_slash_hit_deepmark (심도=DEEP_MARK: 표식 추가)
+  → SlashAttack._apply_slash_mark: slash_mark +1 (0뎀 마커 메타)
+       └─ cur<cap → nv==cap 전이 1회 emit ON_MARK_FULL (현재 구독자 없음 — 예약 키)
+  → 적 사망 시 emit ON_KILL_via_Slash ──→ _on_kill_via_slash_charge (충전류 관통 처형 후속)
+
+납도(RB) Player._do_sheathe
+  → emit ON_SHEATHE ──→ BoonExecutor._on_sheathe
+       → 1차 패스: sheathe_range 내 표식 적마다 _settle_enemy (정산)
+            ├─ 만개(marks==cap) 비보스 → take_damage(9999) 처형
+            ├─ 미만/보스          → take_damage(marks × sheathe_dmg × 거합배수 × 취약배수)
+            └─ 보스 처형선         → 저HP + 거합 + 만개 조건 충족 시 처형
+       → _settle_enemy 가 적을 '죽인' 순간 emit ON_SHEATHE_KILL
+            └─ BoonExecutor._on_sheathe_kill (연쇄 점화)
+                 ├─ 연환납도(SHEATHE_DOMINO) epicenter 도미노 (카드 보유 시)
+                 ├─ baseline 6종 (항상 on·카드 무관·0뎀 셋업/자원)
+                 └─ 연쇄 카드 (S7 4종 + S9 4종 …)
+       → 처치 1회 이상이면 거합 추격 윈도우 open (다음 RB 즉시 추격 납도)
+```
+
+**slash_mark = 0뎀 마커 메타**: `SlashAttack` 이 적중 시 부여(데미지 아님 — 적 HP 불변). 적 머리 위 가시화는 상태 스트립. **cap 단일소스 = `Player.get_mark_cap()`**(발도술 스타일별 숏3/미들5/롱7) — `SlashAttack` 부여 시·`BoonExecutor._mark_cap` 정산 시 같은 게터를 폴링해 분기 없음.
+
+**_settle_enemy 정산 분기**(`BoonExecutor`):
+- **만개·비보스** → 9999 처형(즉사).
+- **미만 또는 보스** → `marks × sheathe_dmg × 거합배수(IAIDO perfect) × 취약배수`.
+- **보스 처형선** → 저HP + 거합 + 만개 동시 충족 시 처형(`_BOSS_EXECUTE_THRESHOLD`).
+
+**★무한연쇄 가드 (correctness 최우선)**: `_on_sheathe_kill` 진입 시 `_in_cascade` 플래그를 세우고, 연쇄 도중 발생하는 ON_SHEATHE_KILL 재진입을 막는다(연쇄가 또 연쇄를 점화 → 무한 루프 차단). 추가로 마릿수·뎁스 cap: `_CASCADE_DEPTH_CAP` / `_CASCADE_KILL_CAP` / `_BASELINE_SPREAD_CAP`. 충전류 관통 처형도 `_in_cascade` 가드로 ON_SHEATHE_KILL 재발을 차단한다.
+
+**cap 단일소스 원칙**: 정산·연쇄가 참조하는 모든 cap(표식 cap·연쇄 cap)은 진입 시 1회 폴링한 단일 값 — 분기마다 재계산하지 않는다(불일치 방지).
+
+**킬소스 계측**(`BoonExecutor.get_kill_source_counts`): 처치를 `slash`(일섬 본체) / `sheathe`(납도 정산) / `cascade`(연쇄) / **`other`** 로 분류해 `ArenaDebug` 가 readout. ★불변식: **`other`(자율 FX) 킬 = 0** — 감속장·취약표식·자원·연출 FX 는 `take_hit` 을 호출하지 않으므로 절대 처치를 만들지 않는다. 이 0 이 깨지면 주인공 규칙 위반.
+
+**미러 규칙**: `BoonSystem`/`BoonExecutor`/`TriggerBus` 는 단일 인스턴스라 Main↔Testplay 미러 불필요(2.3 EliteEffectService 패턴과 동일). `_selected_cards` 의 카드 dict 형상(yokai 키 포함)만 양쪽 동일 유지.
+
 ## 3. 책임 분리 매트릭스
 
 | 분류 | 무엇 | 예시 | 수명 |
