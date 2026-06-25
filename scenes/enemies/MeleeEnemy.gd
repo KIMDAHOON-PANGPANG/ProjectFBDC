@@ -72,9 +72,9 @@ const _KnockbackScript := preload("res://scripts/components/Knockback.gd")
 const _HpBar3DScene := preload("res://scenes/ui/HpBar3D.tscn")
 ## 머리 위 상태(버프/디버프) 아이콘 스트립(공용 — 표식 등 폴링 표시).
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
-## 표식 표시(holrim 슬롯) — 핑크 디버프 아이콘 색/상한. S2 가 slash_mark 로 의미 전환 예정.
-const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
-const _HOLRIM_CAP := 8.0
+## 표식 '참(斬)' 표시 — 청백(冷光) 아이콘. 만개(5) 도달 시 _poll_status 에서 붉게 점멸('거둘 준비').
+const _MARK_COLOR := Color(0.67, 0.8, 1.0)
+const _MARK_CAP := 5.0
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -179,21 +179,27 @@ func _ready() -> void:
 
 	_player = get_tree().get_first_node_in_group("player")
 
-## 머리 위 상태 아이콘 폴링 — 적 meta(holrim_marks 등)를 매 프레임 읽어 스트립 갱신.
-## BoonExecutor 가 meta 를 세팅하고 여기선 읽기만 한다(HpBar3D 의 health 폴링과 동일).
+## 머리 위 상태 아이콘 폴링 — 적 meta(slash_mark)를 매 프레임 읽어 스트립 갱신.
+## SlashAttack 가 일섬 적중 시 meta 를 세팅하고 여기선 읽기만 한다(HpBar3D 의 health 폴링과 동일).
 func _poll_status() -> void:
 	if _status_strip == null or not is_instance_valid(_status_strip):
 		return
-	var marks := int(get_meta("holrim_marks", 0))
+	var marks := int(get_meta("slash_mark", 0))
 	if marks > 0:
-		_status_strip.call("set_status", "holrim", {
-			"value": clampf(float(marks) / _HOLRIM_CAP, 0.0, 1.0),
+		var full: bool = marks >= int(_MARK_CAP)
+		var col: Color = _MARK_COLOR
+		if full:
+			# 만개 — 붉게 점멸('거둘 준비'). _poll_status 가 매 프레임 도므로 시간펄스 색으로 표현.
+			var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 90.0)
+			col = Color(1.0, 0.25, 0.25).lerp(Color(1.0, 0.7, 0.7), pulse)
+		_status_strip.call("set_status", "slash_mark", {
+			"value": clampf(float(marks) / _MARK_CAP, 0.0, 1.0),
 			"mode": 0,
-			"color": _HOLRIM_COLOR,
+			"color": col,
 			"icon": null,
 		})
 	else:
-		_status_strip.call("clear_status", "holrim")
+		_status_strip.call("clear_status", "slash_mark")
 
 func _physics_process(delta: float) -> void:
 	if _dead:

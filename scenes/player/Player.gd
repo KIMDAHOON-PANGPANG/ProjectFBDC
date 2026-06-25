@@ -34,6 +34,19 @@ const _BoonExecutorScript := preload("res://scripts/managers/BoonExecutor.gd")
 ## 머리 위 상태 아이콘 스트립(굶주림 표시 — 적과 동일 공용 컴포넌트).
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
 
+# ── 납도(On_Sheathe) — RB 로 거둬 표식 정산(1차값 코드 상수, 공유 .tres 변형 금지) ──
+## 정산 반경(m) — 이 안의 표식 적만 거둔다. BoonExecutor 도 동일값 보유(정산 주체).
+const _SHEATHE_RANGE := 5.0
+## 미만 표식 정산 데미지 단가(표식 1개당). 만개=처형(보스 제외).
+const _SHEATHE_DMG := 2
+const _SHEATHE_MARK_CAP := 5
+## 거둔 표식 총합당 열 환급(%) — 음수 가산으로 식힘.
+const _SHEATHE_HEAT_REFUND_PER_MARK := 0.08
+## 거둔 표식 총합당 HP 미세 회복(반올림).
+const _SHEATHE_HP_PER_MARK := 0.4
+## 납도 쿨다운(초) — 연타 방지.
+const _SHEATHE_COOLDOWN := 0.3
+
 @export var data: PlayerData
 @export var slash_attack_scene: PackedScene
 @export var aim_arrow_path: NodePath
@@ -66,6 +79,8 @@ var _evade_end: Vector3
 var _evade_elapsed: float = 0.0
 ## 연속 대시 사이 최소 간격 타이머(data.evade_cooldown).
 var _evade_cd: float = 0.0
+## 납도(RB) 쿨다운 잔여(초) — 연타 방지. _physics_process 가 깎는다.
+var _sheathe_cd_t: float = 0.0
 ## 회피 스택 — _ready 에서 data.evade_max_stacks 로 채움. 대시마다 1 소비,
 ## 전부(0) 소진되면 _evade_refill_t(=evade_refill_time) 후 한 번에 가득 찬다.
 var _evade_stacks: int = 2
@@ -253,6 +268,9 @@ func _physics_process(delta: float) -> void:
 	# 연속 대시 사이 최소 간격.
 	if _evade_cd > 0.0:
 		_evade_cd -= delta
+	# 납도(RB) 쿨다운.
+	if _sheathe_cd_t > 0.0:
+		_sheathe_cd_t -= delta
 	# 회피 스택 리필 — 가득 차지 않았으면 한 칸씩 차오른다(칸당 evade_refill_time 초).
 	if _evade_stacks < data.evade_max_stacks:
 		if _evade_refill_t <= 0.0:
@@ -271,6 +289,7 @@ func _physics_process(delta: float) -> void:
 		State.IDLE:
 			_handle_move(delta)
 			_check_instant_slash()
+			_check_sheathe()
 			_check_evade_start()
 			if _cooldown_t > 0.0:
 				_cooldown_t -= delta
@@ -283,6 +302,7 @@ func _physics_process(delta: float) -> void:
 			_update_dash(delta)
 		State.COOLDOWN:
 			_handle_move(delta)
+			_check_sheathe()
 			_check_evade_start()
 			_cooldown_t -= delta
 			if _cooldown_t <= 0.0:
@@ -377,6 +397,67 @@ func _check_instant_slash() -> void:
 		if _aim_arrow != null:
 			_aim_arrow.show_arrow()
 			_aim_arrow.set_charge(0.0)
+
+
+# ══════════════ 납도(On_Sheathe) — RB 로 표식 정산 ══════════════
+
+## RB(slash 액션) 입력 체크 — 쿨/UI 가드 통과 시 _do_sheathe. IDLE/COOLDOWN 에서만 호출됨
+## (AIMING 차징·DASHING·EVADING 보호). LB(fire)=일섬과 분리된 입력이라 충돌 없음.
+func _check_sheathe() -> void:
+	if _sheathe_cd_t > 0.0:
+		return
+	if not Input.is_action_just_pressed("slash"):
+		return
+	if _is_pointer_over_ui():
+		return
+	_do_sheathe()
+
+
+## 납도 발동 — 짧은 거두기 모션 + 칼집 섬광 더미연출 + ON_SHEATHE 발행(BoonExecutor 가 정산).
+## 표식 적이 없으면 정산은 BoonExecutor 쪽에서 자연히 no-op(헛납도) — 모션만 남는다.
+func _do_sheathe() -> void:
+	_sheathe_cd_t = _SHEATHE_COOLDOWN
+	# 거두기 모션 — attack1 1회 재생(없으면 flash 폴백).
+	if _sprite_rig != null and _sprite_rig.has_method("play_oneshot"):
+		_sprite_rig.call("play_oneshot", "attack1", 0.2)
+	elif _sprite_rig != null and _sprite_rig.has_method("flash"):
+		_sprite_rig.call("flash", 0.15)
+	_spawn_sheathe_flash()
+	_play_sfx("slash")
+	var tb := _trigger_bus()
+	if tb != null:
+		tb.call("emit", _TriggerBusScript.ON_SHEATHE, {"source": self, "position": global_position})
+
+
+## 납도 정산 자원 환급(BoonExecutor 가 거둔 표식 총합으로 호출). 음수 열 가산 + HP 미세 회복.
+## 표식 0이면 호출되지 않는다(헛납도 = 자원 변화 없음).
+func _sheathe_restore(total_marks: int) -> void:
+	if total_marks <= 0:
+		return
+	_refund_heat(_SHEATHE_HEAT_REFUND_PER_MARK * float(total_marks))
+	var hp_amt: int = int(round(_SHEATHE_HP_PER_MARK * float(total_marks)))
+	if hp_amt > 0 and _health != null:
+		_health.heal(hp_amt)
+
+
+## 열 환급(음수 경로) — add_heat 는 가산 전용이라 별도. 탈진 상태는 건드리지 않는다
+## (탈진은 _update_heat 의 자체 타이머로 풀림). 쿨다운 자원 모드면 열 개념 없어 no-op.
+func _refund_heat(amount: float) -> void:
+	if not _instant_slash or _overheated:
+		return
+	if _is_cooldown_resource():
+		return
+	_heat = clamp(_heat - amount, 0.0, data.heat_overheat_threshold)
+
+
+## 칼집 섬광 더미연출 — 청백 톤 가벼운 연출(과한 신규 노드 금지). 스프라이트 flash +
+## 카메라 미세 쉐이크로 '거뒀다' 손맛만 준다.
+func _spawn_sheathe_flash() -> void:
+	if _sprite_rig != null and _sprite_rig.has_method("flash"):
+		_sprite_rig.call("flash", 0.12)
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null and rig.has_method("shake"):
+		rig.call("shake", 0.05, 0.12)
 
 
 ## World node to parent spawned VFX/attacks under. Active scene normally;

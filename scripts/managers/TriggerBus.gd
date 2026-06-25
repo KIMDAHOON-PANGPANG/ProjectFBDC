@@ -19,9 +19,11 @@ const ON_JUST_DODGE            := "On_Just_Dodge"
 const ON_SLASH_RIGHT_AFTER_DASH := "On_Slash_Right_After_Dash"
 const ON_KILL_VIA_SLASH        := "On_Kill_via_Slash"
 const ON_HIT_MARKED_ENEMY      := "On_Hit_Marked_Enemy"
-## 표식(holrim_marks)이 cap 에 도달하는 '전이 순간' 1회 — 여우불세례(HOMING_PROJECTILE) 트리거.
-## BoonExecutor._apply_mark 가 cur<cap → nv==cap 전이에서 emit(매 적중 재발화 금지).
+## 표식(slash_mark)이 cap 에 도달하는 '전이 순간' 1회 — 여우불세례(HOMING_PROJECTILE) 트리거.
+## SlashAttack._apply_slash_mark 가 cur<cap → nv==cap 전이에서 emit(매 적중 재발화 금지).
 const ON_MARK_FULL             := "On_Mark_Full"
+## 납도(RB) — slash_mark 정산 트리거. Player._do_sheathe 가 emit, BoonExecutor._on_sheathe 가 구독.
+const ON_SHEATHE               := "On_Sheathe"
 # 아래 2종: 결계 기하 판정 후행 — 상수만 정의, emit 금지.
 const ON_LINE_INTERSECTION     := "On_Line_Intersection"
 const ON_ENCLOSE_AREA          := "On_Enclose_Area"

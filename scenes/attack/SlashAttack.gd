@@ -19,6 +19,8 @@ var attack_power: int = 1
 ## ⏱ 적중 시 미세 히트스탑("탁탁 걸리는" 손맛) — 쓸고 지날 때 적마다 잠깐 멈칫. scale=느려지는 배수, dur=시간(초).
 @export var hit_hitstop_scale: float = 0.45
 @export var hit_hitstop_dur: float = 0.03
+## 표식 '참(斬)' 누적 상한 — 일섬 적중마다 slash_mark +1(cap 5). 납도(RB)로 정산.
+const _SLASH_MARK_CAP := 5
 var _length: float = 1.0
 var _width: float = 1.4
 ## 범위 Vector3 분해 — _width=x(폭) · _height=y(높이) · _len_pad=z(전방 길이 가산).
@@ -155,7 +157,26 @@ func _emit_slash_hit(target: Node) -> void:
 	tb.call("emit", _TriggerBusScript.ON_SLASH_HIT, ctx)
 	if _target_is_dead(target):
 		tb.call("emit", _TriggerBusScript.ON_KILL_VIA_SLASH, ctx)
-	# TODO(S5): 표식 도입 후 target 이 마크됐으면 ON_HIT_MARKED_ENEMY emit. 현재 표식 시스템 없어 미발행.
+		return  # 사망한 적엔 표식 부여 무의미(정산 대상 사라짐).
+	# 표식 '참' 누적 — 0뎀 마커. 데미지는 일섬 본체(_try_kill)가 이미 냈으므로 여기선 set_meta 만.
+	_apply_slash_mark(target, ctx)
+	# 표식이 누적된 적(slash_mark>0)이면 ON_HIT_MARKED_ENEMY emit(후속 카드 트리거 — S3+).
+	if int(target.get_meta("slash_mark", 0)) > 0:
+		tb.call("emit", _TriggerBusScript.ON_HIT_MARKED_ENEMY, ctx)
+
+
+## 표식 '참(斬)' +1(cap 5). cap 전이(cur<cap → nv==cap) 순간 1회 ON_MARK_FULL emit.
+## 0뎀 마커 — take_hit 호출 금지(데미지는 일섬 본체가 냄). 발사체는 _emit_slash_hit 까지 못 오므로 안전.
+func _apply_slash_mark(target: Node, ctx: Dictionary) -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	var cur: int = int(target.get_meta("slash_mark", 0))
+	var nv: int = min(cur + 1, _SLASH_MARK_CAP)
+	target.set_meta("slash_mark", nv)
+	if cur < _SLASH_MARK_CAP and nv == _SLASH_MARK_CAP:
+		var tb := _trigger_bus()
+		if tb != null:
+			tb.call("emit", _TriggerBusScript.ON_MARK_FULL, ctx)
 
 
 ## take_hit/take_damage 직후 이 적이 실제 사망했는지 — HealthComponent(hp<=0) 우선,
