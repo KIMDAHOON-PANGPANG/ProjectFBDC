@@ -4,8 +4,8 @@ func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 15)" % all.size())
-	assert(all.size() == 15, "all_boons 크기 불일치")
+	print("all_boons size: %d (기대: 22)" % all.size())
+	assert(all.size() == 22, "all_boons 크기 불일치")
 
 	var mark = _B.by_id("gumiho_mark")
 	print("by_id(gumiho_mark) name: %s" % str(mark.get("name", "?")))
@@ -17,6 +17,10 @@ func _initialize() -> void:
 	var dokebi_list := _B.by_yokai("DOKEBI")
 	print("by_yokai(DOKEBI) size: %d (기대: 7)" % dokebi_list.size())
 	assert(dokebi_list.size() == 7, "by_yokai(DOKEBI) 크기 불일치")
+
+	var mul_list := _B.by_yokai("MULGWISHIN")
+	print("by_yokai(MULGWISHIN) size: %d (기대: 7)" % mul_list.size())
+	assert(mul_list.size() == 7, "by_yokai(MULGWISHIN) 크기 불일치")
 
 	var rarities := _B.rarities_for("gumiho_mark")
 	print("rarities_for(gumiho_mark): %s" % str(rarities))
@@ -110,6 +114,47 @@ func _initialize() -> void:
 	var gold_master := _B.params_for("dokebi_gold", "master")
 	assert(float(gold_master.get("heat_refund", 0.0)) > 0.0, "dokebi_gold heat_refund 불량")
 
+	# ── 물귀신 7카드 스폿체크 ──
+	var mul_ids := ["mulgwishin_water_zone", "mulgwishin_whirlpool", "mulgwishin_water_grab",
+		"mulgwishin_water_pillar", "mulgwishin_summon_drowned", "mulgwishin_grasp_root",
+		"mulgwishin_abyss_maw"]
+	for mid in mul_ids:
+		var b = _B.by_id(mid)
+		assert(b != null, "%s 없음" % mid)
+		assert(String(b.get("yokai", "")) == "MULGWISHIN", "%s yokai 불일치" % mid)
+		var comps = b.get("components", [])
+		assert(comps.size() > 0, "%s components 없음" % mid)
+		var rar := _B.rarities_for(mid)
+		assert(rar == ["chosim", "rare", "uniq", "legend", "master"], "%s rarities 불일치" % mid)
+
+	# 효과 매핑 스폿체크.
+	var mzone = _B.by_id("mulgwishin_water_zone").get("components", [])[0]
+	assert(String(mzone.get("trigger", "")) == "On_Just_Dodge", "water_zone trigger 불일치")
+	assert(String(mzone.get("effect", "")) == "WATER_ZONE", "water_zone effect 불일치")
+	var mgrasp = _B.by_id("mulgwishin_grasp_root").get("components", [])[0]
+	assert(String(mgrasp.get("trigger", "")) == "On_Dash", "grasp_root trigger 불일치")
+	assert(String(mgrasp.get("effect", "")) == "GRASP_ROOT", "grasp_root effect 불일치")
+	var mpillar = _B.by_id("mulgwishin_water_pillar").get("components", [])[0]
+	assert(String(mpillar.get("effect", "")) == "WATER_PILLAR", "water_pillar effect 불일치")
+	var mgrab = _B.by_id("mulgwishin_water_grab").get("components", [])[0]
+	assert(String(mgrab.get("effect", "")) == "WATER_GRAB", "water_grab effect 불일치")
+	var mwhirl = _B.by_id("mulgwishin_whirlpool").get("components", [])[0]
+	assert(String(mwhirl.get("trigger", "")) == "On_Slash_End", "whirlpool trigger 불일치")
+	assert(String(mwhirl.get("effect", "")) == "WHIRLPOOL", "whirlpool effect 불일치")
+	var mdrown = _B.by_id("mulgwishin_summon_drowned").get("components", [])[0]
+	assert(String(mdrown.get("trigger", "")) == "On_Kill_via_Slash", "summon_drowned trigger 불일치")
+	assert(String(mdrown.get("effect", "")) == "SUMMON_DROWNED", "summon_drowned effect 불일치")
+	var mabyss = _B.by_id("mulgwishin_abyss_maw").get("components", [])[0]
+	assert(String(mabyss.get("effect", "")) == "ABYSS_MAW", "abyss_maw effect 불일치")
+
+	# 물귀신 params 스폿체크.
+	var wzone_uniq := _B.params_for("mulgwishin_water_zone", "uniq")
+	assert(float(wzone_uniq.get("radius", 0.0)) > 0.0, "water_zone radius 불량")
+	assert(wzone_uniq.has("pull"), "water_zone pull 없음")
+	var drown_uniq := _B.params_for("mulgwishin_summon_drowned", "uniq")
+	assert(int(drown_uniq.get("count", 0)) >= 1, "summon_drowned count 불량")
+	assert(float(drown_uniq.get("lifetime", 0.0)) > 0.0, "summon_drowned lifetime 불량")
+
 	# 단일 요괴 스폿체크: draw_boons 10회 호출 시 각 호출 내 모든 카드가 동일 yokai
 	var seen_yokais: Array = []
 	for i in range(10):
@@ -123,5 +168,5 @@ func _initialize() -> void:
 			seen_yokais.append(first_yokai)
 	print("draw_boons 단일요괴 스폿체크 통과. 등장 요괴: %s" % str(seen_yokais))
 
-	print("boon_load_check: 전체 통과 (15장 = 구미호8 + 도깨비7)")
+	print("boon_load_check: 전체 통과 (22장 = 구미호8 + 도깨비7 + 물귀신7)")
 	quit()

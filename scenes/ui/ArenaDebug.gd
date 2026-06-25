@@ -338,6 +338,16 @@ func _build() -> void:
 	t_stat.add_child(_btn("뚝딱 금 나와라 (금화)", func(): _equip_boon("dokebi_gold")))
 	t_stat.add_child(_btn("도깨비 금줄 (점화존)", func(): _equip_boon("dokebi_ignite")))
 
+	# 물귀신 은혜 장착(능동 FX 테스트) — 유일(uniq) 등급 즉시 장착.
+	t_stat.add_child(_title("물귀신 은혜 장착 (uniq)"))
+	t_stat.add_child(_btn("수렁발놀림 (회피 소용돌이존)", func(): _equip_boon("mulgwishin_water_zone")))
+	t_stat.add_child(_btn("퇴수일섬 (착지 소용돌이)", func(): _equip_boon("mulgwishin_whirlpool")))
+	t_stat.add_child(_btn("수장의올가미 (먼 적 견인)", func(): _equip_boon("mulgwishin_water_grab")))
+	t_stat.add_child(_btn("수몰 (젖음 물기둥)", func(): _equip_boon("mulgwishin_water_pillar")))
+	t_stat.add_child(_btn("익사한동무 (익사령 소환)", func(): _equip_boon("mulgwishin_summon_drowned")))
+	t_stat.add_child(_btn("발목잡는손 (물손 속박)", func(): _equip_boon("mulgwishin_grasp_root")))
+	t_stat.add_child(_btn("심연의아가리 (대형 소용돌이)", func(): _equip_boon("mulgwishin_abyss_maw")))
+
 	# 현재 스탯 탭 — 읽기 전용(튜닝 반영된 최종 적용값)
 	var t_cur := _tab("현재")
 	tabs.add_child(t_cur)

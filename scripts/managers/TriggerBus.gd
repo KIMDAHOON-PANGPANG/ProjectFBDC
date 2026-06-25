@@ -11,6 +11,9 @@ const ON_SLASH_CHARGED         := "On_Slash_Charged"
 const ON_SLASH_END             := "On_Slash_End"
 const ON_SLASH_HIT             := "On_Slash_Hit"
 const ON_DASH_START            := "On_Dash_Start"
+## 회피(대시) '종료' 1회 — t>=1.0 도달 시. ON_DASH_START(시작)와 명확히 구분.
+## 물귀신 발목잡는손(GRASP_ROOT) 등 회피-종료 발밑 광역 트리거.
+const ON_DASH                  := "On_Dash"
 const ON_DASH_PASS_ENEMY       := "On_Dash_Pass_Enemy"
 const ON_JUST_DODGE            := "On_Just_Dodge"
 const ON_SLASH_RIGHT_AFTER_DASH := "On_Slash_Right_After_Dash"

@@ -77,6 +77,10 @@ const _HOLRIM_COLOR := Color(1.0, 0.37, 0.69)
 const _HOLRIM_CAP := 8.0
 ## 도깨비 불씨(dokebi_ember) — 빨강/주황 디버프 아이콘 색(holrim 과 별개 슬롯).
 const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
+## 물귀신 젖음(wet_marks) — 물빛 디버프 아이콘 색(holrim/ember 와 별개 슬롯). #2f9fe0.
+const _WET_COLOR := Color(0.184, 0.624, 0.878)
+## 젖음 가시화 정규화 상한(아이콘 게이지 풀 = 5중첩).
+const _WET_CAP := 5.0
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -210,6 +214,17 @@ func _poll_status() -> void:
 		_status_strip.call("clear_status", "ember")
 	if _sprite_rig != null and _sprite_rig.has_method("set_ember"):
 		_sprite_rig.call("set_ember", ember)
+	# ── 물귀신 젖음(wet_marks) — int 누적. 활성 시 물빛 디버프 아이콘(별개 슬롯).
+	var wet := int(get_meta("wet_marks", 0))
+	if wet > 0:
+		_status_strip.call("set_status", "wet", {
+			"value": clampf(float(wet) / _WET_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _WET_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "wet")
 
 func _physics_process(delta: float) -> void:
 	if _dead:
@@ -228,6 +243,13 @@ func _physics_process(delta: float) -> void:
 			velocity = Vector3.ZERO
 			move_and_slide()
 			return
+
+	# 물귀신 속박(boon_root_until_msec) — 잡몹/리퍼 한정 정박(이동 봉인, 넉백은 위에서 적용).
+	# 사망/경직 우선(위에서 이미 return) → 그 다음 속박. 보스/엘리트는 별 클래스라 미적용.
+	if int(get_meta("boon_root_until_msec", 0)) > Time.get_ticks_msec():
+		velocity = Vector3.ZERO
+		move_and_slide()
+		return
 
 	# 리프 점프 중 — 곡선 이동만 처리(추격/공격 잠금).
 	if _leaping:

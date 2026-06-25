@@ -877,6 +877,10 @@ func _update_evade(delta: float) -> void:
 				_tb_pass.call("emit", _TriggerBusScript.ON_DASH_PASS_ENEMY, {"source": self, "target": _e, "position": (_e as Node3D).global_position})
 	if t >= 1.0:
 		_last_evade_end_msec = Time.get_ticks_msec()
+		# On_Dash(회피 종료) 발행 — 물귀신 발목잡는손(GRASP_ROOT) 등 발밑 광역 트리거.
+		var _tb_de := _trigger_bus()
+		if _tb_de != null:
+			_tb_de.call("emit", _TriggerBusScript.ON_DASH, {"source": self, "position": global_position})
 		_set_state(State.IDLE)
 
 ## 이어서 하기(사망 화면) — 같은 노드를 되살린다: 풀 HP + 2초 무적 + 스프라이트 복원.

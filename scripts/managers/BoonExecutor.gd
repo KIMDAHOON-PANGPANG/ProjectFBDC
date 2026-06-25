@@ -23,11 +23,18 @@ const _FoxfireScript := preload("res://scenes/effects/BoonFoxfire.gd")
 const _CloneScript := preload("res://scenes/effects/BoonClone.gd")
 const _GoldScript := preload("res://scenes/effects/BoonGold.gd")
 const _IgniteZoneScript := preload("res://scenes/effects/BoonIgniteZone.gd")
+## 물귀신 능동 FX 노드 스크립트(전용 .gd, class_name 없음).
+const _WaterGrabScript := preload("res://scenes/effects/BoonWaterGrab.gd")
+const _DrownedScript := preload("res://scenes/effects/BoonDrowned.gd")
+const _WaterPillarScript := preload("res://scenes/effects/BoonWaterPillar.gd")
+const _GraspScript := preload("res://scenes/effects/BoonGrasp.gd")
 
 ## 구미호 핑크 틴트(공통).
 const PINK := Color(1.0, 0.37, 0.69)
 ## 도깨비 금황 틴트(공통).
 const GOLD := Color(1.0, 0.76, 0.2)
+## 물귀신 물빛 틴트(공통, #2f9fe0).
+const WATER := Color(0.184, 0.624, 0.878)
 
 ## FX 노드 그룹 + 동시 상한(성능 안전망).
 const GRP_ZONE := "boon_fx_zone"
@@ -55,6 +62,7 @@ func setup(player: Node) -> void:
 	_tb.call("subscribe", _TriggerBusScript.ON_SLASH_HIT, Callable(self, "_on_slash_hit"))
 	_tb.call("subscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, Callable(self, "_on_kill_via_slash"))
 	_tb.call("subscribe", _TriggerBusScript.ON_DASH_PASS_ENEMY, Callable(self, "_on_dash_pass_enemy"))
+	_tb.call("subscribe", _TriggerBusScript.ON_DASH, Callable(self, "_on_dash"))
 	_tb.call("subscribe", _TriggerBusScript.ON_SLASH_END, Callable(self, "_on_slash_end"))
 	_tb.call("subscribe", _TriggerBusScript.ON_SLASH_CHARGED, Callable(self, "_on_slash_charged"))
 	_tb.call("subscribe", _TriggerBusScript.ON_JUST_DODGE, Callable(self, "_on_just_dodge"))
@@ -66,6 +74,7 @@ func _exit_tree() -> void:
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_HIT, Callable(self, "_on_slash_hit"))
 		_tb.call("unsubscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, Callable(self, "_on_kill_via_slash"))
 		_tb.call("unsubscribe", _TriggerBusScript.ON_DASH_PASS_ENEMY, Callable(self, "_on_dash_pass_enemy"))
+		_tb.call("unsubscribe", _TriggerBusScript.ON_DASH, Callable(self, "_on_dash"))
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_END, Callable(self, "_on_slash_end"))
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_CHARGED, Callable(self, "_on_slash_charged"))
 		_tb.call("unsubscribe", _TriggerBusScript.ON_JUST_DODGE, Callable(self, "_on_just_dodge"))
@@ -112,6 +121,11 @@ func _on_slash_hit(ctx: Dictionary) -> void:
 		func(i, params): _dokebi_foxfire(i, ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "EXTRA_FAN",
 		func(i, params): _extra_fan(i, ctx, params))
+	# ── 물귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "WATER_GRAB",
+		func(i, params): _water_grab(i, ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "WATER_PILLAR",
+		func(i, params): _water_pillar(i, ctx, params))
 
 
 func _on_kill_via_slash(ctx: Dictionary) -> void:
@@ -125,11 +139,20 @@ func _on_kill_via_slash(ctx: Dictionary) -> void:
 		func(_i, params): _chain_burst(ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "GOLD_REFUND",
 		func(_i, params): _gold_refund(ctx, params))
+	# ── 물귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "SUMMON_DROWNED",
+		func(_i, params): _summon_drowned(ctx, params))
 
 
 func _on_dash_pass_enemy(ctx: Dictionary) -> void:
 	_for_each_effect(_TriggerBusScript.ON_DASH_PASS_ENEMY, "APPLY_MARK",
 		func(i, params): _apply_mark(i, ctx, params))
+
+
+## 회피(대시) 종료 — 물귀신 발목잡는손(GRASP_ROOT).
+func _on_dash(ctx: Dictionary) -> void:
+	_for_each_effect(_TriggerBusScript.ON_DASH, "GRASP_ROOT",
+		func(_i, params): _grasp_root(ctx, params))
 
 
 func _on_slash_end(ctx: Dictionary) -> void:
@@ -140,6 +163,9 @@ func _on_slash_end(ctx: Dictionary) -> void:
 		func(_i, params): _smash(ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "SUMMON_CLONE",
 		func(_i, params): _summon_clones(ctx, params))
+	# ── 물귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "WHIRLPOOL",
+		func(_i, params): _whirlpool(ctx, params))
 
 
 func _on_slash_charged(ctx: Dictionary) -> void:
@@ -153,6 +179,11 @@ func _on_just_dodge(ctx: Dictionary) -> void:
 	# ── 도깨비 ──
 	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "IGNITE_ZONE",
 		func(_i, params): _ignite_zone(ctx, params))
+	# ── 물귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "WATER_ZONE",
+		func(_i, params): _water_zone(ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "ABYSS_MAW",
+		func(_i, params): _abyss_maw(ctx, params))
 
 
 func _on_mark_full(ctx: Dictionary) -> void:
@@ -764,6 +795,354 @@ func _spawn_burst_particles(pos: Vector3, amount: int, scale: float, col: Color 
 	p.mesh = qm
 	# one_shot 종료 후 자가 free(lifetime + 여유).
 	p.get_tree().create_timer(p.lifetime + 0.3).timeout.connect(p.queue_free)
+
+
+# ══════════════ 물귀신 — WATER_ZONE / ABYSS_MAW(소용돌이 결계) ══════════════
+
+## 회피 자리 물 소용돌이 — BoonCharmZone 재사용(물빛 + 인력). 반경 적에 젖음 + 감속 부여.
+func _water_zone(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		return
+	var host := _effect_host()
+	if host == null:
+		return
+	var zp := params.duplicate()
+	zp["tint"] = WATER
+	# 결계는 인력만 — 파열(burst)은 물귀신 결계엔 안 씀(별도 트리거 없음). burst 값 0 안전.
+	var zone := _CharmZoneScript.new() as Node3D
+	zone.add_to_group(GRP_ZONE)
+	host.add_child(zone)
+	zone.call("init_zone", pos, zp, _player)
+	# 생성 즉시 반경 적에 젖음 1회 + 감속(PC 무관 = enemies 그룹).
+	_apply_wet_and_slow_in_radius(pos, float(params.get("radius", 2.5)),
+		int(params.get("wet_add", 1)), float(params.get("slow_mult", 0.6)))
+
+
+## 심연의아가리 — 대형 소용돌이(강인력) → 클라이맥스 폭발 정산.
+func _abyss_maw(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		return
+	var host := _effect_host()
+	if host == null:
+		return
+	var duration := maxf(float(params.get("duration", 3.0)), 0.5)
+	var zp := {
+		"radius": float(params.get("radius", 4.2)),
+		"duration": duration,
+		"pull": float(params.get("pull", 4.2)),
+		"tint": WATER,
+	}
+	var zone := _CharmZoneScript.new() as Node3D
+	zone.add_to_group(GRP_ZONE)
+	host.add_child(zone)
+	zone.call("init_zone", pos, zp, _player)
+	# 클라이맥스 — duration*0.9 후 광역 토출 넉백 + 버스트.
+	var tree := get_tree()
+	if tree == null:
+		return
+	var climax_kb := float(params.get("climax_knockback", 14.0))
+	var climax_r := maxf(float(params.get("climax_radius", 4.8)), 0.5)
+	var center: Vector3 = pos
+	var t := tree.create_timer(duration * 0.9)
+	t.timeout.connect(func(): _abyss_climax(center, climax_r, climax_kb))
+
+
+func _abyss_climax(center: Vector3, radius: float, kb: float) -> void:
+	if not is_inside_tree():
+		return
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var out: Vector3 = (e as Node3D).global_position - center
+		out.y = 0.0
+		var d: float = out.length()
+		if d <= radius and d > 0.05:
+			if e.has_method("apply_knockback"):
+				e.call("apply_knockback", out.normalized(), kb)
+	_spawn_burst_particles(center + Vector3(0, 0.6, 0), 30, 1.8, WATER)
+
+
+# ══════════════ 물귀신 — WHIRLPOOL(퇴수일섬 소용돌이) ══════════════
+
+## 일섬 착지 소용돌이 — 반경 적 중심 인력 후 물보라 넉백 토출 + 젖음 + 버스트.
+func _whirlpool(ctx: Dictionary, params: Dictionary) -> void:
+	if _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var center: Vector3 = (_player as Node3D).global_position
+	var radius := maxf(float(params.get("radius", 3.0)), 0.5)
+	var pull := float(params.get("pull", 10.0))
+	var burst_kb := float(params.get("burst_knockback", 10.0))
+	var burst_r := maxf(float(params.get("burst_radius", 3.0)), 0.5)
+	var wet_add := int(params.get("wet_add", 1))
+	# 흡입 — 반경 적을 중심으로 강하게 끌어당김 + 젖음.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var to_c: Vector3 = center - (e as Node3D).global_position
+		to_c.y = 0.0
+		var d: float = to_c.length()
+		if d <= radius and d > 0.05:
+			if e.has_method("apply_knockback"):
+				e.call("apply_knockback", to_c.normalized(), pull)
+			var cur := int(e.get_meta("wet_marks", 0))
+			e.set_meta("wet_marks", cur + wet_add)
+	# 소용돌이 디스크 연출.
+	_spawn_water_swirl(center, radius)
+	# 짧은 딜레이 후 물보라 토출(바깥 넉백) + 버스트.
+	var tree := get_tree()
+	if tree == null:
+		return
+	var t := tree.create_timer(0.22)
+	t.timeout.connect(func(): _whirlpool_burst(center, burst_r, burst_kb))
+
+
+func _whirlpool_burst(center: Vector3, radius: float, kb: float) -> void:
+	if not is_inside_tree():
+		return
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var out: Vector3 = (e as Node3D).global_position - center
+		out.y = 0.0
+		var d: float = out.length()
+		if d <= radius and d > 0.05:
+			if e.has_method("apply_knockback"):
+				e.call("apply_knockback", out.normalized(), kb)
+	_spawn_burst_particles(center + Vector3(0, 0.5, 0), 26, 1.6, WATER)
+
+
+# ══════════════ 물귀신 — WATER_GRAB(수장의올가미) ══════════════
+
+## 일섬 적중 N회마다 가장 먼 적에 물올가미 발사 → PC 앞 견인 + 짧은 속박.
+func _water_grab(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:
+	var per_hits := int(params.get("per_hits", 1))
+	if per_hits > 1:
+		var k := boon_index + 200000  # 다른 카운터 도메인과 충돌 방지.
+		_fan_counters[k] = int(_fan_counters.get(k, 0)) + 1
+		if _fan_counters[k] < per_hits:
+			return
+		_fan_counters[k] = 0
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var origin: Vector3 = (_player as Node3D).global_position + Vector3(0, 0.6, 0)
+	var hit_target = ctx.get("target", null)
+	var count := int(params.get("count", 1))
+	var gp := params.duplicate()
+	gp["tint"] = WATER
+	for k in range(count):
+		if get_tree().get_nodes_in_group(GRP_PROJ).size() >= PROJ_CAP:
+			break
+		# 시드 = 가장 먼 적(방금 맞은 적 제외 우선).
+		var seed_target := _farthest_enemy_excluding(origin, hit_target)
+		if seed_target == null:
+			seed_target = _farthest_enemy_excluding(origin, null)
+		if seed_target == null:
+			break
+		var pr := _WaterGrabScript.new() as Node3D
+		pr.add_to_group(GRP_PROJ)
+		host.add_child(pr)
+		var fire_dir: Vector3 = (seed_target as Node3D).global_position - origin
+		pr.call("init_grab", origin, fire_dir, gp, _player, seed_target)
+
+
+# ══════════════ 물귀신 — WATER_PILLAR(수몰) ══════════════
+
+## 일섬 적중 시 젖은 적 발밑 물기둥 솟구침 버스트 + 젖음 증폭 데미지 + 인접 전파.
+func _water_pillar(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:
+	var per_hits := int(params.get("per_hits", 1))
+	if per_hits > 1:
+		var k := boon_index + 300000
+		_fan_counters[k] = int(_fan_counters.get(k, 0)) + 1
+		if _fan_counters[k] < per_hits:
+			return
+		_fan_counters[k] = 0
+	var target = ctx.get("target", null)
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return
+	if (target as Node).is_in_group("boss"):
+		return
+	# 결산 — 젖음 적에만 발동(젖지 않았으면 스킵 = 젖음 페이오프 카드).
+	var wet := int(target.get_meta("wet_marks", 0))
+	if wet <= 0:
+		return
+	var center: Vector3 = (target as Node3D).global_position
+	var radius := maxf(float(params.get("radius", 2.6)), 0.5)
+	var base_dmg := int(params.get("damage", 1))
+	var wet_bonus := int(params.get("wet_bonus_damage", 1))
+	var wet_consume := bool(params.get("wet_consume", true))
+	var spread := int(params.get("spread", 1))
+	var spread_radius := maxf(float(params.get("spread_radius", 3.0)), 0.5)
+	# 물기둥 연출(비주얼 전용).
+	var host := _effect_host()
+	if host != null:
+		var pil := _WaterPillarScript.new() as Node3D
+		host.add_child(pil)
+		pil.call("init_pillar", center, radius * 0.6, WATER)
+	# 반경 적 결산 타격 — 젖은 적은 증폭, 그 외 기본.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var d: float = ((e as Node3D).global_position - center).length()
+		if d > radius:
+			continue
+		var ew := int(e.get_meta("wet_marks", 0))
+		var dmg := base_dmg + (wet_bonus * ew if ew > 0 else 0)
+		if e.has_method("take_hit"):
+			e.call("take_hit", dmg)
+		if wet_consume and ew > 0:
+			e.set_meta("wet_marks", 0)
+	# 인접 젖음 전파.
+	_propagate_wet(center, spread_radius, spread)
+	_spawn_burst_particles(center + Vector3(0, 0.6, 0), 22, 1.5, WATER)
+
+
+func _propagate_wet(pos: Vector3, radius: float, count: int) -> void:
+	if count <= 0:
+		return
+	var cands: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if int(e.get_meta("wet_marks", 0)) > 0:
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d <= radius:
+			cands.append([d, e])
+	cands.sort_custom(func(a, b): return a[0] < b[0])
+	for i in range(min(count, cands.size())):
+		var e = cands[i][1]
+		if is_instance_valid(e):
+			e.set_meta("wet_marks", 1)
+			_spawn_mark_flash_color(e, WATER)
+
+
+# ══════════════ 물귀신 — SUMMON_DROWNED(익사한동무) ══════════════
+
+func _summon_drowned(ctx: Dictionary, params: Dictionary) -> void:
+	var count := int(params.get("count", 1))
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	# 소환 원점 = 처치 적 위치(없으면 PC).
+	var origin: Vector3 = (_player as Node3D).global_position
+	var target = ctx.get("target", null)
+	var pos = ctx.get("position", null)
+	if pos is Vector3:
+		origin = pos
+	elif target is Node3D:
+		origin = (target as Node3D).global_position
+	var dp := params.duplicate()
+	dp["tint"] = WATER
+	for k in range(count):
+		if get_tree().get_nodes_in_group(GRP_SPIRIT).size() >= SPIRIT_CAP:
+			break
+		var dr := _DrownedScript.new() as Node3D
+		dr.add_to_group(GRP_SPIRIT)
+		host.add_child(dr)
+		var ang := TAU * float(k) / float(max(count, 1)) + randf() * 0.6
+		var off := Vector3(cos(ang), 0.0, sin(ang)) * 0.7
+		dr.call("init_drowned", origin + off + Vector3(0, 0.9, 0), dp)
+
+
+# ══════════════ 물귀신 — GRASP_ROOT(발목잡는손) ══════════════
+
+func _grasp_root(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		if _player is Node3D:
+			pos = (_player as Node3D).global_position
+		else:
+			return
+	var radius := maxf(float(params.get("radius", 3.0)), 0.5)
+	var root_dur := float(params.get("root_duration", 1.0))
+	var wet_add := int(params.get("wet_add", 1))
+	# 물손 연출.
+	var host := _effect_host()
+	if host != null:
+		var g := _GraspScript.new() as Node3D
+		host.add_child(g)
+		g.call("init_grasp", pos, radius, WATER)
+	# 반경 적 속박 + 젖음(보스 제외, PC 무관).
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d <= radius:
+			e.set_meta("boon_root_until_msec", Time.get_ticks_msec() + int(root_dur * 1000.0))
+			var cur := int(e.get_meta("wet_marks", 0))
+			e.set_meta("wet_marks", cur + wet_add)
+
+
+# ══════════════ 물귀신 공용 보조 ══════════════
+
+## ctx 에서 position 추출(없으면 target 위치). 실패 시 null.
+func _ctx_position(ctx: Dictionary):
+	var pos = ctx.get("position", null)
+	if pos is Vector3:
+		return pos
+	var t = ctx.get("target", null)
+	if t is Node3D:
+		return (t as Node3D).global_position
+	return null
+
+
+## 가장 먼 적(exclude 제외) — 수장의올가미 시드.
+func _farthest_enemy_excluding(pos: Vector3, exclude) -> Node:
+	var best: Node = null
+	var best_d: float = -1.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if e == exclude:
+			continue
+		var d: float = ((e as Node3D).global_position - pos).length()
+		if d > best_d:
+			best_d = d
+			best = e
+	return best
+
+
+## 반경 적에 젖음 1회 + 감속 부여(WATER_ZONE 생성 즉시). 감속은 적 apply_zone_slow 가 있으면 호출.
+func _apply_wet_and_slow_in_radius(center: Vector3, radius: float, wet_add: int, slow_mult: float) -> void:
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var d: float = ((e as Node3D).global_position - center).length()
+		if d <= radius:
+			var cur := int(e.get_meta("wet_marks", 0))
+			e.set_meta("wet_marks", cur + wet_add)
+			if e.has_method("apply_zone_slow"):
+				e.call("apply_zone_slow", slow_mult)
+
+
+## 물 소용돌이 디스크 — 빠르게 회전하듯 퍼지는 물빛 디스크(WHIRLPOOL 연출).
+func _spawn_water_swirl(center: Vector3, radius: float) -> void:
+	var host := _effect_host()
+	if host == null:
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = _make_disc_mesh(radius)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(WATER.r, WATER.g, WATER.b, 0.5)
+	mat.emission_enabled = true
+	mat.emission = WATER
+	mat.emission_energy_multiplier = 1.8
+	mi.material_override = mat
+	host.add_child(mi)
+	mi.global_position = center + Vector3(0, 0.07, 0)
+	mi.scale = Vector3(0.2, 1.0, 0.2)
+	var t := mi.create_tween()
+	t.set_parallel(true)
+	t.tween_property(mi, "scale", Vector3(1.1, 1.0, 1.1), 0.2)
+	t.tween_property(mi, "rotation:y", PI, 0.4)
+	t.tween_property(mat, "albedo_color:a", 0.0, 0.4)
+	t.chain().tween_callback(mi.queue_free)
 
 
 func _effect_host() -> Node:
