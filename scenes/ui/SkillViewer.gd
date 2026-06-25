@@ -18,6 +18,8 @@ const TYPE_ICONS := {
 
 var _panel: PanelContainer
 var _list: VBoxContainer
+var _tooltip: PanelContainer
+var _tooltip_label: Label
 
 
 func _ready() -> void:
@@ -62,6 +64,26 @@ func _build() -> void:
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 2)
 	vbox.add_child(_list)
+
+	_tooltip = PanelContainer.new()
+	var tsb := StyleBoxFlat.new()
+	tsb.bg_color = Color(0.05, 0.05, 0.08, 0.92)
+	tsb.set_corner_radius_all(6)
+	tsb.set_content_margin_all(8)
+	_tooltip.add_theme_stylebox_override("panel", tsb)
+	_tooltip.process_mode = Node.PROCESS_MODE_ALWAYS
+	_tooltip.visible = false
+	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip_label = Label.new()
+	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tooltip_label.custom_minimum_size = Vector2(0, 0)
+	_tooltip_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_tooltip_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_tooltip_label.add_theme_constant_override("outline_size", 3)
+	_tooltip_label.add_theme_font_size_override("font_size", 13)
+	_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip.add_child(_tooltip_label)
+	add_child(_tooltip)
 
 
 func _notification(what: int) -> void:
@@ -146,8 +168,10 @@ func _make_socket(bg: Color, sym: String, tip: String) -> Control:
 	sb.set_content_margin_all(2)
 	p.add_theme_stylebox_override("panel", sb)
 	p.custom_minimum_size = Vector2(26, 26)
-	p.tooltip_text = tip
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	if tip != "":
+		p.mouse_entered.connect(_on_socket_hover.bind(tip))
+		p.mouse_exited.connect(_on_socket_unhover)
 
 	var l := Label.new()
 	l.text = sym
@@ -161,3 +185,36 @@ func _make_socket(bg: Color, sym: String, tip: String) -> Control:
 	p.add_child(l)
 
 	return p
+
+
+func _on_socket_hover(tip: String) -> void:
+	if _tooltip == null or _tooltip_label == null:
+		return
+	_tooltip_label.custom_minimum_size.x = 304.0
+	_tooltip_label.text = tip
+	_tooltip.visible = true
+	_update_tooltip_pos()
+
+
+func _on_socket_unhover() -> void:
+	if _tooltip != null:
+		_tooltip.visible = false
+
+
+func _update_tooltip_pos() -> void:
+	if _tooltip == null:
+		return
+	var mp: Vector2 = get_viewport().get_mouse_position()
+	var pos: Vector2 = mp + Vector2(16, 16)
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var ts: Vector2 = _tooltip.size
+	pos.x = min(pos.x, vp.x - ts.x - 8.0)
+	pos.y = min(pos.y, vp.y - ts.y - 8.0)
+	pos.x = max(pos.x, 8.0)
+	pos.y = max(pos.y, 8.0)
+	_tooltip.position = pos
+
+
+func _process(_delta: float) -> void:
+	if _tooltip != null and _tooltip.visible:
+		_update_tooltip_pos()
