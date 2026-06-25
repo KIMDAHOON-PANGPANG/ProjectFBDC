@@ -1,3 +1,88 @@
 {
-  "boons": []
+  "boons": [
+    {
+      "id": "iaido_draw",
+      "name": "발도(拔刀)",
+      "desc": "납도류 스타일 확정. 납도(RB) 정산의 회수 범위와 단가가 강화된다.",
+      "kind": "style",
+      "skill_type": "발도술",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "Passive",
+          "effect": "STYLE_IAIDO",
+          "params_by_rarity": {
+            "chosim": { "sheathe_range_bonus": 0.5, "sheathe_dmg_bonus": 0 },
+            "rare":   { "sheathe_range_bonus": 0.9, "sheathe_dmg_bonus": 0 },
+            "uniq":   { "sheathe_range_bonus": 1.2, "sheathe_dmg_bonus": 1 },
+            "legend": { "sheathe_range_bonus": 1.6, "sheathe_dmg_bonus": 1 },
+            "master": { "sheathe_range_bonus": 2.0, "sheathe_dmg_bonus": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "iaido_perfect",
+      "name": "거합(居合)",
+      "desc": "마지막 일섬 착지 직후 짧은 순간 안에 납도하면 '거합' — 회수 범위·정산·환원이 크게 증폭된다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "IAIDO_PERFECT",
+          "params_by_rarity": {
+            "chosim": { "perfect_window": 0.25, "range_mult": 1.4, "settle_mult": 1.6, "refund_mult": 1.5 },
+            "rare":   { "perfect_window": 0.28, "range_mult": 1.45, "settle_mult": 1.75, "refund_mult": 1.6 },
+            "uniq":   { "perfect_window": 0.32, "range_mult": 1.5, "settle_mult": 1.9, "refund_mult": 1.7 },
+            "legend": { "perfect_window": 0.36, "range_mult": 1.6, "settle_mult": 2.05, "refund_mult": 1.85 },
+            "master": { "perfect_window": 0.4, "range_mult": 1.7, "settle_mult": 2.2, "refund_mult": 2.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "deep_mark",
+      "name": "심도(深刀)",
+      "desc": "일섬 적중마다 표식이 더 깊게 새겨진다. 만개가 빨라진다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "DEEP_MARK",
+          "params_by_rarity": {
+            "chosim": { "extra": 1, "per_hits": 1 },
+            "rare":   { "extra": 1, "per_hits": 1 },
+            "uniq":   { "extra": 1, "per_hits": 1 },
+            "legend": { "extra": 1, "per_hits": 1 },
+            "master": { "extra": 2, "per_hits": 1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "sheathe_refund",
+      "name": "환원(還元)",
+      "desc": "거둔 표식에 비례한 열·HP 환급이 증폭된다. 만개 회수는 환원이 2배.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "SHEATHE_REFUND",
+          "params_by_rarity": {
+            "chosim": { "heat_per_mark_extra": 0.04, "hp_per_mark_extra": 0.3, "full_collect_mult": 2.0 },
+            "rare":   { "heat_per_mark_extra": 0.05, "hp_per_mark_extra": 0.38, "full_collect_mult": 2.0 },
+            "uniq":   { "heat_per_mark_extra": 0.06, "hp_per_mark_extra": 0.45, "full_collect_mult": 2.0 },
+            "legend": { "heat_per_mark_extra": 0.07, "hp_per_mark_extra": 0.52, "full_collect_mult": 2.0 },
+            "master": { "heat_per_mark_extra": 0.08, "hp_per_mark_extra": 0.6, "full_collect_mult": 2.0 }
+          }
+        }
+      ]
+    }
+  ]
 }

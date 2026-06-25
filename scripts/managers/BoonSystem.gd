@@ -154,6 +154,15 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 		"legend": "전설", "master": "마스터"
 	}
 
+	# 스타일 exclusive: 이미 style 카드를 보유 중이면 다른 style 카드를 풀에서 제외.
+	# (현재 납도류 1종이라 사실상 '발도 보유 시 발도 미노출' — 프레임만 깔아 둠.)
+	var owns_style := false
+	for oid in owned_ids:
+		var ob = _by_id.get(String(oid), null)
+		if ob is Dictionary and String(ob.get("kind", "")) == "style":
+			owns_style = true
+			break
+
 	# 미보유 카드만 추려 available 구성.
 	var available: Array = []
 	for b in BOONS:
@@ -161,6 +170,9 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 			continue
 		var bid: String = String(b.get("id", ""))
 		if bid == "" or bid in owned_ids:
+			continue
+		# style 카드는 1픽 exclusive — 이미 스타일 보유면 제외.
+		if owns_style and String(b.get("kind", "")) == "style":
 			continue
 		available.append(b)
 	if available.is_empty():
@@ -189,6 +201,7 @@ static func draw_boons(count: int, level: int, owned_ids: Array = []) -> Array:
 			"name": String(b.get("name", "")),
 			"desc": String(b.get("desc", "")),
 			"yokai": String(b.get("yokai", "")),
+			"kind": String(b.get("kind", "")),
 			"skill_type": slot,
 			"rarity": rar,
 			"rarity_label": String(rarity_labels.get(rar, rar))

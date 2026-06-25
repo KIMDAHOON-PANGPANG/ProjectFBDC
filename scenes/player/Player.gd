@@ -112,6 +112,8 @@ var slash_damage_bonus: int = 0
 var active_boons: Array = []
 ## 권속 은혜 효과 실행기 노드 참조.
 var _boon_executor: Node = null
+## 마지막 일섬 착지 시각(ms) — 거합(IAIDO_PERFECT) perfect 윈도우 판정용. 0=아직 없음.
+var last_slash_end_msec: int = 0
 ## 머리 위 상태 아이콘 스트립(굶주림 등) — _ready 에서 코드 인스턴스.
 var _status_strip: Node = null
 
@@ -431,13 +433,22 @@ func _do_sheathe() -> void:
 
 ## 납도 정산 자원 환급(BoonExecutor 가 거둔 표식 총합으로 호출). 음수 열 가산 + HP 미세 회복.
 ## 표식 0이면 호출되지 않는다(헛납도 = 자원 변화 없음).
-func _sheathe_restore(total_marks: int) -> void:
+## heat_extra_per/hp_extra_per = 환원(SHEATHE_REFUND) marks당 추가 환급. refund_mult = 거합/환원 곱.
+## 디폴트 인자 = 베이스 납도(은혜 없을 때) 호환.
+func _sheathe_restore(total_marks: int, heat_extra_per: float = 0.0, hp_extra_per: float = 0.0, refund_mult: float = 1.0) -> void:
 	if total_marks <= 0:
 		return
-	_refund_heat(_SHEATHE_HEAT_REFUND_PER_MARK * float(total_marks))
-	var hp_amt: int = int(round(_SHEATHE_HP_PER_MARK * float(total_marks)))
+	var heat_per: float = (_SHEATHE_HEAT_REFUND_PER_MARK + heat_extra_per) * float(total_marks) * refund_mult
+	_refund_heat(heat_per)
+	var hp_per: float = (_SHEATHE_HP_PER_MARK + hp_extra_per) * float(total_marks) * refund_mult
+	var hp_amt: int = int(round(hp_per))
 	if hp_amt > 0 and _health != null:
 		_health.heal(hp_amt)
+
+
+## 거합(IAIDO_PERFECT) perfect 판정용 — 마지막 일섬 착지 시각(ms). 0=아직 일섬 착지 없음.
+func get_last_slash_end_msec() -> int:
+	return last_slash_end_msec
 
 
 ## 열 환급(음수 경로) — add_heat 는 가산 전용이라 별도. 탈진 상태는 건드리지 않는다
@@ -742,6 +753,8 @@ func _update_dash(delta: float) -> void:
 	if t >= 1.0:
 		# 착지 회복 유예 — 도착 지점에서 적 충돌/탄에 즉시 피격되는 불쾌감 방지.
 		_slash_grace_t = max(_slash_grace_t, data.slash_post_grace)
+		# 일섬 착지 시각 기록 — 거합(IAIDO_PERFECT) perfect 윈도우 기준점.
+		last_slash_end_msec = Time.get_ticks_msec()
 		_complete_slash_action()
 
 
