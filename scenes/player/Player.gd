@@ -133,6 +133,20 @@ var boon_haste_charge_mult: float = 0.0
 var boon_dash_dist_bonus: float = 0.0
 ## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
+# ── M9-S7 baseline④: 거합 추격 윈도우(코드 상수·항상 on) ──
+## 추격 윈도우 잔여(초). 납도가 처치를 내면 open_sheathe_follow 가 0.4 로 세팅, _physics_process 가 깎음.
+## > 0 동안 RB(slash) 재입력 시 _SHEATHE_COOLDOWN 무시하고 즉시 추격 납도 1회.
+var _sheathe_follow_t: float = 0.0
+## 추격 1회 cap — 추격 납도가 또 추격 윈도우를 열지 못하게(open_sheathe_follow 가 used 면 return).
+## 일반 납도 시작 시에만 false 로 리셋. ★무한 추격 방지.
+var _sheathe_follow_used: bool = false
+# ── M9-S7 폭심 충전(EPICENTER_OVERCHARGE): 다음 일섬 1발 대버스트 예약(런타임 변수·런마다 리셋) ──
+## 예약된 다음 일섬 사거리/폭 배수 + 열 환급 비율. _fire_slash 가 1발 소비 후 즉시 1.0/0 리셋.
+var boon_next_slash_range_mult: float = 1.0
+var boon_next_slash_width_mult: float = 1.0
+var boon_next_slash_heat_refund: float = 0.0
+## 예약 윈도우 잔여(초). > 0 일 때만 예약 적용. 만료 시 예약 소멸(배수 리셋).
+var _next_burst_t: float = 0.0
 ## 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속. _zone_slow_t > 0 이면 _handle_move 적용.
 var _zone_slow_t: float = 0.0
 var _zone_slow_mult: float = 1.0
@@ -283,6 +297,18 @@ func _physics_process(delta: float) -> void:
 	# 납도(RB) 쿨다운.
 	if _sheathe_cd_t > 0.0:
 		_sheathe_cd_t -= delta
+	# M9-S7 거합 추격 윈도우 — 미입력 시 시간 경과로 닫힘(자동 발동 0). _sheathe_follow_used 는
+	# 다음 일반 납도 시작 시 리셋(추격 1회 cap 유지).
+	if _sheathe_follow_t > 0.0:
+		_sheathe_follow_t -= delta
+	# M9-S7 폭심 충전 예약 윈도우 — 만료 시 예약 소멸(다음 일섬에 적용 안 됨).
+	if _next_burst_t > 0.0:
+		_next_burst_t -= delta
+		if _next_burst_t <= 0.0:
+			_next_burst_t = 0.0
+			boon_next_slash_range_mult = 1.0
+			boon_next_slash_width_mult = 1.0
+			boon_next_slash_heat_refund = 0.0
 	# 역수(IAIDO_HASTE) 윈도우 타이머 — 다음 일섬 발사 또는 시간 경과로 종료.
 	if boon_haste_t > 0.0:
 		boon_haste_t -= delta
@@ -421,13 +447,35 @@ func _check_instant_slash() -> void:
 ## RB(slash 액션) 입력 체크 — 쿨/UI 가드 통과 시 _do_sheathe. IDLE/COOLDOWN 에서만 호출됨
 ## (AIMING 차징·DASHING·EVADING 보호). LB(fire)=일섬과 분리된 입력이라 충돌 없음.
 func _check_sheathe() -> void:
+	# ── M9-S7 거합 추격 윈도우 — 처치 직후 짧은 윈도우 안 RB 재입력이면 쿨 무시 즉시 추격 납도 1회. ──
+	# ★_sheathe_follow_used=true 세팅 → 이 추격 납도가 일으킨 처치로 open_sheathe_follow 가 또 호출돼도
+	#   used 라 재오픈 거부 = 추격 1회 cap(무한 추격 방지). 일반 납도 경로에서만 used 가 false 로 리셋된다.
+	if _sheathe_follow_t > 0.0 and Input.is_action_just_pressed("slash") and not _is_pointer_over_ui():
+		_sheathe_follow_used = true
+		_sheathe_follow_t = 0.0
+		_sheathe_cd_t = 0.0  # _SHEATHE_COOLDOWN 무시.
+		_do_sheathe()
+		return
 	if _sheathe_cd_t > 0.0:
 		return
 	if not Input.is_action_just_pressed("slash"):
 		return
 	if _is_pointer_over_ui():
 		return
+	# 일반(추격 아닌) 납도 시작 — 추격 1회 cap 리셋(이 납도가 처치를 내면 다시 추격 윈도우를 열 수 있게).
+	_sheathe_follow_used = false
 	_do_sheathe()
+
+
+## M9-S7 거합 추격 윈도우 오픈 — BoonExecutor 가 ON_SHEATHE_KILL(처치) 발생 납도 끝에서 1회 호출.
+## 이미 이번 추격 체인에서 한 번 열었으면(used) 재오픈 금지 → 추격은 연속 1회만(무한 방지).
+## 미입력 시 _sheathe_follow_t 가 _physics_process 에서 0 으로 닳아 윈도우가 자동으로 닫힌다(자동 발동 0).
+func open_sheathe_follow() -> void:
+	if _sheathe_follow_used:
+		return
+	_sheathe_follow_t = 0.4
+	# 칼집 금빛 잔광 더미(선택) — 기존 섬광 재사용.
+	_spawn_sheathe_flash()
 
 
 ## 납도 발동 — 짧은 거두기 모션 + 칼집 섬광 더미연출 + ON_SHEATHE 발행(BoonExecutor 가 정산).
@@ -459,6 +507,16 @@ func _sheathe_restore(total_marks: int, heat_extra_per: float = 0.0, hp_extra_pe
 	var hp_amt: int = int(round(hp_per))
 	if hp_amt > 0 and _health != null:
 		_health.heal(hp_amt)
+
+
+## M9-S7 폭심 충전(EPICENTER_OVERCHARGE) — BoonExecutor 가 납도 처형 시 호출. 다음 일섬 '1발'에만
+## 적용될 사거리/폭 배수 + 열 환급을 예약(누적 아님 — 세팅/최댓값). _fire_slash 가 1발 소비 후 즉시 리셋.
+## window(s) 안에 발사 안 하면 _physics_process 가 예약 소멸. 공유 .tres 미변형(런타임 인스턴스 변수).
+func reserve_next_slash_burst(range_mult: float, width_mult: float, heat_refund: float, window: float) -> void:
+	boon_next_slash_range_mult = max(1.0, range_mult)
+	boon_next_slash_width_mult = max(1.0, width_mult)
+	boon_next_slash_heat_refund = max(0.0, heat_refund)
+	_next_burst_t = max(window, 0.1)
 
 
 ## 거합(IAIDO_PERFECT) perfect 판정용 — 마지막 일섬 착지 시각(ms). 0=아직 일섬 착지 없음.
@@ -714,10 +772,17 @@ func _fire_slash() -> void:
 	var slash_range: float = lerp(data.min_slash_range, data.instant_slash_distance, charge_frac)
 	# 일섬연장(SLASH_EXTEND) — 패시브 사거리 배수(공유 .tres 미변형, 런타임 변수).
 	slash_range *= boon_slash_range_mult
+	# M9-S7 폭심 충전(EPICENTER_OVERCHARGE) — 예약된 다음 일섬 1발이면 사거리 대버스트.
+	var burst_active: bool = _next_burst_t > 0.0
+	if burst_active:
+		slash_range *= boon_next_slash_range_mult
 	var ext: Vector3 = data.slash_hit_extents
 	# 일섬연장(SLASH_EXTEND) — 패시브 폭/관통 배수. x=폭, z=전방 길이 가산 모두 확장.
 	if boon_slash_width_mult > 1.0:
 		ext = Vector3(ext.x * boon_slash_width_mult, ext.y, ext.z * boon_slash_width_mult)
+	# M9-S7 폭심 충전 — 예약된 다음 일섬 1발이면 폭 대버스트(x=폭, z=전방 길이 모두 확장).
+	if burst_active and boon_next_slash_width_mult > 1.0:
+		ext = Vector3(ext.x * boon_next_slash_width_mult, ext.y, ext.z * boon_next_slash_width_mult)
 	# 직전(또는 방금 발행된 ON_SLASH_CHARGED)에서 세팅된 부채 폭 확장 보너스를 이번 일섬에 소비.
 	# 공유 PlayerData.tres 를 변형하지 않도록 로컬 복사본의 x(폭)만 키운다(런마다 리셋되는 런타임 변수).
 	if boon_slash_fan_width_mult > 1.0:
@@ -767,6 +832,15 @@ func _fire_slash() -> void:
 		_slash_fixed_cd_t = max(data.slash_fixed_cooldown, 0.0)
 	else:
 		_add_heat()
+	# M9-S7 폭심 충전 — 예약 버스트 1발 소비. 열 환급(_add_heat 후 적용 — 누적 열을 일부 식힘) +
+	# 즉시 리셋(다음 일섬은 무효, 1발만 적용). 누적 금지.
+	if burst_active:
+		if boon_next_slash_heat_refund > 0.0:
+			_refund_heat(data.heat_overheat_threshold * boon_next_slash_heat_refund)
+		boon_next_slash_range_mult = 1.0
+		boon_next_slash_width_mult = 1.0
+		boon_next_slash_heat_refund = 0.0
+		_next_burst_t = 0.0
 
 func _update_dash(delta: float) -> void:
 	_dash_elapsed += delta

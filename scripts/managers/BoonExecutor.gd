@@ -43,6 +43,16 @@ const _CASCADE_KILL_CAP := 6
 const _CHAIN_RADIUS_DEFAULT := 3.0
 const _CHAIN_COUNT_DEFAULT := 2
 const _CHAIN_DEPTH_DEFAULT := 2
+# ── M9-S7: 납도 연쇄 카드 1차 — 4 신규 카드 코드 1차값(boons.json params 우선, 없으면 이 값) ──
+## 거합도미노(IAI_DOMINO) — 거합+만개 처형 시 주변 만개 적 일제 처형. epicenter 반경/마릿수 cap.
+const _IAI_DOMINO_RADIUS_DEFAULT := 4.0
+const _IAI_DOMINO_COUNT_DEFAULT := 3
+## 참예수확(REAPING_CULL) — 만개 처형 시 주변 미만 표식 적 일괄 정산(marks×단가).
+const _REAPING_CULL_RADIUS_DEFAULT := 2.5
+const _REAPING_PER_MARK_DEFAULT := 2
+## 전파인(MARK_CONTAGION) — 처형 시 최근접 표식 적 1마리에 표식 만개 전염. 1처형당 hops 홉.
+const _CONTAGION_HOPS_DEFAULT := 1
+
 ## baseline 6종 코드 1차값(카드 무관 항상 on — 강한 한정자로 약하게).
 const _BL_RIPPLE_RADIUS := 1.5     # 1 납도 파문 — 만개 적 1마리 흘려 처형
 const _BL_MARK_RADIUS := 3.0       # 2 참결 — 표식 살포
@@ -182,6 +192,14 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 	if total_marks > 0:
 		_sheathe_slowmo(is_perfect)
 		_sheathe_zoom(is_perfect)
+
+	# ── M9-S7 baseline④: 거합 추격 윈도우 — 이번 납도가 처치(ON_SHEATHE_KILL 1회 이상)를 냈으면
+	# Player 에 짧은 추격 윈도우(0.4s)를 1회 연다. 1차 정산이 적을 죽였을 때만(executed_pts 비어있지 않음
+	# = 1차 만개 처형 발생, 또는 _sheathe_kill_count>0 = 연쇄/신규카드 처형 발생). _on_sheathe 끝에서 1회만
+	# 호출해 다중 오픈 방지. open_sheathe_follow 가 _sheathe_follow_used 면 재오픈 거부(추격 1회 cap·무한 방지). ──
+	if (_sheathe_kill_count > 0 or not executed_pts.is_empty()) and _player != null \
+			and is_instance_valid(_player) and _player.has_method("open_sheathe_follow"):
+		_player.call("open_sheathe_follow")
 
 
 ## 거합 perfect 판정 — 마지막 일섬 착지 후 window(s) 이내 납도인가.
@@ -365,10 +383,20 @@ func _on_sheathe_kill(ctx) -> void:
 	var is_perfect: bool = bool(ctx.get("is_perfect", false))
 	var tier: int = int(ctx.get("tier", 0))
 	var depth: int = int(ctx.get("depth", 0))
+	var victim_marks: int = int(ctx.get("marks", 0))
 
 	# ── 연환납도(SHEATHE_DOMINO) — 카드 보유 시에만, epicenter 도미노(뎁스 cap·마릿수 cap). ──
 	if was_full and depth < _CASCADE_DEPTH_CAP and _sheathe_kill_count < _CASCADE_KILL_CAP:
 		_cascade_domino_from(epicenter, depth, is_perfect)
+
+	# ── M9-S7: 납도 연쇄 카드 4종(카드 보유 시에만). 전부 비재귀 뎁스1 — depth 증가 금지.
+	# ★take_hit/_settle 호출 분기(거합도미노/참예수확)는 핸들러 안에서 _in_cascade=true 로 감싸
+	#   ON_SHEATHE_KILL 재발(무한재귀)을 차단한다. 전파인/폭심 충전은 take_hit 미호출(set_meta/예약만). ──
+	if was_full:
+		_on_sheathe_kill_domino_iai(epicenter, is_perfect)   # 1 거합도미노(거합+만개 게이트는 핸들러 안)
+		_on_sheathe_kill_reaping(epicenter)                  # 2 참예수확
+		_on_sheathe_kill_overcharge(victim_marks)            # 3 폭심 충전
+		_on_sheathe_kill_contagion(epicenter)                # 4 전파인
 
 	# ── baseline 6종 — 항상(카드 무관). 자원 클램프는 각 호출/HealthComponent 가 보장. ──
 	_baseline_ripple(epicenter)        # 1 납도 파문
@@ -444,6 +472,177 @@ func _cascade_domino_from(epicenter: Vector3, depth: int, is_perfect: bool) -> v
 		if is_full and (depth + 1) < eff_depth_cap and _sheathe_kill_count < _CASCADE_KILL_CAP:
 			_cascade_domino_from((c["e"] as Node3D).global_position if is_instance_valid(c["e"]) else epicenter, depth + 1, is_perfect)
 	_in_cascade = prev_cascade
+
+
+# ══════════════ M9-S7: 납도 연쇄 카드 4종 — 전부 비재귀 뎁스1·_in_cascade 가드·보스 면역 ══════════════
+
+## 1 거합도미노(IAI_DOMINO) — was_full && is_perfect(거합)일 때만 발동. epicenter iai_radius 내
+## '만개(slash_mark>=cap)·비보스' 적 전원을 가까운 순 domino_count 마리까지 '한 번에' 일제 처형.
+## ★도미노 재귀가 아니라 한 번에(반복문 1회). _in_cascade=true 로 감싸 각 _settle_enemy 처형이
+## ON_SHEATHE_KILL 을 재발하지 않게 한다(무한연쇄 차단). _sheathe_kill_count 누적 + _CASCADE_KILL_CAP 안전망.
+func _on_sheathe_kill_domino_iai(epicenter: Vector3, is_perfect: bool) -> void:
+	if not is_perfect:
+		return  # 거합 납도 처형에서만 발동.
+	var has_card: bool = false
+	var radius: float = _IAI_DOMINO_RADIUS_DEFAULT
+	var count: int = _IAI_DOMINO_COUNT_DEFAULT
+	_for_each_effect("On_Sheathe", "IAI_DOMINO", func(_i, params):
+		has_card = true
+		radius = max(radius, float(params.get("iai_radius", _IAI_DOMINO_RADIUS_DEFAULT)))
+		count = max(count, int(params.get("domino_count", _IAI_DOMINO_COUNT_DEFAULT)))
+	)
+	if not has_card or radius <= 0.0 or count <= 0:
+		return
+	# epicenter 기준 '만개·비보스' 후보 수집 → 가까운 순 정렬.
+	var cands: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if e.is_in_group("boss"):
+			continue  # 보스 만개 면역.
+		if int(e.get_meta("slash_mark", 0)) < _MARK_CAP:
+			continue  # 만개만.
+		var d: float = (e as Node3D).global_position.distance_to(epicenter)
+		if d > radius:
+			continue
+		cands.append({"e": e, "d": d})
+	cands.sort_custom(func(a, b): return a["d"] < b["d"])
+	# ★연쇄 진입 — _in_cascade=true 동안 _settle_enemy 처형이 ON_SHEATHE_KILL 재발 안 함.
+	var prev: bool = _in_cascade
+	_in_cascade = true
+	var spread: int = 0
+	for c in cands:
+		if spread >= count:
+			break
+		if _sheathe_kill_count >= _CASCADE_KILL_CAP:
+			break
+		var e = c["e"]
+		if e == null or not is_instance_valid(e):
+			continue
+		var marks: int = int(e.get_meta("slash_mark", 0))
+		if marks < _MARK_CAP:
+			continue  # 그새 다른 전파로 거둬졌으면 스킵(visited 대용).
+		_cascade_bonus_marks += marks
+		_spawn_perfect_flash((e as Node3D).global_position)  # 흰 섬광 재사용.
+		_settle_enemy(e, marks, 1.0, 0, false)  # 만개라 9999 처형(연쇄 중 = 재발 안 함).
+		_sheathe_kill_count += 1
+		spread += 1
+	_in_cascade = prev
+
+
+## 2 참예수확(REAPING_CULL) — was_full 게이트. epicenter cull_radius 내 '미만 표식(0<marks<cap)·비보스'
+## 적 전원에 marks×per_mark_dmg 피해 일괄 정산(처형 의도 아님 — 죽으면 OK, 살았으면 표식 0 리셋).
+## ★_in_cascade=true 로 감싸 take_hit 사망이 ON_SHEATHE_KILL 재발 안 하게(무한연쇄 차단). 뎁스1 비재귀.
+func _on_sheathe_kill_reaping(epicenter: Vector3) -> void:
+	var has_card: bool = false
+	var radius: float = _REAPING_CULL_RADIUS_DEFAULT
+	var per_mark: int = _REAPING_PER_MARK_DEFAULT
+	_for_each_effect("On_Sheathe", "REAPING_CULL", func(_i, params):
+		has_card = true
+		radius = max(radius, float(params.get("cull_radius", _REAPING_CULL_RADIUS_DEFAULT)))
+		per_mark = max(per_mark, int(params.get("per_mark_dmg", _REAPING_PER_MARK_DEFAULT)))
+	)
+	if not has_card or radius <= 0.0:
+		return
+	# 후보 수집 — 미만 표식(0<marks<cap)·비보스·반경 내. (take_hit 중 free 가능성 대비 사전 수집.)
+	var targets: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if e.is_in_group("boss"):
+			continue  # 보스 면역.
+		var marks: int = int(e.get_meta("slash_mark", 0))
+		if marks <= 0 or marks >= _MARK_CAP:
+			continue  # 미만 표식만(표식0·만개 제외).
+		if (e as Node3D).global_position.distance_to(epicenter) > radius:
+			continue
+		targets.append(e)
+	if targets.is_empty():
+		return
+	# ★연쇄 진입 — take_hit 사망이 ON_SHEATHE_KILL 재발 안 함.
+	var prev: bool = _in_cascade
+	_in_cascade = true
+	for e in targets:
+		if e == null or not is_instance_valid(e) or not e.has_method("take_hit"):
+			continue
+		var marks: int = int(e.get_meta("slash_mark", 0))
+		if marks <= 0 or marks >= _MARK_CAP:
+			continue  # 그새 상태 변동 시 재확인.
+		var pos: Vector3 = (e as Node3D).global_position
+		_spawn_perfect_flash(pos)  # 노랑→흰 호 더미(재사용).
+		e.call("take_hit", max(marks * per_mark, 1))
+		# 처형 아님 — 살아남았으면 표식 0 리셋(이중 정산 방지).
+		if is_instance_valid(e):
+			e.set_meta("slash_mark", 0)
+	_in_cascade = prev
+
+
+## 3 폭심 충전(EPICENTER_OVERCHARGE) — was_full 게이트. 죽은 적 marks 비례 무관(1차값 고정 배수)로
+## Player 에 '다음 일섬 1발' 대버스트를 예약 위임(reserve_next_slash_burst). take_hit/_settle 미호출이라
+## 연쇄 무관(_in_cascade 불필요). 충전 디스크 더미 = _spawn_chain_arc 재사용.
+func _on_sheathe_kill_overcharge(_victim_marks: int) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if not _player.has_method("reserve_next_slash_burst"):
+		return
+	var has_card: bool = false
+	var range_mult: float = 1.5
+	var width_mult: float = 1.4
+	var heat_refund: float = 0.15
+	var window: float = 4.0
+	_for_each_effect("On_Sheathe", "EPICENTER_OVERCHARGE", func(_i, params):
+		has_card = true
+		range_mult = max(range_mult, float(params.get("range_mult", 1.5)))
+		width_mult = max(width_mult, float(params.get("width_mult", 1.4)))
+		heat_refund = max(heat_refund, float(params.get("heat_refund", 0.15)))
+		window = max(window, float(params.get("window", 4.0)))
+	)
+	if not has_card:
+		return
+	_player.call("reserve_next_slash_burst", range_mult, width_mult, heat_refund, window)
+	# 충전 디스크 더미(PC 발밑 청백 디스크) — 신규 노드 없이 _spawn_chain_arc 제자리 링 재사용.
+	if _player is Node3D:
+		var p: Vector3 = (_player as Node3D).global_position
+		_spawn_chain_arc(p, p)
+
+
+## 4 전파인(MARK_CONTAGION) — was_full 게이트. epicenter 최근접 '이미 표식 있는(slash_mark>0)·비보스'
+## 적을 hops 마리(각 홉 서로 다른 적, visited 중복 방지)에 표식 즉시 만개로 전염(set_meta cap). 0뎀·처형 안 함.
+## take_hit 미호출이라 ON_SHEATHE_KILL 재발 불가(전염이 또 전염 안 함 — hops 루프 1회 비재귀로 뎁스≤1 보장).
+func _on_sheathe_kill_contagion(epicenter: Vector3) -> void:
+	var has_card: bool = false
+	var hops: int = _CONTAGION_HOPS_DEFAULT
+	_for_each_effect("On_Sheathe", "MARK_CONTAGION", func(_i, params):
+		has_card = true
+		hops = max(hops, int(params.get("hops", _CONTAGION_HOPS_DEFAULT)))
+	)
+	if not has_card or hops <= 0:
+		return
+	var visited: Dictionary = {}
+	for _h in range(hops):
+		# epicenter 최근접 미방문 '표식 있는·비보스' 적 1마리.
+		var best: Node = null
+		var best_d: float = INF
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e == null or not is_instance_valid(e) or not (e is Node3D):
+				continue
+			if e.is_in_group("boss"):
+				continue  # 보스 면역.
+			if visited.has(e.get_instance_id()):
+				continue
+			var marks: int = int(e.get_meta("slash_mark", 0))
+			if marks <= 0 or marks >= _MARK_CAP:
+				continue  # 표식 있는(0<marks<cap) 적만 — 표식0·이미 만개 제외.
+			var d: float = (e as Node3D).global_position.distance_to(epicenter)
+			if d >= best_d:
+				continue
+			best_d = d
+			best = e
+		if best == null:
+			break  # 더 전염할 대상 없음.
+		best.set_meta("slash_mark", _MARK_CAP)  # 즉시 만개 전염(0뎀, 처형 안 함).
+		visited[best.get_instance_id()] = true
+		_spawn_chain_arc(epicenter, (best as Node3D).global_position)  # 전염 호.
 
 
 # ══════════════ M9-S6: baseline 6종 (코드 상수·항상 on·0뎀 셋업/자원) ══════════════

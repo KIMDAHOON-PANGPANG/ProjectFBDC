@@ -209,6 +209,90 @@
           }
         }
       ]
+    },
+    {
+      "id": "iai_domino",
+      "name": "거합도미노(居合連鎖)",
+      "desc": "거합(퍼펙트 납도)으로 만개 적을 처형하면, 주변의 다른 만개 적들이 일제히 함께 처형된다. 단 한 번의 거합으로 무리를 베어 넘긴다.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "IAI_DOMINO",
+          "params_by_rarity": {
+            "chosim": { "iai_radius": 4.0, "domino_count": 3 },
+            "rare":   { "iai_radius": 4.2, "domino_count": 3 },
+            "uniq":   { "iai_radius": 4.6, "domino_count": 4 },
+            "legend": { "iai_radius": 5.0, "domino_count": 4 },
+            "master": { "iai_radius": 5.4, "domino_count": 5 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "reaping_cull",
+      "name": "참예수확(斬刈收穫)",
+      "desc": "납도가 만개 적을 처형하면, 주변의 미만 표식 적 전원에게 새긴 표식만큼 일괄 피해가 정산된다. 군집을 단숨에 정리한다.",
+      "kind": "sheathe",
+      "skill_type": "마무리",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "REAPING_CULL",
+          "params_by_rarity": {
+            "chosim": { "cull_radius": 2.5, "per_mark_dmg": 2 },
+            "rare":   { "cull_radius": 2.8, "per_mark_dmg": 2 },
+            "uniq":   { "cull_radius": 3.2, "per_mark_dmg": 3 },
+            "legend": { "cull_radius": 3.6, "per_mark_dmg": 3 },
+            "master": { "cull_radius": 4.0, "per_mark_dmg": 4 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "epicenter_overcharge",
+      "name": "폭심 충전(爆心充塡)",
+      "desc": "납도 처형의 표식에 비례해 다음 일섬 단 한 발이 대버스트로 충전된다 — 사거리·폭이 늘고 열이 환급된다.",
+      "kind": "control",
+      "skill_type": "조작",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "EPICENTER_OVERCHARGE",
+          "params_by_rarity": {
+            "chosim": { "range_mult": 1.5, "width_mult": 1.4, "heat_refund": 0.15, "window": 4.0 },
+            "rare":   { "range_mult": 1.55, "width_mult": 1.45, "heat_refund": 0.17, "window": 4.0 },
+            "uniq":   { "range_mult": 1.65, "width_mult": 1.55, "heat_refund": 0.2, "window": 4.0 },
+            "legend": { "range_mult": 1.75, "width_mult": 1.65, "heat_refund": 0.23, "window": 4.0 },
+            "master": { "range_mult": 1.9, "width_mult": 1.8, "heat_refund": 0.27, "window": 4.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mark_contagion",
+      "name": "전파인(傳播刃)",
+      "desc": "납도 처형이 일어나면 가장 가까운 이미 표식이 있는 적 1마리에게 표식이 단숨에 만개로 전염된다. 표식이 번져 연쇄 처형의 불씨가 된다.",
+      "kind": "mark",
+      "skill_type": "표식",
+      "style_req": "iaido",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "MARK_CONTAGION",
+          "params_by_rarity": {
+            "chosim": { "hops": 1 },
+            "rare":   { "hops": 1 },
+            "uniq":   { "hops": 1 },
+            "legend": { "hops": 2 },
+            "master": { "hops": 2 }
+          }
+        }
+      ]
     }
   ]
 }
