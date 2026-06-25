@@ -359,6 +359,16 @@ func _build() -> void:
 	t_stat.add_child(_btn("명부의 영역 (결계 틱딜)", func(): _equip_boon("jeoseung_realm")))
 	t_stat.add_child(_btn("구혼사슬 (다수 견인)", func(): _equip_boon("jeoseung_soul_chain")))
 
+	# 처녀귀신 은혜 장착(능동 FX 테스트) — 유일(uniq) 등급 즉시 장착.
+	t_stat.add_child(_title("처녀귀신 은혜 장착 (uniq)"))
+	t_stat.add_child(_btn("난발 (결계선 존)", func(): _equip_boon("cheonyeo_hair_line")))
+	t_stat.add_child(_btn("교차원한 (X자 참혼)", func(): _equip_boon("cheonyeo_cross_slash")))
+	t_stat.add_child(_btn("대원혼 (원귀 처형)", func(): _equip_boon("cheonyeo_great_wraith")))
+	t_stat.add_child(_btn("회포일섬 (곡선 베기)", func(): _equip_boon("cheonyeo_curve_slash")))
+	t_stat.add_child(_btn("머리채 (먼 적 견인)", func(): _equip_boon("cheonyeo_hair_grab")))
+	t_stat.add_child(_btn("소복결계 (대형 결계)", func(): _equip_boon("cheonyeo_shroud_zone")))
+	t_stat.add_child(_btn("단발참 (결계 폭파)", func(): _equip_boon("cheonyeo_hair_detonate")))
+
 	# 현재 스탯 탭 — 읽기 전용(튜닝 반영된 최종 적용값)
 	var t_cur := _tab("현재")
 	tabs.add_child(t_cur)

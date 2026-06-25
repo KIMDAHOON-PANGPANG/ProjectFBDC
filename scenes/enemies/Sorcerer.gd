@@ -45,6 +45,9 @@ const _HOLRIM_CAP := 8.0
 ## 저승사자 명부 낙인(nakin_marks) — 보라 디버프 아이콘 색(별개 슬롯). #7b5cf0.
 const _NAKIN_COLOR := Color(0.482, 0.361, 0.941)
 const _NAKIN_CAP := 8.0
+## 처녀귀신 원한(wonhan_marks) — 진홍 디버프 아이콘 색(별개 슬롯). #d11f3a.
+const _WONHAN_COLOR := Color(0.820, 0.122, 0.227)
+const _WONHAN_CAP := 8.0
 
 const _TINT := Color(0.62, 0.32, 1.0)  # 보라 — 마법사
 
@@ -178,6 +181,17 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "nakin")
+	# ── 처녀귀신 원한(wonhan_marks) — int 누적. 활성 시 진홍 디버프 아이콘(별개 슬롯).
+	var wonhan := int(get_meta("wonhan_marks", 0))
+	if wonhan > 0:
+		_status_strip.call("set_status", "wonhan", {
+			"value": clampf(float(wonhan) / _WONHAN_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _WONHAN_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "wonhan")
 
 
 ## 도깨비 불씨 몸 펄스(직접 modulate 모델). flash/phase 트윈·유령화 진행 중엔 스킵

@@ -4,8 +4,8 @@ func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 30)" % all.size())
-	assert(all.size() == 30, "all_boons 크기 불일치")
+	print("all_boons size: %d (기대: 37)" % all.size())
+	assert(all.size() == 37, "all_boons 크기 불일치")
 
 	var mark = _B.by_id("gumiho_mark")
 	print("by_id(gumiho_mark) name: %s" % str(mark.get("name", "?")))
@@ -25,6 +25,10 @@ func _initialize() -> void:
 	var jeo_list := _B.by_yokai("JEOSEUNG")
 	print("by_yokai(JEOSEUNG) size: %d (기대: 8)" % jeo_list.size())
 	assert(jeo_list.size() == 8, "by_yokai(JEOSEUNG) 크기 불일치")
+
+	var cheo_list := _B.by_yokai("CHEONYEO")
+	print("by_yokai(CHEONYEO) size: %d (기대: 7)" % cheo_list.size())
+	assert(cheo_list.size() == 7, "by_yokai(CHEONYEO) 크기 불일치")
 
 	var rarities := _B.rarities_for("gumiho_mark")
 	print("rarities_for(gumiho_mark): %s" % str(rarities))
@@ -204,5 +208,37 @@ func _initialize() -> void:
 			seen_yokais.append(first_yokai)
 	print("draw_boons 단일요괴 스폿체크 통과. 등장 요괴: %s" % str(seen_yokais))
 
-	print("boon_load_check: 전체 통과 (30장 = 구미호8 + 도깨비7 + 물귀신7 + 저승사자8)")
+	# ── 처녀귀신 7카드 스폿체크 ──
+	var cheo_ids := ["cheonyeo_hair_line", "cheonyeo_cross_slash", "cheonyeo_great_wraith",
+		"cheonyeo_curve_slash", "cheonyeo_hair_grab", "cheonyeo_shroud_zone",
+		"cheonyeo_hair_detonate"]
+	for cid in cheo_ids:
+		var b = _B.by_id(cid)
+		assert(b != null, "%s 없음" % cid)
+		assert(String(b.get("yokai", "")) == "CHEONYEO", "%s yokai 불일치" % cid)
+		var comps = b.get("components", [])
+		assert(comps.size() > 0, "%s components 없음" % cid)
+		var rar := _B.rarities_for(cid)
+		assert(rar == ["chosim", "rare", "uniq", "legend", "master"], "%s rarities 불일치" % cid)
+
+	# 효과 매핑 스폿체크.
+	var c_hair_line = _B.by_id("cheonyeo_hair_line").get("components", [])[0]
+	assert(String(c_hair_line.get("trigger", "")) == "On_Dash", "hair_line trigger 불일치")
+	assert(String(c_hair_line.get("effect", "")) == "HAIR_LINE", "hair_line effect 불일치")
+	var c_cross = _B.by_id("cheonyeo_cross_slash").get("components", [])[0]
+	assert(String(c_cross.get("effect", "")) == "CROSS_SLASH", "cross_slash effect 불일치")
+	var c_wraith = _B.by_id("cheonyeo_great_wraith").get("components", [])[0]
+	assert(String(c_wraith.get("trigger", "")) == "On_Kill_via_Slash", "great_wraith trigger 불일치")
+	assert(String(c_wraith.get("effect", "")) == "GREAT_WRAITH", "great_wraith effect 불일치")
+	var c_detonate = _B.by_id("cheonyeo_hair_detonate").get("components", [])[0]
+	assert(String(c_detonate.get("trigger", "")) == "On_Slash_End", "hair_detonate trigger 불일치")
+	assert(String(c_detonate.get("effect", "")) == "HAIR_DETONATE", "hair_detonate effect 불일치")
+
+	# params 스폿체크.
+	var shroud_uniq := _B.params_for("cheonyeo_shroud_zone", "uniq")
+	assert(float(shroud_uniq.get("radius", 0.0)) > 0.0, "shroud_zone radius 불량")
+	var grab_uniq := _B.params_for("cheonyeo_hair_grab", "uniq")
+	assert(float(grab_uniq.get("speed", 0.0)) > 0.0, "hair_grab speed 불량")
+
+	print("boon_load_check: 전체 통과 (37장 = 구미호8 + 도깨비7 + 물귀신7 + 저승사자8 + 처녀귀신7)")
 	quit()

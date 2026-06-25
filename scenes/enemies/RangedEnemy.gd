@@ -39,6 +39,9 @@ const _EMBER_COLOR := Color(1.0, 0.23, 0.1)
 ## 저승사자 명부 낙인(nakin_marks) — 보라 디버프 아이콘 색(별개 슬롯). #7b5cf0.
 const _NAKIN_COLOR := Color(0.482, 0.361, 0.941)
 const _NAKIN_CAP := 8.0
+## 처녀귀신 원한(wonhan_marks) — 진홍 디버프 아이콘 색(별개 슬롯). #d11f3a.
+const _WONHAN_COLOR := Color(0.820, 0.122, 0.227)
+const _WONHAN_CAP := 8.0
 
 ## Multiplier injected by bullet-time. 1.0 = normal, 0.25 = slow.
 var time_scale_mult: float = 1.0
@@ -155,6 +158,17 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "nakin")
+	# ── 처녀귀신 원한(wonhan_marks) — int 누적. 활성 시 진홍 디버프 아이콘(별개 슬롯).
+	var wonhan := int(get_meta("wonhan_marks", 0))
+	if wonhan > 0:
+		_status_strip.call("set_status", "wonhan", {
+			"value": clampf(float(wonhan) / _WONHAN_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _WONHAN_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "wonhan")
 
 func _physics_process(delta: float) -> void:
 	if _dead:

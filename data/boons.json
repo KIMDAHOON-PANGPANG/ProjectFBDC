@@ -599,6 +599,146 @@
           }
         }
       ]
+    },
+    {
+      "id": "cheonyeo_hair_line",
+      "yokai": "CHEONYEO",
+      "skill_type": "질주",
+      "name": "난발",
+      "desc": "회피를 마칠 때 발밑에 진홍 결계선을 깔아 닿은 적에게 도트와 슬로우를 준다. 단발참이 결산한다",
+      "components": [
+        {
+          "trigger": "On_Dash",
+          "effect": "HAIR_LINE",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.2, "duration": 2.6, "slow_mult": 0.7,  "dot_interval": 0.7,  "dot_damage": 1, "wonhan_add": 1 },
+            "rare":    { "radius": 2.6, "duration": 3.0, "slow_mult": 0.65, "dot_interval": 0.65, "dot_damage": 1, "wonhan_add": 1 },
+            "uniq":    { "radius": 3.0, "duration": 3.4, "slow_mult": 0.6,  "dot_interval": 0.6,  "dot_damage": 1, "wonhan_add": 1 },
+            "legend":  { "radius": 3.4, "duration": 3.8, "slow_mult": 0.55, "dot_interval": 0.55, "dot_damage": 2, "wonhan_add": 1 },
+            "master":  { "radius": 4.0, "duration": 4.4, "slow_mult": 0.5,  "dot_interval": 0.5,  "dot_damage": 2, "wonhan_add": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cheonyeo_cross_slash",
+      "yokai": "CHEONYEO",
+      "skill_type": "타격",
+      "name": "교차원한",
+      "desc": "일섬 적중마다 X자 참혼 추가타와 원한을 부여하고, 원한 적 재타격 시 십자 폭발을 일으킨다",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "CROSS_SLASH",
+          "params_by_rarity": {
+            "chosim":  { "per_hits": 3, "range": 2.6, "width": 1.4, "damage": 1, "wonhan_add": 1, "cross_radius": 2.2, "cross_damage": 1 },
+            "rare":    { "per_hits": 3, "range": 2.9, "width": 1.6, "damage": 1, "wonhan_add": 1, "cross_radius": 2.4, "cross_damage": 1 },
+            "uniq":    { "per_hits": 2, "range": 3.2, "width": 1.8, "damage": 1, "wonhan_add": 1, "cross_radius": 2.6, "cross_damage": 1 },
+            "legend":  { "per_hits": 2, "range": 3.6, "width": 2.1, "damage": 2, "wonhan_add": 2, "cross_radius": 3.0, "cross_damage": 2 },
+            "master":  { "per_hits": 1, "range": 4.0, "width": 2.4, "damage": 2, "wonhan_add": 2, "cross_radius": 3.4, "cross_damage": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cheonyeo_great_wraith",
+      "yokai": "CHEONYEO",
+      "skill_type": "권능",
+      "name": "대원혼",
+      "desc": "일섬으로 처치 시 진홍 원귀들이 솟구쳐 포위하고 반경을 광역 처형·결박한다",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "GREAT_WRAITH",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.6, "damage": 2, "execute_threshold": 2, "root_duration": 0.4, "wonhan_cap": 6 },
+            "rare":    { "radius": 3.0, "damage": 2, "execute_threshold": 3, "root_duration": 0.5, "wonhan_cap": 7 },
+            "uniq":    { "radius": 3.6, "damage": 3, "execute_threshold": 3, "root_duration": 0.6, "wonhan_cap": 8 },
+            "legend":  { "radius": 4.2, "damage": 3, "execute_threshold": 4, "root_duration": 0.7, "wonhan_cap": 9 },
+            "master":  { "radius": 5.0, "damage": 4, "execute_threshold": 5, "root_duration": 1.0, "wonhan_cap": 10 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cheonyeo_curve_slash",
+      "yokai": "CHEONYEO",
+      "skill_type": "공격",
+      "name": "회포일섬",
+      "desc": "일섬을 마칠 때 곡선 머리채 궤적으로 다단 베기하고 결계호 잔류 존을 남긴다",
+      "components": [
+        {
+          "trigger": "On_Slash_End",
+          "effect": "CURVE_SLASH",
+          "params_by_rarity": {
+            "chosim":  { "radius": 2.6, "damage": 1, "hits": 1, "zone_duration": 1.6, "zone_radius": 1.8 },
+            "rare":    { "radius": 2.9, "damage": 1, "hits": 2, "zone_duration": 1.8, "zone_radius": 2.0 },
+            "uniq":    { "radius": 3.2, "damage": 1, "hits": 2, "zone_duration": 2.0, "zone_radius": 2.2 },
+            "legend":  { "radius": 3.6, "damage": 2, "hits": 3, "zone_duration": 2.4, "zone_radius": 2.6 },
+            "master":  { "radius": 4.2, "damage": 2, "hits": 3, "zone_duration": 3.0, "zone_radius": 3.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cheonyeo_hair_grab",
+      "yokai": "CHEONYEO",
+      "skill_type": "속박",
+      "name": "머리채",
+      "desc": "일섬 적중 시 머리카락 채찍으로 먼 적을 견인·결박하고 원한을 부여한다",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "HAIR_GRAB",
+          "params_by_rarity": {
+            "chosim":  { "speed": 16.0, "radius": 0.9, "pull_to_pc": 9.0,  "root_duration": 0.6, "wonhan_add": 1, "count": 1, "per_hits": 3 },
+            "rare":    { "speed": 17.0, "radius": 1.0, "pull_to_pc": 10.0, "root_duration": 0.8, "wonhan_add": 1, "count": 1, "per_hits": 3 },
+            "uniq":    { "speed": 18.0, "radius": 1.1, "pull_to_pc": 12.0, "root_duration": 1.0, "wonhan_add": 1, "count": 1, "per_hits": 2 },
+            "legend":  { "speed": 19.0, "radius": 1.2, "pull_to_pc": 14.0, "root_duration": 1.2, "wonhan_add": 2, "count": 2, "per_hits": 2 },
+            "master":  { "speed": 21.0, "radius": 1.3, "pull_to_pc": 16.0, "root_duration": 1.5, "wonhan_add": 2, "count": 2, "per_hits": 1 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cheonyeo_shroud_zone",
+      "yokai": "CHEONYEO",
+      "skill_type": "결계",
+      "name": "소복결계",
+      "desc": "퍼펙트 회피 시 진홍 결계 원진을 펼쳐 내부 적을 늦추고 주기적으로 도트 피해를 준다",
+      "components": [
+        {
+          "trigger": "On_Just_Dodge",
+          "effect": "SHROUD_ZONE",
+          "params_by_rarity": {
+            "chosim":  { "radius": 3.8, "duration": 3.6, "slow_mult": 0.7,  "dot_interval": 0.6,  "dot_damage": 1 },
+            "rare":    { "radius": 4.4, "duration": 4.2, "slow_mult": 0.65, "dot_interval": 0.55, "dot_damage": 1 },
+            "uniq":    { "radius": 5.2, "duration": 5.0, "slow_mult": 0.6,  "dot_interval": 0.5,  "dot_damage": 1 },
+            "legend":  { "radius": 5.8, "duration": 5.6, "slow_mult": 0.55, "dot_interval": 0.45, "dot_damage": 2 },
+            "master":  { "radius": 6.6, "duration": 6.4, "slow_mult": 0.5,  "dot_interval": 0.4,  "dot_damage": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cheonyeo_hair_detonate",
+      "yokai": "CHEONYEO",
+      "skill_type": "등불",
+      "name": "단발참",
+      "desc": "일섬을 마칠 때 깔아둔 진홍 결계존을 일제히 끊어 방사 대폭발을 일으키고 원한 적을 처형한다",
+      "components": [
+        {
+          "trigger": "On_Slash_End",
+          "effect": "HAIR_DETONATE",
+          "params_by_rarity": {
+            "chosim":  { "knockback": 9.0,  "burst_radius": 2.6, "execute_threshold": 2 },
+            "rare":    { "knockback": 10.0, "burst_radius": 2.9, "execute_threshold": 3 },
+            "uniq":    { "knockback": 12.0, "burst_radius": 3.2, "execute_threshold": 3 },
+            "legend":  { "knockback": 14.0, "burst_radius": 3.6, "execute_threshold": 4 },
+            "master":  { "knockback": 17.0, "burst_radius": 4.2, "execute_threshold": 5 }
+          }
+        }
+      ]
     }
   ]
 }

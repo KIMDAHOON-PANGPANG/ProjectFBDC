@@ -37,6 +37,8 @@ const GOLD := Color(1.0, 0.76, 0.2)
 const WATER := Color(0.184, 0.624, 0.878)
 ## 저승사자 보라 틴트(공통, #7b5cf0).
 const PURPLE := Color(0.482, 0.361, 0.941)
+## 처녀귀신 진홍 틴트 #d11f3a.
+const CRIMSON := Color(0.820, 0.122, 0.227)
 ## 명부 낙인(nakin_marks) 가시화 정규화 상한(아이콘 게이지 풀 = master cap 8).
 const NAKIN_CAP := 8
 
@@ -135,6 +137,11 @@ func _on_slash_hit(ctx: Dictionary) -> void:
 		func(i, params): _soul_homing(i, ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "EXECUTE",
 		func(i, params): _soul_execute(i, ctx, params))
+	# ── 처녀귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "CROSS_SLASH",
+		func(i, params): _cross_slash(i, ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_SLASH_HIT, "HAIR_GRAB",
+		func(i, params): _hair_grab(i, ctx, params))
 
 
 func _on_kill_via_slash(ctx: Dictionary) -> void:
@@ -156,6 +163,9 @@ func _on_kill_via_slash(ctx: Dictionary) -> void:
 		func(_i, params): _summon_saja(ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "LANTERN_ZONE",
 		func(_i, params): _lantern_zone(ctx, params))
+	# ── 처녀귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_KILL_VIA_SLASH, "GREAT_WRAITH",
+		func(_i, params): _great_wraith(ctx, params))
 
 
 func _on_dash_pass_enemy(ctx: Dictionary) -> void:
@@ -170,6 +180,9 @@ func _on_dash(ctx: Dictionary) -> void:
 	# ── 저승사자 ──
 	_for_each_effect(_TriggerBusScript.ON_DASH, "CHAIN_SHARD",
 		func(_i, params): _chain_shard(ctx, params))
+	# ── 처녀귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_DASH, "HAIR_LINE",
+		func(_i, params): _hair_line(ctx, params))
 
 
 func _on_slash_end(ctx: Dictionary) -> void:
@@ -188,6 +201,11 @@ func _on_slash_end(ctx: Dictionary) -> void:
 		func(_i, params): _clone_saja(ctx, params))
 	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "SOUL_CHAIN",
 		func(_i, params): _soul_chain(ctx, params))
+	# ── 처녀귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "CURVE_SLASH",
+		func(_i, params): _curve_slash(ctx, params))
+	_for_each_effect(_TriggerBusScript.ON_SLASH_END, "HAIR_DETONATE",
+		func(_i, params): _hair_detonate(ctx, params))
 
 
 func _on_slash_charged(ctx: Dictionary) -> void:
@@ -209,6 +227,9 @@ func _on_just_dodge(ctx: Dictionary) -> void:
 	# ── 저승사자 ──
 	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "REALM",
 		func(_i, params): _realm(ctx, params))
+	# ── 처녀귀신 ──
+	_for_each_effect(_TriggerBusScript.ON_JUST_DODGE, "SHROUD_ZONE",
+		func(_i, params): _shroud_zone(ctx, params))
 
 
 func _on_mark_full(ctx: Dictionary) -> void:
@@ -1557,6 +1578,325 @@ func _nearest_enemy_excluding_list(pos: Vector3, exclude: Array) -> Node:
 			best_d = d
 			best = e
 	return best
+
+
+# ══════════════ 처녀귀신 — 원한(wonhan) 표식 공용 ══════════════
+
+## 원한 표식 누적 — nakin 패턴 복제, 진홍 인장 플래시. cap 전이 순간 파편 버스트.
+func _add_wonhan(target: Node, add: int, cap: int) -> void:
+	if target == null or not is_instance_valid(target) or not (target is Node3D):
+		return
+	if (target as Node).is_in_group("boss"):
+		return
+	var c: int = cap if cap > 0 else NAKIN_CAP
+	var cur := int(target.get_meta("wonhan_marks", 0))
+	var nv: int = min(cur + add, c)
+	target.set_meta("wonhan_marks", nv)
+	_spawn_mark_flash_color(target, CRIMSON)
+	if cur < c and nv >= c:
+		_spawn_shard_burst(target, 1.4)
+
+
+# ══════════════ 처녀귀신 — HAIR_LINE(난발) ══════════════
+
+## 회피 종료 시 PC 발밑 진홍 결계선 존(BoonCharmZone 진홍 변형). GRP_ZONE 등록(단발참 소모).
+func _hair_line(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		if _player is Node3D:
+			pos = (_player as Node3D).global_position
+		else:
+			return
+	var host := _effect_host()
+	if host == null:
+		return
+	var zp := params.duplicate()
+	zp["tint"] = CRIMSON
+	var zone := _CharmZoneScript.new() as Node3D
+	zone.add_to_group(GRP_ZONE)
+	host.add_child(zone)
+	zone.call("init_zone", pos, zp, _player)
+	# 생성 즉시 반경 적에 도트 + 원한.
+	var radius := maxf(float(params.get("radius", 2.5)), 0.5)
+	var dot_dmg := int(params.get("dot_damage", 1))
+	var wonhan_add := int(params.get("wonhan_add", 1))
+	var slow_mult := float(params.get("slow_mult", 0.6))
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if ((e as Node3D).global_position - pos).length() <= radius:
+			if e.has_method("take_hit"):
+				e.call("take_hit", dot_dmg)
+			if e.has_method("apply_zone_slow"):
+				e.call("apply_zone_slow", slow_mult)
+			_add_wonhan(e, wonhan_add, NAKIN_CAP)
+
+
+# ══════════════ 처녀귀신 — CROSS_SLASH(교차원한) ══════════════
+
+## 일섬 적중 N회마다 전방 X자 추가타 + 원한. 원한 보유 적 재타격 시 십자 폭발.
+func _cross_slash(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:
+	var per_hits := int(params.get("per_hits", 2))
+	var k := boon_index + 600000
+	_fan_counters[k] = int(_fan_counters.get(k, 0)) + 1
+	if _fan_counters[k] < per_hits:
+		return
+	_fan_counters[k] = 0
+	if _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var origin: Vector3 = (_player as Node3D).global_position
+	var rng := float(params.get("range", 3.0))
+	var width := float(params.get("width", 1.6))
+	var damage := int(params.get("damage", 1))
+	var wonhan_add := int(params.get("wonhan_add", 1))
+	var cross_radius := maxf(float(params.get("cross_radius", 2.6)), 0.5)
+	var cross_damage := int(params.get("cross_damage", 1))
+	var aim := Vector3(1, 0, 0)
+	var av = _player.get("_aim_dir")
+	if av is Vector3 and (av as Vector3).length_squared() > 0.0001:
+		aim = (av as Vector3).normalized()
+	var cos_half: float = clampf(1.0 - width * 0.18, -0.3, 0.9)
+	# X자 추가타 + 원한.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		var to_e: Vector3 = (e as Node3D).global_position - origin
+		to_e.y = 0.0
+		var d: float = to_e.length()
+		if d > rng or d < 0.05:
+			continue
+		if aim.dot(to_e.normalized()) < cos_half:
+			continue
+		if e.has_method("take_hit"):
+			e.call("take_hit", damage)
+		_add_wonhan(e, wonhan_add, NAKIN_CAP)
+	# 원한 보유 적 십자 폭발(범위 안 원한 적 위치마다).
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if int(e.get_meta("wonhan_marks", 0)) <= 0:
+			continue
+		var to_e: Vector3 = (e as Node3D).global_position - origin
+		to_e.y = 0.0
+		if to_e.length() > rng:
+			continue
+		var epos: Vector3 = (e as Node3D).global_position
+		for e2 in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(e2) or not (e2 is Node3D) or e2.is_in_group("boss"):
+				continue
+			if ((e2 as Node3D).global_position - epos).length() <= cross_radius:
+				if e2.has_method("take_hit"):
+					e2.call("take_hit", cross_damage)
+		_spawn_burst_particles(epos + Vector3(0, 0.6, 0), 24, 1.5, CRIMSON)
+	_spawn_fan_arc_color(origin + aim * (rng * 0.4), width, CRIMSON)
+
+
+# ══════════════ 처녀귀신 — GREAT_WRAITH(대원혼) ══════════════
+
+## 일섬 처치 시 진홍 원귀 포위 솟구침 연출 + 반경 광역 처형 + 결박.
+func _great_wraith(ctx: Dictionary, params: Dictionary) -> void:
+	var target = ctx.get("target", null)
+	var pos = ctx.get("position", null)
+	var center: Vector3
+	if pos is Vector3:
+		center = pos
+	elif target is Node3D:
+		center = (target as Node3D).global_position
+	elif _player is Node3D:
+		center = (_player as Node3D).global_position
+	else:
+		return
+	var radius := maxf(float(params.get("radius", 3.0)), 0.5)
+	var damage := int(params.get("damage", 2))
+	var threshold := int(params.get("execute_threshold", 3))
+	var root_dur := float(params.get("root_duration", 0.6))
+	# 원귀 포위 솟구침 연출.
+	_spawn_burst_particles(center + Vector3(0, 0.4, 0), 34, 2.0, CRIMSON)
+	_spawn_burst_particles(center + Vector3(0, 1.0, 0), 18, 1.4, CRIMSON)
+	# 반경 적 처리.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if ((e as Node3D).global_position - center).length() > radius:
+			continue
+		if e.has_method("take_hit"):
+			e.call("take_hit", damage)
+		var hp_now := _enemy_hp(e)
+		if hp_now >= 0 and hp_now <= threshold:
+			if e.has_method("take_hit"):
+				e.call("take_hit", 999)
+		e.set_meta("boon_root_until_msec", Time.get_ticks_msec() + int(root_dur * 1000.0))
+	# 카메라 쉐이크.
+	var rig := get_tree().get_first_node_in_group("camera_rig")
+	if rig != null and is_instance_valid(rig) and rig.has_method("shake"):
+		rig.call("shake", 0.12, 0.3)
+
+
+# ══════════════ 처녀귀신 — CURVE_SLASH(회포일섬) ══════════════
+
+## 일섬 착지 시 곡선 다단 베기 + 결계호 잔류 존.
+func _curve_slash(ctx: Dictionary, params: Dictionary) -> void:
+	if _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var center: Vector3 = (_player as Node3D).global_position
+	var radius := maxf(float(params.get("radius", 3.0)), 0.5)
+	var damage := int(params.get("damage", 1))
+	var hits := int(params.get("hits", 2))
+	var zone_duration := maxf(float(params.get("zone_duration", 2.0)), 0.3)
+	var zone_radius := maxf(float(params.get("zone_radius", 2.2)), 0.3)
+	# 다단 베기 — 반경 적에 hits 회 take_hit.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if ((e as Node3D).global_position - center).length() <= radius:
+			for _h in range(hits):
+				if is_instance_valid(e) and e.has_method("take_hit"):
+					e.call("take_hit", damage)
+	# 곡선 호 연출.
+	_spawn_fan_arc_color(center, 2.0, CRIMSON)
+	_spawn_burst_particles(center + Vector3(0, 0.5, 0), 20, 1.4, CRIMSON)
+	# 잔류 결계호 존.
+	var host := _effect_host()
+	if host == null:
+		return
+	var zp := {
+		"radius": zone_radius,
+		"duration": zone_duration,
+		"pull": 1.0,
+		"tint": CRIMSON,
+	}
+	var zone := _CharmZoneScript.new() as Node3D
+	zone.add_to_group(GRP_ZONE)
+	host.add_child(zone)
+	zone.call("init_zone", center, zp, _player)
+
+
+# ══════════════ 처녀귀신 — HAIR_GRAB(머리채) ══════════════
+
+## 일섬 적중 N회마다 가장 먼 적에 진홍 머리채 발사 → 견인+결박+원한. BoonWaterGrab 진홍 변형.
+func _hair_grab(boon_index: int, ctx: Dictionary, params: Dictionary) -> void:
+	var per_hits := int(params.get("per_hits", 1))
+	if per_hits > 1:
+		var k := boon_index + 700000
+		_fan_counters[k] = int(_fan_counters.get(k, 0)) + 1
+		if _fan_counters[k] < per_hits:
+			return
+		_fan_counters[k] = 0
+	var host := _effect_host()
+	if host == null or _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var origin: Vector3 = (_player as Node3D).global_position + Vector3(0, 0.6, 0)
+	var hit_target = ctx.get("target", null)
+	var count := int(params.get("count", 1))
+	var wonhan_add := int(params.get("wonhan_add", 1))
+	var gp := params.duplicate()
+	gp["tint"] = CRIMSON
+	for k in range(count):
+		if get_tree().get_nodes_in_group(GRP_PROJ).size() >= PROJ_CAP:
+			break
+		var seed_target := _farthest_enemy_excluding(origin, hit_target)
+		if seed_target == null:
+			seed_target = _farthest_enemy_excluding(origin, null)
+		if seed_target == null:
+			break
+		# 발사 전 원한 부여.
+		_add_wonhan(seed_target, wonhan_add, NAKIN_CAP)
+		var pr := _WaterGrabScript.new() as Node3D
+		pr.add_to_group(GRP_PROJ)
+		host.add_child(pr)
+		var fire_dir: Vector3 = (seed_target as Node3D).global_position - origin
+		pr.call("init_grab", origin, fire_dir, gp, _player, seed_target)
+
+
+# ══════════════ 처녀귀신 — SHROUD_ZONE(소복결계) ══════════════
+
+## 퍼펙트 회피 시 대형 진홍 결계 — 내부 슬로우/주기 도트(IgniteZone 재사용).
+func _shroud_zone(ctx: Dictionary, params: Dictionary) -> void:
+	var pos = _ctx_position(ctx)
+	if not (pos is Vector3):
+		if _player is Node3D:
+			pos = (_player as Node3D).global_position
+		else:
+			return
+	var host := _effect_host()
+	if host == null:
+		return
+	var duration := maxf(float(params.get("duration", 5.0)), 0.5)
+	var radius := maxf(float(params.get("radius", 5.0)), 0.5)
+	var slow_mult := float(params.get("slow_mult", 0.6))
+	var zp := {
+		"radius": radius,
+		"duration": duration,
+		"dot_interval": maxf(float(params.get("dot_interval", 0.5)), 0.1),
+		"dot_damage": int(params.get("dot_damage", 1)),
+		"foxfire_interval": duration + 10.0,
+		"foxfire_speed": 1.0,
+		"tint": CRIMSON,
+	}
+	var z := _IgniteZoneScript.new() as Node3D
+	z.add_to_group(GRP_ZONE)
+	host.add_child(z)
+	z.call("init_zone", pos, zp, GRP_PROJ, PROJ_CAP)
+	# 생성 즉시 반경 적 감속.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+			continue
+		if ((e as Node3D).global_position - pos).length() <= radius:
+			if e.has_method("apply_zone_slow"):
+				e.call("apply_zone_slow", slow_mult)
+
+
+# ══════════════ 처녀귀신 — HAIR_DETONATE(단발참) ══════════════
+
+## 일섬 착지 시 GRP_ZONE 결계존 일제 소모 → 각 존 위치 방사 폭발 + 원한 적 처형.
+func _hair_detonate(ctx: Dictionary, params: Dictionary) -> void:
+	if _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+		return
+	var knockback := float(params.get("knockback", 12.0))
+	var burst_radius := maxf(float(params.get("burst_radius", 3.0)), 0.5)
+	var threshold := int(params.get("execute_threshold", 3))
+	var zones: Array = []
+	for z in get_tree().get_nodes_in_group(GRP_ZONE):
+		if is_instance_valid(z) and z is Node3D:
+			zones.append(z)
+	if zones.size() == 0:
+		# 폴백 — 존 없으면 PC 중심 1회 폭발.
+		var pc_pos: Vector3 = (_player as Node3D).global_position
+		_spawn_burst_particles(pc_pos + Vector3(0, 0.6, 0), 26, 1.6, CRIMSON)
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+				continue
+			var out: Vector3 = (e as Node3D).global_position - pc_pos
+			out.y = 0.0
+			if out.length() <= burst_radius and out.length() > 0.05:
+				if e.has_method("apply_knockback"):
+					e.call("apply_knockback", out.normalized(), knockback)
+		return
+	for z in zones:
+		if not is_instance_valid(z) or not (z is Node3D):
+			continue
+		var zcenter: Vector3 = (z as Node3D).global_position
+		# 반경 적 폭발.
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(e) or not (e is Node3D) or e.is_in_group("boss"):
+				continue
+			var out: Vector3 = (e as Node3D).global_position - zcenter
+			out.y = 0.0
+			if out.length() <= burst_radius and out.length() > 0.05:
+				if e.has_method("apply_knockback"):
+					e.call("apply_knockback", out.normalized(), knockback)
+				# 원한 적 처형.
+				if int(e.get_meta("wonhan_marks", 0)) > 0:
+					var hp_now := _enemy_hp(e)
+					if hp_now >= 0 and hp_now <= threshold:
+						if e.has_method("take_hit"):
+							e.call("take_hit", 999)
+		_spawn_burst_particles(zcenter + Vector3(0, 0.6, 0), 26, 1.6, CRIMSON)
+		# 존 소모.
+		if z.has_method("_fade"):
+			z.call("_fade")
+		else:
+			z.queue_free()
 
 
 func _effect_host() -> Node:

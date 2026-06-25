@@ -85,6 +85,9 @@ const _WET_CAP := 5.0
 const _NAKIN_COLOR := Color(0.482, 0.361, 0.941)
 ## 낙인 가시화 정규화 상한(아이콘 게이지 풀 = master cap 8).
 const _NAKIN_CAP := 8.0
+## 처녀귀신 원한(wonhan_marks) — 진홍 디버프 아이콘 색(별개 슬롯). #d11f3a.
+const _WONHAN_COLOR := Color(0.820, 0.122, 0.227)
+const _WONHAN_CAP := 8.0
 
 ## 군집 분리용 프레임당 공유 이웃 캐시(정적). 몹마다 get_nodes_in_group 을 부르면
 ## 할당/순회가 폭증하므로 프레임당 1회만 갱신해 모든 MeleeEnemy 가 공유한다.
@@ -240,6 +243,17 @@ func _poll_status() -> void:
 		})
 	else:
 		_status_strip.call("clear_status", "nakin")
+	# ── 처녀귀신 원한(wonhan_marks) — int 누적. 활성 시 진홍 디버프 아이콘(별개 슬롯).
+	var wonhan := int(get_meta("wonhan_marks", 0))
+	if wonhan > 0:
+		_status_strip.call("set_status", "wonhan", {
+			"value": clampf(float(wonhan) / _WONHAN_CAP, 0.0, 1.0),
+			"mode": 0,
+			"color": _WONHAN_COLOR,
+			"icon": null,
+		})
+	else:
+		_status_strip.call("clear_status", "wonhan")
 
 func _physics_process(delta: float) -> void:
 	if _dead:
