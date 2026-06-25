@@ -152,6 +152,8 @@ func _on_start2_pressed() -> void:
 	_GameConfig.wave_preset = 0
 	_GameConfig.contact_damage_enabled = false
 	_GameConfig.charge_zoom_enabled = true   # 일섬 차징 카메라 줌 기본 ON
+	_GameConfig.slash_resource_mode = 0  # 일섬 자원 = 열기(Heat)
+	_GameConfig.slash_aim_mode = 1      # 에임 = 즉발
 	_goto(_MAIN_PATH)
 
 

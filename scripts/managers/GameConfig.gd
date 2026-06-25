@@ -27,8 +27,8 @@ static var contact_damage_enabled: bool = false
 ## D-3 플래그(선언만 — 동작 배선은 다음 세션).
 ## 일섬 자원 방식: 0=열기(Heat, 모드2 기본) / 1=쿨다운.
 static var slash_resource_mode: int = 0
-## 일섬 에임 방식(즉발 일섬 모드 전용): 0=차징(기본) / 1=즉발.
-static var slash_aim_mode: int = 0
+## 일섬 에임 방식(즉발 일섬 모드 전용): 0=차징 / 1=즉발(기본).
+static var slash_aim_mode: int = 1
 
 ## 탈진(오버히트) 시 이동 감속 패널티 on/off. 기본 꺼짐 — 탈진 패널티는 일섬 발사 봉인만,
 ## 이동 감속은 선택 토글. (BuildConfig.overheat_move_slow / ESC 툴에디터 토글로 제어)
