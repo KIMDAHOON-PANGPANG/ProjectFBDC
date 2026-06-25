@@ -1348,7 +1348,7 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 		_player.call("levelup_pushback")
 	# 카드 기록 — _pending_boon_cards 에서 이름 조회 후 _selected_cards 에 추가, SkillViewer 갱신.
 	var card_name: String = (String(card.get("name", card_id)) if not card.is_empty() else card_id)
-	_selected_cards.append({"id": card_id, "name": card_name})
+	_selected_cards.append({"id": card_id, "name": card_name, "skill_type": String(card.get("skill_type", "")), "desc": String(card.get("desc", "")), "yokai": String(card.get("yokai", "")), "rarity": String(card.get("rarity", ""))})
 	if _skill_viewer != null and _skill_viewer.has_method("refresh"):
 		_skill_viewer.call("refresh", _selected_cards)
 
