@@ -53,6 +53,11 @@ var _cam_base_origin: Vector3
 var _zoom_t: float = 0.0
 var _zoom_total: float = 0.0
 var _zoom_scale_target: float = 1.0
+# Sheathe zoom-IN state — 줌인=로컬 오프셋 축소(가까이), zoom_punch(dolly-out, >1)의 반대 방향.
+# 별도 상태로 유지하고 _update_cam_local 에서 base 에 곱으로만 합성(섞지 말 것).
+var _zin_t: float = 0.0
+var _zin_total: float = 0.0
+var _zin_scale_target: float = 1.0
 # LB 차징 줌아웃(ESC 토글) — active 동안 base origin 을 charge_zoom_max 로 서서히
 # 밀어냈다가(최대값 cap), 해제 시 1.0 으로 복귀. zoom_punch 와 max 로 합쳐진다.
 var _charge_zoom: float = 1.0
@@ -136,7 +141,16 @@ func _update_cam_local(delta: float) -> void:
 	var ct: float = charge_zoom_max if _charge_zoom_active else 1.0
 	_charge_zoom = move_toward(_charge_zoom, ct, charge_zoom_rate * delta)
 	zoom = max(zoom, _charge_zoom)
-	var base: Vector3 = _cam_base_origin * zoom
+	# 납도 줌인 — 오프셋을 _zin_scale_target(<=1)로 축소(가까이) 후 1.0 으로 복귀.
+	# zoom 은 >=1 dolly-out, zin 은 <=1 dolly-in 이라 곱으로 합성(동시 발동 시 상쇄).
+	var zin: float = 1.0
+	if _zin_t > 0.0:
+		_zin_t -= delta
+		var zif: float = clamp(_zin_t / max(_zin_total, 0.0001), 0.0, 1.0)
+		zin = lerp(1.0, _zin_scale_target, zif)
+		if _zin_t <= 0.0:
+			_zin_scale_target = 1.0
+	var base: Vector3 = _cam_base_origin * zoom * zin
 	# Shake offset on top of the (possibly zoomed) base.
 	var off := Vector3.ZERO
 	if _shake_t > 0.0:
@@ -192,6 +206,17 @@ func zoom_punch(scale: float, duration: float) -> void:
 	_zoom_scale_target = max(_zoom_scale_target, max(scale, 1.0))
 	_zoom_t = max(_zoom_t, duration)
 	_zoom_total = _zoom_t
+
+## 납도 줌인 — 카메라가 PC 쪽으로 확 당겨졌다(줌인) 부드럽게 복귀.
+## 줌인=로컬 오프셋 축소(가까이)로, zoom_punch(줌아웃)의 반대 방향. scale 은 1.0 미만.
+## 더 가까운(작은) 값 우선(punch 의 max 와 대칭으로 min 사용).
+func sheathe_zoom_in(scale: float, duration: float) -> void:
+	if duration <= 0.0:
+		return
+	var s := clampf(scale, 0.3, 1.0)
+	_zin_scale_target = min(_zin_scale_target, s)
+	_zin_t = max(_zin_t, duration)
+	_zin_total = _zin_t
 
 ## LB 차징 줌아웃 토글 — active=true 면 매 프레임 charge_zoom_max 로 서서히 빠지고,
 ## false 면 1.0 으로 복귀(_update_cam_local 의 move_toward). Player 가 차징 중 호출.

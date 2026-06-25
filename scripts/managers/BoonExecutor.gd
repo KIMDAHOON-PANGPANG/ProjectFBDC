@@ -22,6 +22,8 @@ var _hit_counters: Dictionary = {}
 ## 무납(IAIDO_CHAIN) 거합 미터 — 연속 납도 단계(0~max). _last_chain_msec 로 combo_window 판정.
 var _chain_stage: int = 0
 var _last_chain_msec: int = 0
+## 블러드 FX 변주 카운터 — 정산 적마다 +1, %8 로 핏자국 텍스처 인덱스 선택.
+var _blood_counter: int = 0
 ## 안티-보스 처형선 — 보스 HP 가 max_hp 의 이 비율 이하면 거합+만개 납도로 처형(코드 1차값).
 const _BOSS_EXECUTE_THRESHOLD := 0.25
 
@@ -40,6 +42,9 @@ func _exit_tree() -> void:
 	if _tb != null:
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SHEATHE, _on_sheathe)
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_HIT, _on_slash_hit_deepmark)
+	# 영구 슬로우 방지 — 셧다운 중 납도 슬로우가 걸려 있었어도 강제 정상화.
+	if not is_equal_approx(Engine.time_scale, 1.0):
+		Engine.time_scale = 1.0
 
 
 # ══════════════ 납도(On_Sheathe) 정산 — slash_mark 거두기 ══════════════
@@ -138,10 +143,13 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 				_player.call("spawn_finisher_slash", max(1, int(params.get("extra_slashes", 1))))
 		)
 
-	# 거합 성공 연출 — 흰 섬광 + 미세 슬로우(데미지 파이프와 독립).
+	# 거합 성공 연출 — 흰 섬광(데미지 파이프와 독립).
 	if do_perfect_fx:
 		_spawn_perfect_flash(origin)
-		_micro_slow()
+	## 납도 연출 — 거둔 게 있을 때만 슬로우+줌인(헛납도는 연출 없음). is_perfect 면 더 깊게.
+	if total_marks > 0:
+		_sheathe_slowmo(is_perfect)
+		_sheathe_zoom(is_perfect)
 
 
 ## 거합 perfect 판정 — 마지막 일섬 착지 후 window(s) 이내 납도인가.
@@ -159,10 +167,15 @@ func _is_perfect_sheathe(window: float) -> bool:
 ## dmg_bonus = 발도 단가 가산, dmg_mult = 거합 정산 곱(만개 처형엔 미적용).
 ## is_perfect = 거합 납도 여부 — 보스 안티-보스 처형선(저HP+거합+만개) 게이트.
 func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 0, is_perfect: bool = false) -> void:
+	# 블러드 FX 위치 — take_hit(사망 free) 전에 적 위치 캡처.
+	var blood_pos: Vector3 = (e as Node3D).global_position if e is Node3D else Vector3.ZERO
 	if not e.has_method("take_hit"):
 		e.set_meta("slash_mark", 0)
 		return
 	var is_boss: bool = e.is_in_group("boss")
+	# 처형 여부 산출 — 아래 take_hit 분기와 동일 판정(블러드 크기 결정용).
+	var is_exec: bool = (marks >= _MARK_CAP and not is_boss) \
+		or (is_boss and marks >= _MARK_CAP and is_perfect and _boss_below_execute_threshold(e))
 	if marks >= _MARK_CAP and not is_boss:
 		e.call("take_hit", 9999)  # 만개 처형 — 잡몹/엘리트/주술사 즉사
 	elif is_boss and marks >= _MARK_CAP and is_perfect and _boss_below_execute_threshold(e):
@@ -174,6 +187,8 @@ func _settle_enemy(e: Node, marks: int, dmg_mult: float = 1.0, dmg_bonus: int = 
 	# 죽었든 살았든 표식 소거(살아남은 보스는 다시 새겨야 함).
 	if is_instance_valid(e):
 		e.set_meta("slash_mark", 0)
+	# 정산 적마다 블러드 터짐(처형은 크게).
+	_spawn_blood(blood_pos, is_exec)
 
 
 ## 보스 현재 HP 가 max_hp 의 처형선 비율 이하인가 — HealthComponent(hp/max_hp) 읽기. 못 읽으면 false(보수적).
@@ -386,17 +401,97 @@ func _spawn_perfect_flash(origin: Vector3) -> void:
 	t.chain().tween_callback(mi.queue_free)
 
 
-## 거합 미세 슬로우 — Engine.time_scale 짧게 낮췄다 복구. ignore_time_scale 타이머로 영구 슬로우 방지.
-func _micro_slow() -> void:
+## 납도 슬로우모션 — 1차값(일반 0.4/0.22s · 거합 0.3/0.32s). ignore_time_scale 타이머로 1.0 복구.
+## S3 거합 _micro_slow 와 통합(중복 슬로우 제거). BulletTime 퍼펙트닷지 슬로우와 시간상 겹쳐도
+## 둘 다 ignore_time_scale 라 마지막 복구 타이머가 1.0 으로 되돌린다.
+func _sheathe_slowmo(is_perfect: bool) -> void:
 	if not is_inside_tree():
 		return
-	Engine.time_scale = 0.6
+	var sc: float = 0.3 if is_perfect else 0.4
+	var dur: float = 0.32 if is_perfect else 0.22
+	Engine.time_scale = sc
 	var tree := get_tree()
 	if tree == null:
 		Engine.time_scale = 1.0
 		return
 	# create_timer(time, process_always, process_in_physics=false, ignore_time_scale=true)
-	tree.create_timer(0.12, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+	tree.create_timer(dur, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+
+
+## 납도 줌인 — 1차값(일반 0.82 · 거합 0.75, time 0.4). group 'camera_rig' 노드 덕타이핑.
+func _sheathe_zoom(is_perfect: bool) -> void:
+	var rig = get_tree().get_first_node_in_group("camera_rig") if is_inside_tree() else null
+	if rig == null or not is_instance_valid(rig):
+		return
+	if not rig.has_method("sheathe_zoom_in"):
+		return
+	var sc: float = 0.75 if is_perfect else 0.82
+	rig.call("sheathe_zoom_in", sc, 0.4)
+
+
+# ══════════════ 블러드 FX (정산 적마다 — 핏자국 Sprite3D + 빨강 입자) ══════════════
+
+## 거둔 적 위치에 핏자국 1장(빌보드, scale 0.3→1.2 빠르게 후 페이드) + 빨강 입자 버스트.
+## 처형(is_exec)은 1.6배 크게. 신규 class_name 없이 코드 인라인(godot-pixel-sprite-alpha 적용).
+func _spawn_blood(pos: Vector3, is_exec: bool) -> void:
+	if pos == Vector3.ZERO:
+		return
+	var host := _effect_host()
+	if host == null:
+		return
+	var idx: int = (_blood_counter % 8) + 1
+	_blood_counter += 1
+	var tex_path: String = "res://market/HitFx/VFX Blood Concepts/VFX Blood Concepts FXOnly%d.png" % idx
+	var tex = load(tex_path)
+	if tex == null:
+		return
+	var spr := Sprite3D.new()
+	spr.texture = tex
+	spr.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	spr.shaded = false  # d3d12 흰배경 방지(언라이트).
+	spr.transparent = true
+	spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	spr.alpha_scissor_threshold = 0.3
+	spr.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	spr.pixel_size = 0.01
+	spr.top_level = true
+	spr.global_position = Vector3(pos.x, pos.y + 0.9, pos.z)
+	host.add_child(spr)
+	var s_end: float = 1.2 * (1.6 if is_exec else 1.0)
+	spr.scale = Vector3.ONE * 0.3
+	var t := spr.create_tween()
+	t.tween_property(spr, "scale", Vector3.ONE * s_end, 0.1)  # 0.3→1.2(처형 1.92) 빠르게.
+	t.tween_property(spr, "modulate:a", 0.0, 0.35)            # 0.35s 페이드.
+	t.tween_callback(spr.queue_free)
+	_spawn_blood_particles(pos, is_exec)
+
+
+## 피 튀는 입자 — 작은 빨강 CPUParticles3D 1회 버스트(사방). one_shot 후 자동 free 타이머.
+func _spawn_blood_particles(pos: Vector3, is_exec: bool) -> void:
+	var host := _effect_host()
+	if host == null:
+		return
+	var mult: float = 1.6 if is_exec else 1.0
+	var p := CPUParticles3D.new()
+	p.top_level = true
+	p.global_position = Vector3(pos.x, pos.y + 0.7, pos.z)
+	p.one_shot = true
+	p.emitting = true
+	p.amount = int(round(14 * mult))
+	p.lifetime = 0.4
+	p.explosiveness = 1.0
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.initial_velocity_min = 2.0
+	p.initial_velocity_max = 4.0 * mult
+	p.gravity = Vector3(0, -9.0, 0)
+	p.scale_amount_min = 0.06
+	p.scale_amount_max = 0.12
+	p.color = Color(0.6, 0.02, 0.02)
+	host.add_child(p)
+	var tree := host.get_tree()
+	if tree != null:
+		tree.create_timer(1.0, true).timeout.connect(p.queue_free)
 
 
 # ══════════════ 재사용 FX 헬퍼 (M9 더미 연출 재활용 — 보존) ══════════════
