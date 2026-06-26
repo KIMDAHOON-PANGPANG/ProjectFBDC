@@ -349,7 +349,7 @@ Player.take_hit (HP → 0)
        → _settle_enemy 가 적을 '죽인' 순간 emit ON_SHEATHE_KILL
             └─ BoonExecutor._on_sheathe_kill (연쇄 점화)
                  ├─ 연환납도(SHEATHE_DOMINO) epicenter 도미노 (카드 보유 시)
-                 ├─ baseline 6종 (항상 on·카드 무관·0뎀 셋업/자원)
+                 ├─ baseline 카드 5종 (has-card 게이트·0뎀·take_hit 미호출)
                  └─ 연쇄 카드 (S7 4종 + S9 4종 …)
        → 처치 1회 이상이면 거합 추격 윈도우 open (다음 RB 즉시 추격 납도)
 ```
@@ -367,7 +367,9 @@ Player.take_hit (HP → 0)
 
 **킬소스 계측**(`BoonExecutor.get_kill_source_counts`): 처치를 `slash`(일섬 본체) / `sheathe`(납도 정산) / `cascade`(연쇄) / **`other`** 로 분류해 `ArenaDebug` 가 readout. ★불변식: **`other`(자율 FX) 킬 = 0** — 감속장·취약표식·자원·연출 FX 는 `take_hit` 을 호출하지 않으므로 절대 처치를 만들지 않는다. 이 0 이 깨지면 주인공 규칙 위반.
 
-**미러 규칙**: `BoonSystem`/`BoonExecutor`/`TriggerBus` 는 단일 인스턴스라 Main↔Testplay 미러 불필요(2.3 EliteEffectService 패턴과 동일). `_selected_cards` 의 카드 dict 형상(yokai 키 포함)만 양쪽 동일 유지.
+**빌드 진행 (pool 분기·`BoonSystem.draw_boons`)**: 카드 pool = pillar(발도술 3종·한 판 1택) / style_kit(메인 빌드 35장) / support(보조 16장). **L2**(첫 레벨업·style 미보유) = pillar 결정적 노출(발도술 강제 1픽). **L3+**(style 보유) = style_req 필터 통과한 style_kit + support 합성 — support_slots 램프(lv3~5=1, lv6+=1~2)만큼 보조를 끼워 가독성/도배 방지(`_collect_into` 가 kit 은 skill_type dedup, support 는 면제). **baseline 5종은 카드화**(옛 항상-on 6종 → has-card 게이트 5종, 납도 파문 baseline 제거) = 보유 카드 없으면 발동 0.
+
+**미러 규칙**: `BoonSystem`/`BoonExecutor`/`TriggerBus` 는 단일 인스턴스라 Main↔Testplay 미러 불필요(2.3 EliteEffectService 패턴과 동일). `_selected_cards` 의 카드 dict 형상(pool 키 포함)만 양쪽 동일 유지.
 
 ## 3. 책임 분리 매트릭스
 

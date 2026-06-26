@@ -136,7 +136,7 @@ func _notification(what: int) -> void:
 			_panel.position.x = vw - _panel.custom_minimum_size.x - 20.0
 
 
-## 카드 목록 갱신 — cards: Array of {id, name, skill_type, desc, yokai, rarity}. 타입 행 레이아웃으로 재빌드.
+## 카드 목록 갱신 — cards: Array of {id, name, skill_type, desc, pool, rarity}. 타입 행 레이아웃으로 재빌드.
 func refresh(cards: Array) -> void:
 	if _list == null:
 		return
@@ -194,7 +194,7 @@ func refresh(cards: Array) -> void:
 			for cid in order:
 				var c: Dictionary = counts[cid]["card"]
 				var n: int = int(counts[cid]["n"])
-				var kc: Color = _BoonSystem.yokai_color(String(c.get("yokai", "")))
+				var kc: Color = _BoonSystem.pool_color(String(c.get("pool", "")))
 				var sym: String = String(TYPE_ICONS.get(t, ""))
 				var sock_sym: String = sym if n <= 1 else ("%s×%d" % [sym, n])
 				var tip: String = String(c.get("name", "")) + " — " + String(c.get("desc", ""))

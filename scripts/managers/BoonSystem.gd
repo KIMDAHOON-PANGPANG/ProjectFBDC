@@ -7,11 +7,17 @@ extends RefCounted
 
 const _JSON := "res://data/boons.json"
 
-## M9-S1: 요괴 그룹핑(YOKAI_COLORS) 철거. 카드 UI(LevelUpScreen/SkillViewer)는 여전히
-## 카드 yokai 키로 액센트 색을 묻는다 — 중립 기본색을 반환하는 슬림 헬퍼만 유지.
-## M9 가 카드별 색 체계를 정하면 여기서 매핑을 다시 채운다.
-static func yokai_color(_y: String) -> Color:
-	return Color(0.7, 0.7, 0.7)
+## M9-T8: 카드 pool(pillar/style_kit/support) 키로 액센트 색을 돌려준다 — 카드 UI 색 구분.
+static func pool_color(pool: String) -> Color:
+	match pool:
+		"pillar":
+			return Color(0.95, 0.78, 0.30)
+		"style_kit":
+			return Color(0.45, 0.70, 1.0)
+		"support":
+			return Color(0.50, 0.85, 0.55)
+		_:
+			return Color(0.7, 0.7, 0.7)
 
 static var BOONS: Array = []
 static var _by_id: Dictionary = {}
@@ -279,7 +285,6 @@ static func _make_card(b: Dictionary, rar: String, rarity_labels: Dictionary) ->
 		"id": String(b.get("id", "")),
 		"name": String(b.get("name", "")),
 		"desc": String(b.get("desc", "")),
-		"yokai": String(b.get("yokai", "")),
 		"kind": String(b.get("kind", "")),
 		"pool": String(b.get("pool", "")),
 		"skill_type": String(b.get("skill_type", "")),

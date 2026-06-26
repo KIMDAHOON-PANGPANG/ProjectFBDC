@@ -843,11 +843,11 @@ func _commit_iaido_chain() -> void:
 	_pending_chain = false
 
 
-# ══════════════ M9-S6: ON_SHEATHE_KILL 핸들러 — epicenter 도미노 재정렬 + baseline 6종 ══════════════
+# ══════════════ M9-S6: ON_SHEATHE_KILL 핸들러 — epicenter 도미노 재정렬 + baseline 카드 5종 ══════════════
 
 ## 납도 정산 사망(epicenter) 1회마다 호출. was_full(만개 처형)이면 연환납도(카드 보유 시) 도미노를
-## epicenter 기준으로 1회 전파(★_in_cascade 가드 하에 — ON_SHEATHE_KILL 재발 차단). 이어 baseline 6종
-## 항상 발동(카드 무관·강한 한정자로 약하게). baseline 중 take_hit 부르는 건 납도 파문 1마리뿐.
+## epicenter 기준으로 1회 전파(★_in_cascade 가드 하에 — ON_SHEATHE_KILL 재발 차단). 이어
+## baseline-converted 카드 5종(전부 has-card 게이트·0뎀·take_hit 미호출 = 기타FX 킬 0).
 func _on_sheathe_kill(ctx) -> void:
 	if not is_inside_tree() or not (ctx is Dictionary):
 		return

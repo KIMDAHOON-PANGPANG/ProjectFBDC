@@ -622,7 +622,7 @@ func take_hit(amount: int = 1) -> void:
 		_active_slam_decal = null
 		_attacking = false
 	# 슬래시(PC) — 잡몹/리퍼/슬래머 모두 일섬 데미지(amount)만큼. HP 스케일(시간/레벨)과
-	# 함께 다중타로 처치돼 표식 누적·연쇄·흡혈 빌드가 동작한다(옛 999 원샷 제거).
+	# 함께 다중타로 처치돼 표식 누적·납도 연쇄가 동작한다(옛 999 원샷 제거).
 	if _health != null:
 		_health.take_damage(amount)
 	else:

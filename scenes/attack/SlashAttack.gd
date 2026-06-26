@@ -171,8 +171,8 @@ func _emit_slash_hit(target: Node) -> void:
 	var pos: Vector3 = (target as Node3D).global_position if (target is Node3D) else global_position
 	var src := get_tree().get_first_node_in_group("player")
 	var ctx := {"target": target, "position": pos, "source": src}
-	# On_Slash_Hit 은 적중마다(표식 누적·도깨비 ember 등). On_Kill_via_Slash 는 이 적중으로
-	# 실제 사망(HP<=0 / _dead)한 경우에만 — HP>1 몹은 다중타라 처치 시 1회만 흡혈/연쇄 발동.
+	# On_Slash_Hit 은 적중마다(표식 누적 등). On_Kill_via_Slash 는 이 적중으로
+	# 실제 사망(HP<=0 / _dead)한 경우에만 — HP>1 몹은 다중타라 처치 시 1회만 연쇄 발동.
 	tb.call("emit", _TriggerBusScript.ON_SLASH_HIT, ctx)
 	if _target_is_dead(target):
 		tb.call("emit", _TriggerBusScript.ON_KILL_VIA_SLASH, ctx)

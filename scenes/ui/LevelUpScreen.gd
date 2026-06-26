@@ -60,7 +60,7 @@ func _build_overlay() -> void:
 	add_child(_cards_root)
 
 ## Owner calls this after instantiating, with the 3 cards to display.
-## Each entry: { id, name, desc, yokai, skill_type, rarity, rarity_label }.
+## Each entry: { id, name, desc, pool, skill_type, rarity, rarity_label }.
 func show_cards(cards: Array) -> void:
 	_cards_data = cards
 	# Clear any previous cards (defensive — usually we're fresh).
@@ -85,11 +85,11 @@ func _build_card_button(card_dict: Dictionary, index: int) -> Button:
 
 	var name_str := String(card_dict.get("name", "?"))
 	var rarity_label := String(card_dict.get("rarity_label", ""))
-	var yokai := String(card_dict.get("yokai", ""))
+	var pool := String(card_dict.get("pool", ""))
 	var desc_str := String(card_dict.get("desc", ""))
 	var sk := String(card_dict.get("skill_type", ""))
 
-	var key_col: Color = _BoonSystem.yokai_color(yokai)
+	var key_col: Color = _BoonSystem.pool_color(pool)
 
 	# border width by rarity (등급=굵기, 색과 분리)
 	var border_w: int = 2

@@ -58,19 +58,25 @@ resources/chapters/ — chapter_1.tres, chapter_2.tres, chapter_3.tres (WaveCurv
 resources/meta/passives/ — hp_bonus / move_speed / slash_width / exp_gain / evade_cooldown / iframe_extra / free_card (MetaPassive)
 resources/          — monster_table.tres(MonsterTable=몬스터 밸런스 단일 소스) + player/player_data.tres(PlayerData=PC 밸런스) · ⚠ 옛 pc.csv/enemy.csv/combat_table.xlsx 는 **삭제됨**(인하우스 툴로 대체)
 addons/balance_tool — 인하우스 밸런스 에디터 플러그인(PC/몬스터 탭, 한글 라벨+툴팁) — Godot Project Settings>Plugins 에서 켬
-data/               — upgrades.csv(레벨업 효과 — UpgradeSystem 로더, 아직 CSV) · boons.json(M9 권속 은혜 38장 — BoonSystem 로더) ⚠ 전투 테이블은 리소스로 이관됨
+data/               — upgrades.csv(레벨업 효과 — UpgradeSystem 로더, 아직 CSV) · boons.json(M9 권속 은혜 54장(pillar 3/style_kit 35/support 16) — BoonSystem 로더) ⚠ 전투 테이블은 리소스로 이관됨
 ```
 
 ## 기능별 인덱스 — "어디를 봐야 하나"
 
 | 만지고 싶은 것 | 핵심 파일 (1~2개) | 보조 파일 |
 |---|---|---|
-| ⭐ M9 발도술 3종 스타일 1택 (숏/미들/롱) | `scripts/managers/BoonSystem.gd` `draw_boons`(`force_style`=style 미보유 시 첫 draw 에 발도술 `kind=='style'` 3종만 강제 노출 1픽 · 보유 후 `style_req` 필터 + style 카드 exclusive 제외 → 한 판 한 스타일 풀만) · 카드 데이터 `data/boons.json`(38장, `kind`=style/mark/sheathe/slash/control) | `LevelUpScreen`/`SkillViewer`(카드 UI · `BoonSystem.yokai_color`=현재 중립 회색 스텁) · `Player.active_boons`(런마다 `_ready` 리셋) |
+| ⭐ M9 발도술 3종 스타일 1택 (숏/미들/롱) | `scripts/managers/BoonSystem.gd` `draw_boons`(`force_style`=style 미보유 시 첫 draw 에 발도술 `kind=='style'` 3종만 강제 노출 1픽 · 보유 후 `style_req` 필터 + style 카드 exclusive 제외 → 한 판 한 스타일 풀만) · 카드 데이터 `data/boons.json`(54장(pillar 3/style_kit 35/support 16), `kind`=style/mark/sheathe/slash/control) | `LevelUpScreen`/`SkillViewer`(카드 UI · `BoonSystem.pool_color`=pool별 색(pillar 금/style_kit 청/support 녹)) · `Player.active_boons`(런마다 `_ready` 리셋) |
 | ⭐ M9 표식 '참(斬)' (slash_mark) + cap 단일소스 | `scenes/attack/SlashAttack.gd` `_apply_slash_mark`(일섬 적중마다 마커 +1, cap 전이 1회 `ON_MARK_FULL` emit) · **cap 단일소스 = `Player.get_mark_cap()`**(숏3/미들5/롱7 — `BoonExecutor._mark_cap` 도 같은 게터 폴링) | 적 머리 위 가시화 = `Player._status_strip`/HpBar3D 계열 · 표식은 0뎀 마커(데미지 없음, 납도 정산에서만 환금) |
 | ⭐ M9 납도(RB) 정산 — slash_mark 거두기 | `scenes/player/Player.gd` `_do_sheathe`→`TriggerBus.ON_SHEATHE` emit → `scripts/managers/BoonExecutor.gd` `_on_sheathe`→`_settle_enemy`(만개 비보스=9999 처형 / 미만·보스=marks×`sheathe_dmg`×거합×취약 / 보스 처형선=저HP+거합+만개) | 쿨타임 = `Player` 납도 쿨 + HUD 시계 클록 표시 · `_BOSS_EXECUTE_THRESHOLD`(보스 처형선) · 거합(IAIDO) perfect 윈도우 = `Player.last_slash_end_msec` |
-| ⭐ M9 납도 처치 연쇄 (★무한방지 최우선) | `BoonExecutor.gd` `ON_SHEATHE_KILL`→`_on_sheathe_kill`(연환납도 `_cascade_domino_from` 도미노 + baseline 6종 항상-on + 연쇄 카드) · **★`_in_cascade` 가드**(연쇄 중 ON_SHEATHE_KILL 재발 차단=무한연쇄 불성립) + `_CASCADE_DEPTH_CAP`/`_KILL_CAP`/`_BASELINE_SPREAD_CAP` 마릿수·뎁스 cap | 카드 16종(S6 baseline 6 + S7 4 + S9 4 + S11 충전류 등) · 충전류 관통 처형은 일섬 본체 적중 편승(자동딜 아님, `_in_cascade` 가드) |
+| ⭐ M9 납도 처치 연쇄 (★무한방지 최우선) | `BoonExecutor.gd` `ON_SHEATHE_KILL`→`_on_sheathe_kill`(연환납도 `_cascade_domino_from` 도미노 + baseline 카드 5종(has-card 게이트) + 연쇄 카드) · **★`_in_cascade` 가드**(연쇄 중 ON_SHEATHE_KILL 재발 차단=무한연쇄 불성립) + `_CASCADE_DEPTH_CAP`/`_KILL_CAP`/`_BASELINE_SPREAD_CAP` 마릿수·뎁스 cap | 카드 다수(baseline 5 + S7 4 + S9 4 + 충전류 + 보조 16 등) · 충전류 관통 처형은 일섬 본체 적중 편승(자동딜 아님, `_in_cascade` 가드) |
 | ⭐ M9 납도 연출 (슬로우/줌인/블러드) | `BoonExecutor.gd` 거합 연출(흰 섬광 + 미세 슬로우) · 블러드 FX(`_spawn_blood` 정산 적마다 핏자국 Sprite3D + 빨강 입자 = **FXOnly·take_hit 미호출·0킬**) | `Player` 납도 슬로우모션/캐릭터 줌인 훅 · FX 헬퍼는 더미 연출(보존) |
 | ⭐ M9 킬소스 계측 (주인공 규칙 검증) | `BoonExecutor.gd` `get_kill_source_counts`(slash/sheathe/cascade/**other**) → `scenes/ui/ArenaDebug.gd` readout(일섬/납도/연쇄/기타FX) · ★불변식: **기타FX 킬 = 0**(자율 FX 는 take_hit 미호출이라 절대 처치 안 함) | 모든 처치는 일섬 본체·납도 정산·연쇄 중 하나로만 귀속 |
+| ⭐ M9 빌드 진행 (pool 분기·L2 기둥 1픽·L3+ kit/support 합성) | `scripts/managers/BoonSystem.gd` `draw_boons`(L2=style 미보유 시 pillar 발도술 3종 결정적 노출 1픽 · L3+=style_req 필터 통과한 style_kit + support 합성, support_slots 램프[lv3~5=1·lv6+=1~2] · pool=pillar/style_kit/support 분기) | `_collect_into`(kit dedup·support 면제) · `data/boons.json` pool 필드 |
+| ⭐ M9 보조 카드 16장 (pool=support·전부 0뎀) | `scripts/managers/BoonExecutor.gd` 보조 핸들러(흡인장판/이속 `boon_move_speed_mult`/열식힘 `boon_gauge_burst`/EXP자석 `boon_exp_magnet_mult`/표식가속/질주표식/차지여운/흡혈의 의식 등 — On_Dash/On_Slash_End/On_Kill/On_Sheathe_Kill 트리거) | ★전부 take_hit 미호출 = 기타FX 킬 0 · `data/boons.json` pool=support 16장 |
+| ⭐ M9 흡혈/baseline 카드화 (옛 항상-on 6종 → 카드 5종) | `BoonExecutor.gd` `_baseline_heal/gem_summon/mark_spread/heat_refund/echo_slash`(전부 has-card 게이트·0뎀·take_hit 미호출) · 납도 파문 baseline 제거 | 미문서 항상-on 0 — 보유 카드만 발동 |
+| ⭐ M9 퍼펙트 타이밍 바 | `scenes/ui/TimingBar3D.gd` (`Player.get_timing_window` 거합/박자/완극 윈도우 시각화) | `Player.gd` `get_timing_window` |
+| ⭐ 튜토리얼 (발도/회피/납도) | `scenes/main/Tutorial.gd` (단계별 발도→회피→납도 안내) | `OutGame` 튜토리얼 버튼 |
+| ⭐ TAB 일시정지 + 스킬 빌드 뷰 · 납도 쿨 HUD | `scenes/ui/SkillViewer.gd` (TAB → 보유 보은 pool별 색 목록) · 납도 쿨 클록 = `PlayerData.sheathe_cooldown`(`Player.get_sheathe_cooldown_frac`) | `PlayerHud` 클록 표시 |
 | ⭐ 전투 밸런스 데이터 (인하우스 툴) | **몬스터** = `resources/monster_table.tres`(`MonsterTable`=`Array[MonsterStats]`, scripts/resources/) · **PC** = `resources/player/player_data.tres`(`PlayerData`) · 편집은 **`addons/balance_tool`** 플러그인(PC/몬스터 탭, 한글 라벨+마우스오버 한글 툴팁, 값 변경 즉시 `ResourceSaver.save`) | CSV/xlsx 전부 삭제됨. 새 몬스터 필드 = `MonsterStats.gd` @export + `balance_dock.gd` `MON_FIELDS` 한 줄 추가 |
 | 전투 데이터 로더 (적용 지점) | `CombatData._ensure_loaded`(monster_table.tres → id→MonsterStats 맵) · `apply_to_enemy(self, kind)` (Melee/Ranged/Elite/Sorcerer/Boss `_ready`) — `_apply_*`가 MonsterStats 필드를 적 export 로 복사 · `apply_to_player`=**no-op**(PlayerData.tres 직접 사용) · `all_enemy_rows()`(몬스터 리스트 UI) | kind→id: melee101/ranged102/elite103/leaper104/slammer105/sorcerer106/boss200+boss_id · ⚠ 잡몹/엘리트 HP 미적용(레벨링/타입표), 슬래머·궁수·보스·주술사 HP 는 적용 |
 | 적 종류 코드 (enemy.csv ENUM) | 101=근접 102=원거리 103=엘리트 104=리퍼 105=슬래머 106=주술사 · 201/202/203=보스1/2/3 | `CombatData.apply_to_enemy` 의 kind→id 매핑 · `Boss.boss_id` export |
@@ -159,7 +165,7 @@ data/               — upgrades.csv(레벨업 효과 — UpgradeSystem 로더, 
   - 두 씬은 의도적으로 중복. Testplay는 자동 스폰만 제외, EXP/레벨업/엘리트 효과/불릿타임 모두 동일.
   - 예외: `WaveManager` 자체는 Testplay에 없음 (그 자리에 우측 버튼 패널).
   - **M8 진행**: 엘리트 효과 + 불릿타임은 `EliteEffectService` / `BulletTimeService`로 추출됨 → 그 부분은 더 이상 미러 코드 아님, 양쪽이 같은 서비스를 인스턴스. 신규 효과는 서비스 한 곳만 수정. (다음 후보: 스폰 로직 `SpawnService`)
-  - **M9 발도/표식/납도 연쇄**: `BoonSystem`(static loader)·`BoonExecutor`(Player 자식 단일 인스턴스)·`TriggerBus`(autoload 단일)는 **Main↔Testplay 미러 불필요**(EliteEffectService 패턴 — 양쪽이 같은 단일 인스턴스에 위임). 단 `Main`/`Testplay` 의 `_selected_cards` 에 `yokai` 키를 담는 `_on_upgrade_card_selected` 부분은 **양쪽 동일 유지**(카드 dict 형상 미러).
+  - **M9 발도/표식/납도 연쇄**: `BoonSystem`(static loader)·`BoonExecutor`(Player 자식 단일 인스턴스)·`TriggerBus`(autoload 단일)는 **Main↔Testplay 미러 불필요**(EliteEffectService 패턴 — 양쪽이 같은 단일 인스턴스에 위임). 단 `Main`/`Testplay` 의 `_selected_cards` 에 `pool` 키를 담는 `_on_upgrade_card_selected` 부분은 **양쪽 동일 유지**(카드 dict 형상 미러).
 
 ## 코딩 컨벤션
 
