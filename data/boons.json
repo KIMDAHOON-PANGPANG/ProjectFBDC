@@ -1922,6 +1922,116 @@
           }
         }
       ]
+    },
+    {
+      "id": "bl_heal",
+      "name": "흡혈의 의식(吸血儀式)",
+      "desc": "칼을 거두어 적을 쓰러뜨린 자리 가까이 있으면 체력이 조금 돌아온다. 강한 적일수록 더 많이.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe_Kill",
+          "effect": "BL_HEAL",
+          "params_by_rarity": {
+            "chosim": {},
+            "rare": {},
+            "uniq": {},
+            "legend": {},
+            "master": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": "bl_gem",
+      "name": "혼백의 인도(魂魄引導)",
+      "desc": "적을 거둔 자리의 흩어진 혼불이 곧장 끌려온다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe_Kill",
+          "effect": "BL_GEM",
+          "params_by_rarity": {
+            "chosim": {},
+            "rare": {},
+            "uniq": {},
+            "legend": {},
+            "master": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": "bl_spread",
+      "name": "참결의 살포(斬決撒布)",
+      "desc": "적을 거둔 자리 둘레의 적들에게 표식이 흩뿌려진다. 강한 적을 거두면 더 짙게. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "nuki",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe_Kill",
+          "effect": "BL_SPREAD",
+          "params_by_rarity": {
+            "chosim": {},
+            "rare": {},
+            "uniq": {},
+            "legend": {},
+            "master": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": "bl_heat",
+      "name": "잔열의 환수(殘熱還收)",
+      "desc": "적을 거둘 때마다 달아오른 열기가 조금씩 식는다. 강한 적일수록 더 크게.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "charge",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe_Kill",
+          "effect": "BL_HEAT",
+          "params_by_rarity": {
+            "chosim": {},
+            "rare": {},
+            "uniq": {},
+            "legend": {},
+            "master": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": "bl_echo",
+      "name": "참향의 잔영(斬響殘影)",
+      "desc": "적을 거둔 자리에서 빈 일섬이 한 줄기 메아리친다. 표식만 남기고 베지는 않는다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "iaido",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe_Kill",
+          "effect": "BL_ECHO",
+          "params_by_rarity": {
+            "chosim": {},
+            "rare": {},
+            "uniq": {},
+            "legend": {},
+            "master": {}
+          }
+        }
+      ]
     }
   ]
 }

@@ -1,16 +1,16 @@
 extends SceneTree
 
-## M9-T6: 납도류(18) + 연격류(10) + 충전류(10) + 보조(11) = 49장 로드 검증.
+## M9-T7: 납도류(18) + 연격류(10) + 충전류(10) + 보조(11) + baseline 5 = 54장 로드 검증.
 ## pool 분기(pillar/style_kit/support) + L2 발도술 3종 결정적 노출 + L3+ style_kit/support 합성 확인.
 
 func _initialize() -> void:
 	const _B := preload("res://scripts/managers/BoonSystem.gd")
 
 	var all := _B.all_boons()
-	print("all_boons size: %d (기대: 49)" % all.size())
-	assert(all.size() == 49, "all_boons 크기 불일치 (M9-T6 49장 기대)")
+	print("all_boons size: %d (기대: 54)" % all.size())
+	assert(all.size() == 54, "all_boons 크기 불일치 (M9-T7 54장 기대)")
 
-	# ── pool 분류 카운트: pillar 3 / style_kit 35 / support 11. ──
+	# ── pool 분류 카운트: pillar 3 / style_kit 35 / support 16. ──
 	var pool_count := {"pillar": 0, "style_kit": 0, "support": 0, "": 0}
 	for b in all:
 		var p := String(b.get("pool", ""))
@@ -18,7 +18,7 @@ func _initialize() -> void:
 	print("pools — pillar:%d style_kit:%d support:%d (빈값:%d)" % [pool_count["pillar"], pool_count["style_kit"], pool_count["support"], pool_count[""]])
 	assert(pool_count["pillar"] == 3, "pillar 3장 아님")
 	assert(pool_count["style_kit"] == 35, "style_kit 35장 아님")
-	assert(pool_count["support"] == 11, "support 11장 아님")
+	assert(pool_count["support"] == 16, "support 16장 아님")
 	assert(pool_count[""] == 0, "pool 키 없는 카드 존재")
 
 	# pillar 3종 = 발도술(kind=='style').
@@ -41,6 +41,11 @@ func _initialize() -> void:
 		"mark_accel": ["SUPPORT_MARK_ACCEL", ""],
 		"dash_mark": ["SUPPORT_DASH_MARK", "charge"],
 		"draw_afterglow": ["SUPPORT_KILL_AFTERGLOW", "charge"],
+		"bl_heal": ["BL_HEAL", ""],
+		"bl_gem": ["BL_GEM", ""],
+		"bl_spread": ["BL_SPREAD", "nuki"],
+		"bl_heat": ["BL_HEAT", "charge"],
+		"bl_echo": ["BL_ECHO", "iaido"],
 	}
 	for id in support_effect.keys():
 		var card = _B.by_id(id)
@@ -137,5 +142,5 @@ func _initialize() -> void:
 			assert(id != "harvest_pull", "charge 런에 iaido 전용 support(harvest_pull) 섞임")
 			assert(String(c.get("kind", "")) != "style", "charge 런 style exclusive 위반")
 
-	print("boon_load_check: 전체 통과 (M9-T6 49장 + pool 분기 + L2/L3+ 합성)")
+	print("boon_load_check: 전체 통과 (M9-T7 54장 + pool 분기 + L2/L3+ 합성)")
 	quit()

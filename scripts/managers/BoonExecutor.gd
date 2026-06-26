@@ -125,9 +125,8 @@ func get_kill_source_counts() -> Dictionary:
 	}
 
 
-## baseline 6종 코드 1차값(카드 무관 항상 on — 강한 한정자로 약하게).
-const _BL_RIPPLE_RADIUS := 1.5     # 1 납도 파문 — 만개 적 1마리 흘려 처형
-const _BL_MARK_RADIUS := 3.0       # 2 참결 — 표식 살포
+## baseline-converted 5종 코드 1차값(카드 게이트·0뎀 셋업/자원).
+const _BL_MARK_RADIUS := 3.0       # 1 참결 — 표식 살포
 const _BL_HEAL_RADIUS := 4.0       # 3 환혈 — PC 회복
 const _BL_HEAL_TRASH := 1          # 환혈 잡몹(tier0)
 const _BL_HEAL_BIG := 3            # 환혈 엘리트/보스(tier>0)
@@ -882,13 +881,12 @@ func _on_sheathe_kill(ctx) -> void:
 	# ── M9-T6: 보조 — 집결의 잔향(SUPPORT_GATHER_FIELD). 처치 지점 흡인 감속장(SLOW_FIELD 엔진 위임·0뎀·동시≤2). ──
 	_support_gather_field(epicenter)
 
-	# ── baseline 6종 — 항상(카드 무관). 자원 클램프는 각 호출/HealthComponent 가 보장. ──
-	_baseline_ripple(epicenter)        # 1 납도 파문
-	_baseline_mark_spread(epicenter, tier)  # 2 참결
-	_baseline_heal(epicenter, tier)    # 3 환혈
-	_baseline_heat_refund(tier)        # 4 잔열 환수
-	_baseline_gem_summon(epicenter)    # 5 혼백 소집
-	_baseline_echo_slash(epicenter)    # 6 참향
+	# ── baseline-converted 5종 — 카드 보유 시에만(has-card 게이트). 전부 0뎀·take_hit 미호출. ──
+	_baseline_heal(epicenter, tier)
+	_baseline_gem_summon(epicenter)
+	_baseline_mark_spread(epicenter, tier)
+	_baseline_heat_refund(tier)
+	_baseline_echo_slash(epicenter)
 
 
 ## 연환납도 epicenter 도미노 — epicenter 기준 chain_radius 내 'slash_mark>0' 비보스 적을
@@ -1345,97 +1343,80 @@ func _on_sheathe_kill_spirit(tier: int) -> void:
 		_spawn_chain_arc(p, p)
 
 
-# ══════════════ M9-S6: baseline 6종 (코드 상수·항상 on·0뎀 셋업/자원) ══════════════
+# ══════════════ M9-T7: baseline-converted 5종 (카드 게이트·0뎀 셋업/자원) ══════════════
 
-## 1 납도 파문 — epicenter 소반경 내 '만개(>=cap)·비보스' 1마리만 흘려 처형(비재귀 — _in_cascade 가드).
-func _baseline_ripple(epicenter: Vector3) -> void:
-	var target: Node = null
-	var best_d: float = INF
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if e == null or not is_instance_valid(e) or not (e is Node3D):
-			continue
-		if e.is_in_group("boss"):
-			continue
-		if int(e.get_meta("slash_mark", 0)) < _mark_cap():
-			continue  # 만개만.
-		var d: float = (e as Node3D).global_position.distance_to(epicenter)
-		if d > _BL_RIPPLE_RADIUS or d >= best_d:
-			continue
-		best_d = d
-		target = e
-	if target == null:
-		return
-	# 흰 점멸 + 처형. ★_in_cascade 로 감싸 ON_SHEATHE_KILL 재발 차단(무한연쇄 방지).
-	_spawn_perfect_flash((target as Node3D).global_position)
-	var prev: bool = _in_cascade
-	_in_cascade = true
-	var marks: int = int(target.get_meta("slash_mark", 0))
-	_cascade_bonus_marks += marks
-	_settle_enemy(target, marks, 1.0, 0, false)
-	_in_cascade = prev
-
-
-## 2 참결(표식 파문) — epicenter 반경 내 적에 표식 살포(0뎀). grant=tier>0?2:1, cap 클램프. 청백 링.
+## 1 참결(표식 파문) — epicenter 반경 내 적에 표식 살포(0뎀). BL_SPREAD 카드 보유 시에만.
+## grant=tier>0?2:1, cap 클램프. 청백 링.
 func _baseline_mark_spread(epicenter: Vector3, tier: int) -> void:
-	# M9-S13: 1납도당 참결 발동 cap — 다중 처치(도미노) 시 표식 살포 인플레 억제. 초과분은 살포 스킵.
-	if _baseline_spread_count >= _BASELINE_SPREAD_CAP:
-		return
-	_baseline_spread_count += 1
-	var grant: int = 2 if tier > 0 else 1
-	var any: bool = false
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if e == null or not is_instance_valid(e) or not (e is Node3D):
-			continue
-		if (e as Node3D).global_position.distance_to(epicenter) > _BL_MARK_RADIUS:
-			continue
-		var cur: int = int(e.get_meta("slash_mark", 0))
-		e.set_meta("slash_mark", min(cur + grant, _mark_cap()))
-		any = true
-	if any:
-		_spawn_chain_arc(epicenter, epicenter)  # 제자리 청백 링(_make_disc_mesh 더미).
+	_for_each_effect("On_Sheathe_Kill", "BL_SPREAD", func(_i, _params):
+		# M9-S13: 1납도당 참결 발동 cap — 다중 처치(도미노) 시 표식 살포 인플레 억제. 초과분은 살포 스킵.
+		if _baseline_spread_count >= _BASELINE_SPREAD_CAP:
+			return
+		_baseline_spread_count += 1
+		var grant: int = 2 if tier > 0 else 1
+		var any: bool = false
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e == null or not is_instance_valid(e) or not (e is Node3D):
+				continue
+			if (e as Node3D).global_position.distance_to(epicenter) > _BL_MARK_RADIUS:
+				continue
+			var cur: int = int(e.get_meta("slash_mark", 0))
+			e.set_meta("slash_mark", min(cur + grant, _mark_cap()))
+			any = true
+		if any:
+			_spawn_chain_arc(epicenter, epicenter)  # 제자리 청백 링(_make_disc_mesh 더미).
+	)
 
 
-## 3 환혈 — PC 가 epicenter 반경 내면 회복(잡몹1/엘리트·보스3). HealthComponent.heal 이 max 클램프.
+## 2 환혈 — BL_HEAL 카드 보유 시에만. PC 가 epicenter 반경 내면 회복(잡몹1/엘리트·보스3). HealthComponent.heal 이 max 클램프.
 func _baseline_heal(epicenter: Vector3, tier: int) -> void:
-	if _player == null or not is_instance_valid(_player) or not (_player is Node3D):
-		return
-	if (_player as Node3D).global_position.distance_to(epicenter) > _BL_HEAL_RADIUS:
-		return
-	var hc = _player.get_node_or_null("HealthComponent")
-	if hc == null or not hc.has_method("heal"):
-		return
-	var amt: int = _BL_HEAL_BIG if tier > 0 else _BL_HEAL_TRASH
-	hc.call("heal", amt)
+	_for_each_effect("On_Sheathe_Kill", "BL_HEAL", func(_i, _params):
+		if _player == null or not is_instance_valid(_player) or not (_player is Node3D):
+			return
+		if (_player as Node3D).global_position.distance_to(epicenter) > _BL_HEAL_RADIUS:
+			return
+		var hc = _player.get_node_or_null("HealthComponent")
+		if hc == null or not hc.has_method("heal"):
+			return
+		var amt: int = _BL_HEAL_BIG if tier > 0 else _BL_HEAL_TRASH
+		hc.call("heal", amt)
+	)
 
 
-## 4 잔열 환수 — 즉발(열기) 자원 모드면 PC 열 환급(tier 스케일). _refund_heat 가 탈진/쿨모드/0하한 가드.
+## 3 잔열 환수 — BL_HEAT 카드 보유 시에만. 즉발(열기) 자원 모드면 PC 열 환급(tier 스케일). _refund_heat 가 탈진/쿨모드/0하한 가드.
 func _baseline_heat_refund(tier: int) -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if not _player.has_method("_refund_heat"):
-		return
-	# tier 스케일 — 잡몹 작게, 엘리트/보스 크게(코드 1차값, 공유 .tres 미변형).
-	var amt: float = 0.06 * float(tier + 1)
-	_player.call("_refund_heat", amt)
+	_for_each_effect("On_Sheathe_Kill", "BL_HEAT", func(_i, _params):
+		if _player == null or not is_instance_valid(_player):
+			return
+		if not _player.has_method("_refund_heat"):
+			return
+		# tier 스케일 — 잡몹 작게, 엘리트/보스 크게(코드 1차값, 공유 .tres 미변형).
+		var amt: float = 0.06 * float(tier + 1)
+		_player.call("_refund_heat", amt)
+	)
 
 
-## 5 혼백 소집 — epicenter 반경 내 ExpGem(group) 강제 호밍(force_home). 0뎀.
+## 4 혼백 소집 — BL_GEM 카드 보유 시에만. epicenter 반경 내 ExpGem(group) 강제 호밍(force_home). 0뎀.
 func _baseline_gem_summon(epicenter: Vector3) -> void:
-	for g in get_tree().get_nodes_in_group("exp_gems"):
-		if g == null or not is_instance_valid(g) or not (g is Node3D):
-			continue
-		if (g as Node3D).global_position.distance_to(epicenter) > _BL_GEM_RADIUS:
-			continue
-		if g.has_method("force_home"):
-			g.call("force_home")
+	_for_each_effect("On_Sheathe_Kill", "BL_GEM", func(_i, _params):
+		for g in get_tree().get_nodes_in_group("exp_gems"):
+			if g == null or not is_instance_valid(g) or not (g is Node3D):
+				continue
+			if (g as Node3D).global_position.distance_to(epicenter) > _BL_GEM_RADIUS:
+				continue
+			if g.has_method("force_home"):
+				g.call("force_home")
+	)
 
 
-## 6 참향(잔향 일섬) — Player.spawn_echo_slash(데미지0·표식만·노킬). epicenter 최근접 미표식 적 방향 1줄.
+## 5 참향(잔향 일섬) — BL_ECHO 카드 보유 시에만. Player.spawn_echo_slash(데미지0·표식만·노킬). epicenter 최근접 미표식 적 방향 1줄.
 func _baseline_echo_slash(epicenter: Vector3) -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	if _player.has_method("spawn_echo_slash"):
-		_player.call("spawn_echo_slash", epicenter)
+	_for_each_effect("On_Sheathe_Kill", "BL_ECHO", func(_i, _params):
+		if _player == null or not is_instance_valid(_player):
+			return
+		if _player.has_method("spawn_echo_slash"):
+			_player.call("spawn_echo_slash", epicenter)
+	)
 
 
 ## epicenter→대상 청백 호 더미 — _make_disc_mesh 얇은 디스크 1회(scale 펄스 후 페이드 free).
