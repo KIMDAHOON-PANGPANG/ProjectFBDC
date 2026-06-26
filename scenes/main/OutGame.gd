@@ -89,11 +89,13 @@ func _build() -> void:
 	if _is_release_build():
 		# 빌드 EXE — 게임 시작 단일 진입(빌드 매니저가 구운 모드/토글 적용). 사망 화면 "이어서 하기"는 유지.
 		center.add_child(_make_button("게임 시작", _on_release_start))
+		center.add_child(_make_button("튜토리얼", _on_tutorial_pressed))
 		center.add_child(_make_button("설정", _on_settings_pressed))
 		center.add_child(_make_button("종료", _on_quit_pressed))
 	else:
 		# 에디터/개발 — 전체 메뉴.
 		center.add_child(_make_button("게임 시작", _on_start2_pressed))
+		center.add_child(_make_button("튜토리얼", _on_tutorial_pressed))
 		center.add_child(_make_button("밸런싱 아레나 (F1 패널)", _on_arena_pressed))
 		center.add_child(_make_button("영구강화 (혼)", _on_meta_pressed))
 		center.add_child(_make_button("설정", _on_settings_pressed))
@@ -145,6 +147,10 @@ func _make_button(label: String, cb: Callable) -> Button:
 	btn.add_theme_stylebox_override("pressed", hover)
 	btn.pressed.connect(cb)
 	return btn
+
+
+func _on_tutorial_pressed() -> void:
+	_goto("res://scenes/main/Tutorial.tscn")
 
 
 func _on_start2_pressed() -> void:
