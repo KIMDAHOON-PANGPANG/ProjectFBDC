@@ -116,6 +116,9 @@ func _process(delta: float) -> void:
 	var eff_magnet: float = magnet_radius
 	if "exp_magnet_mult" in _player:
 		eff_magnet *= maxf(0.1, float(_player.exp_magnet_mult))
+	# M9-T6 수확의 인력(SUPPORT_SHEATHE_MAGNET) — 납도 후 일시 자석 반경 ×boon_exp_magnet_mult(영구 스탯과 별개로 곱).
+	if "boon_exp_magnet_mult" in _player:
+		eff_magnet *= maxf(1.0, float(_player.boon_exp_magnet_mult))
 
 	# 스폰 직후 1회: 이 젬이 일섬(대시+착지유예) 도중에 떨어졌다면(=슬래시가 죽인 적의 젬),
 	# PC 는 이미 대시로 지나가 magnet_radius 밖이다. 넉넉한 slash_reserve_radius 안이면 즉시 예약해

@@ -146,6 +146,9 @@ func setup(player: Node) -> void:
 	_tb.call("subscribe", _TriggerBusScript.ON_SHEATHE_KILL, _on_sheathe_kill)
 	# M9-S11: 충전류 여운일섬(CHARGE_AFTERGLOW) — 일섬 처치 시 다음 차지 가속 + 자원 환급.
 	_tb.call("subscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, _on_kill_via_slash_charge)
+	# M9-T6: 보조(support) — 회피 종료(ON_DASH) / 일섬 종료(ON_SLASH_END) 구독. Player 가 이미 양 지점 emit.
+	_tb.call("subscribe", _TriggerBusScript.ON_DASH, _on_dash_support)
+	_tb.call("subscribe", _TriggerBusScript.ON_SLASH_END, _on_slash_end_support)
 
 
 func _exit_tree() -> void:
@@ -154,6 +157,8 @@ func _exit_tree() -> void:
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_HIT, _on_slash_hit_deepmark)
 		_tb.call("unsubscribe", _TriggerBusScript.ON_SHEATHE_KILL, _on_sheathe_kill)
 		_tb.call("unsubscribe", _TriggerBusScript.ON_KILL_VIA_SLASH, _on_kill_via_slash_charge)
+		_tb.call("unsubscribe", _TriggerBusScript.ON_DASH, _on_dash_support)
+		_tb.call("unsubscribe", _TriggerBusScript.ON_SLASH_END, _on_slash_end_support)
 	# 영구 슬로우 방지 — 셧다운 중 납도 슬로우가 걸려 있었어도 강제 정상화.
 	if not is_equal_approx(Engine.time_scale, 1.0):
 		Engine.time_scale = 1.0
@@ -292,6 +297,9 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 			if _player.has_method("apply_iaido_haste"):
 				_player.call("apply_iaido_haste", float(params.get("haste_pct", 0.0)), float(params.get("dash_bonus", 0.0)))
 		)
+
+	# M9-T6 수확의 인력(SUPPORT_SHEATHE_MAGNET, iaido) — 납도마다 epicenter 반경 젬 force_home + 일시 자석 반경↑. 0뎀.
+	_support_sheathe_magnet(origin)
 
 	# 거합일도(IAIDO_FINISHER) — 거합+만개 처형이 있었던 납도면 _aim_dir 로 추가 일섬 발사.
 	if is_perfect and not executed_pts.is_empty():
@@ -437,6 +445,21 @@ func _on_slash_hit_deepmark(ctx: Dictionary) -> void:
 	_for_each_effect("On_Slash_Hit", "MARK_SPREAD", func(_i, params):
 		_spread_marks_from(target as Node3D, int(params.get("spread_count", 1)), float(params.get("spread_radius", 2.5)))
 	)
+	# M9-T6 각인의 가속(SUPPORT_MARK_ACCEL) — N타마다 적중 적 표식 +extra(DEEP_MARK 엔진 재사용, per_hits 게이팅, cap 클램프). 0뎀.
+	_for_each_effect("On_Slash_Hit", "SUPPORT_MARK_ACCEL", func(i, params):
+		var per_hits: int = max(int(params.get("per_hits", 3)), 1)
+		var extra: int = max(int(params.get("extra", 1)), 0)
+		# DEEP_MARK 과 카운터 충돌 방지 — boon_index 키에 오프셋(별도 누적기). per_hits 도달 시 표식 가산.
+		var key: int = i + 100000
+		var c: int = int(_hit_counters.get(key, 0)) + 1
+		if c >= per_hits:
+			_hit_counters[key] = 0
+			if extra > 0:
+				var cur: int = int((target as Node).get_meta("slash_mark", 0))
+				(target as Node).set_meta("slash_mark", min(cur + extra, _mark_cap()))
+		else:
+			_hit_counters[key] = c
+	)
 	# ── M9-S11 충전류 관통 처형 — 일섬 본체 적중에 편승(자동딜 아님). ★_in_cascade 가드로 ON_SHEATHE_KILL 재발 차단. ──
 	_charge_pierce_reap(target as Node)
 	_charge_pierce_thunder(target as Node)
@@ -558,6 +581,15 @@ func _on_kill_via_slash_charge(ctx) -> void:
 		dash_bonus = max(dash_bonus, float(params.get("dash_bonus", 0.0)))
 		gauge_frac = max(gauge_frac, float(params.get("gauge_frac", 0.0)))
 	)
+	# ── M9-T6: 보조 — 일섬 처치(On_Kill_via_Slash) 트리거 3종. 전부 0뎀·take_hit 미호출. ──
+	# 여운/발열은 has_card 와 무관하게 자체 카드 보유로 게이트(아래 헬퍼 내부). kpos = 처치 위치(ctx.position, 사망 전 캡처).
+	var kpos: Vector3 = ctx.get("position", Vector3.ZERO)
+	if kpos == Vector3.ZERO and _player is Node3D:
+		kpos = (_player as Node3D).global_position
+	_support_kill_vent()          # 여열환수 — 열 식힘(boon_gauge_burst 소량)
+	_support_kill_magnet(kpos)    # 혼불자석 — EXP젬 force_home
+	_support_kill_afterglow()     # 발도의 여운 — 다음 차지 가속 + 자원 환급
+
 	if not has_card:
 		return
 	if _player.has_method("apply_iaido_haste"):
@@ -566,6 +598,181 @@ func _on_kill_via_slash_charge(ctx) -> void:
 		_player.call("boon_gauge_burst", gauge_frac)
 	if _player is Node3D:
 		_spawn_perfect_flash((_player as Node3D).global_position)
+
+
+# ══════════════ M9-T6: 보조(support) 11장 핸들러 — ★전부 0뎀·take_hit 미호출(자율 FX 킬 0) ══════════════
+## 검증된 엔진 위임만: SLOW_FIELD(_spawn_slow_field) / DEEP_MARK(set_meta cap 클램프) / force_home(ExpGem) /
+## boon_gauge_burst(Player 열·쿨) / CHARGE_AFTERGLOW(apply_iaido_haste + boon_gauge_burst) / 이동·자석 일시 보너스.
+## ★ 어떤 핸들러도 적 take_hit 을 부르지 않는다 = ON_SHEATHE_KILL 재발 불가·_in_cascade 무관·주인공 규칙 유지.
+
+## 회피 종료(On_Dash) — 보조 3종(질주잔영장/질주의 기/방열질주) + 충전류 질주표식(style_req=charge).
+func _on_dash_support(ctx) -> void:
+	if not is_inside_tree() or _player == null or not is_instance_valid(_player):
+		return
+	if not (ctx is Dictionary):
+		return
+	var pos: Vector3 = ctx.get("position", Vector3.ZERO)
+	if pos == Vector3.ZERO and _player is Node3D:
+		pos = (_player as Node3D).global_position
+	# 1 질주잔영장(SUPPORT_DASH_FIELD) — 대시 종료 지점 소반경 흡인 감속장(SLOW_FIELD 엔진, 짧은 수명, 0뎀).
+	_for_each_effect("On_Dash", "SUPPORT_DASH_FIELD", func(_i, params):
+		_spawn_slow_field(pos,
+			float(params.get("slow_mult", 0.6)),
+			float(params.get("lifetime", 0.7)),
+			float(params.get("radius", 2.0)),
+			float(params.get("drift", 0.6)))
+	)
+	# 2 질주의 기(SUPPORT_DASH_HASTE) — 대시 후 duration 동안 이속 +move_pct(Player 일시 보너스).
+	_for_each_effect("On_Dash", "SUPPORT_DASH_HASTE", func(_i, params):
+		if _player.has_method("boon_add_move_speed"):
+			_player.call("boon_add_move_speed", float(params.get("move_pct", 0.18)), float(params.get("duration", 2.5)))
+	)
+	# 3 방열질주(SUPPORT_DASH_VENT) — 대시마다 열 식힘/쿨 단축(boon_gauge_burst 위임).
+	_for_each_effect("On_Dash", "SUPPORT_DASH_VENT", func(_i, params):
+		if _player.has_method("boon_gauge_burst"):
+			_player.call("boon_gauge_burst", float(params.get("gauge_frac", 0.08)))
+	)
+	# 4 질주표식(SUPPORT_DASH_MARK, charge) — 대시 경로 반경 적에 표식 +extra(set_meta cap 클램프, max_targets cap, 0뎀).
+	_for_each_effect("On_Dash", "SUPPORT_DASH_MARK", func(_i, params):
+		_support_dash_mark(pos,
+			float(params.get("radius", 1.6)),
+			max(int(params.get("extra", 1)), 0),
+			max(int(params.get("max_targets", 3)), 0))
+	)
+
+
+## 일섬 종료(On_Slash_End) — 잔심의 호흡(SUPPORT_SLASH_VENT). 일섬 후 열 식힘/쿨 단축(boon_gauge_burst). 0뎀.
+func _on_slash_end_support(ctx) -> void:
+	if not is_inside_tree() or _player == null or not is_instance_valid(_player):
+		return
+	if not (ctx is Dictionary):
+		return
+	_for_each_effect("On_Slash_End", "SUPPORT_SLASH_VENT", func(_i, params):
+		if _player.has_method("boon_gauge_burst"):
+			_player.call("boon_gauge_burst", float(params.get("gauge_frac", 0.06)))
+	)
+
+
+## 집결의 잔향(SUPPORT_GATHER_FIELD) — 납도 처치 지점 흡인 감속장(SLOW_FIELD 엔진 위임, 0뎀·동시≤2).
+func _support_gather_field(epicenter: Vector3) -> void:
+	_for_each_effect("On_Sheathe_Kill", "SUPPORT_GATHER_FIELD", func(_i, params):
+		_spawn_slow_field(epicenter,
+			float(params.get("slow_mult", 0.6)),
+			float(params.get("lifetime", 1.0)),
+			float(params.get("radius", 2.4)),
+			float(params.get("drift", 0.7)))
+	)
+
+
+## 여열환수(SUPPORT_KILL_VENT) — 일섬 처치마다 열 식힘(boon_gauge_burst 소량). 0뎀.
+func _support_kill_vent() -> void:
+	if _player == null or not is_instance_valid(_player) or not _player.has_method("boon_gauge_burst"):
+		return
+	var frac: float = 0.0
+	_for_each_effect("On_Kill_via_Slash", "SUPPORT_KILL_VENT", func(_i, params):
+		frac = max(frac, float(params.get("gauge_frac", 0.05)))
+	)
+	if frac > 0.0:
+		_player.call("boon_gauge_burst", frac)
+
+
+## 혼불자석(SUPPORT_KILL_MAGNET) — 처치 지점 반경 내 EXP젬 force_home(0뎀).
+func _support_kill_magnet(epicenter: Vector3) -> void:
+	var radius: float = 0.0
+	_for_each_effect("On_Kill_via_Slash", "SUPPORT_KILL_MAGNET", func(_i, params):
+		radius = max(radius, float(params.get("radius", 4.0)))
+	)
+	if radius <= 0.0:
+		return
+	for g in get_tree().get_nodes_in_group("exp_gems"):
+		if g == null or not is_instance_valid(g) or not (g is Node3D):
+			continue
+		if (g as Node3D).global_position.distance_to(epicenter) > radius:
+			continue
+		if g.has_method("force_home"):
+			g.call("force_home")
+
+
+## 발도의 여운(SUPPORT_KILL_AFTERGLOW, charge) — 일섬 처치마다 다음 차지 가속 + 대시 거리 + 자원 환급(0뎀, CHARGE_AFTERGLOW 패턴).
+func _support_kill_afterglow() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var has_card: bool = false
+	var haste: float = 0.0
+	var dash_bonus: float = 0.0
+	var gauge_frac: float = 0.0
+	_for_each_effect("On_Kill_via_Slash", "SUPPORT_KILL_AFTERGLOW", func(_i, params):
+		has_card = true
+		haste = max(haste, float(params.get("haste_pct", 0.0)))
+		dash_bonus = max(dash_bonus, float(params.get("dash_bonus", 0.0)))
+		gauge_frac = max(gauge_frac, float(params.get("gauge_frac", 0.0)))
+	)
+	if not has_card:
+		return
+	if _player.has_method("apply_iaido_haste"):
+		_player.call("apply_iaido_haste", haste, dash_bonus)
+	if gauge_frac > 0.0 and _player.has_method("boon_gauge_burst"):
+		_player.call("boon_gauge_burst", gauge_frac)
+
+
+## 수확의 인력(SUPPORT_SHEATHE_MAGNET, iaido) — 납도 origin 반경 젬 force_home + duration 동안 자석 반경 ×mult(0뎀).
+func _support_sheathe_magnet(origin: Vector3) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var has_card: bool = false
+	var radius: float = 0.0
+	var magnet_mult: float = 1.0
+	var duration: float = 0.0
+	_for_each_effect("On_Sheathe", "SUPPORT_SHEATHE_MAGNET", func(_i, params):
+		has_card = true
+		radius = max(radius, float(params.get("radius", 4.0)))
+		magnet_mult = max(magnet_mult, float(params.get("magnet_mult", 1.6)))
+		duration = max(duration, float(params.get("duration", 2.0)))
+	)
+	if not has_card:
+		return
+	# 즉시 호밍 — origin 반경 내 젬.
+	for g in get_tree().get_nodes_in_group("exp_gems"):
+		if g == null or not is_instance_valid(g) or not (g is Node3D):
+			continue
+		if radius > 0.0 and (g as Node3D).global_position.distance_to(origin) > radius:
+			continue
+		if g.has_method("force_home"):
+			g.call("force_home")
+	# 일시 자석 반경 가산(Player 런타임 보너스 — permanent exp_magnet_mult 와 별개).
+	if magnet_mult > 1.0 and duration > 0.0 and _player.has_method("boon_add_exp_magnet"):
+		_player.call("boon_add_exp_magnet", magnet_mult, duration)
+
+
+## 질주표식(SUPPORT_DASH_MARK, charge) — pos 반경 내 비보스 적 max_targets 마리에 표식 +extra(cap 클램프, 0뎀).
+func _support_dash_mark(pos: Vector3, radius: float, extra: int, max_targets: int) -> void:
+	if radius <= 0.0 or extra <= 0 or max_targets <= 0:
+		return
+	var cap: int = _mark_cap()
+	# 가까운 순 — pos 반경 내 비보스 적 수집.
+	var cands: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e) or not (e is Node3D):
+			continue
+		if e.is_in_group("boss"):
+			continue  # 보스 표식 살포 제외(원천 인플레 방지 — 코어 보존).
+		var d: float = (e as Node3D).global_position.distance_to(pos)
+		if d > radius:
+			continue
+		cands.append({"e": e, "d": d})
+	if cands.is_empty():
+		return
+	cands.sort_custom(func(a, b): return a["d"] < b["d"])
+	var hit: int = 0
+	for c in cands:
+		if hit >= max_targets:
+			break
+		var e = c["e"]
+		if e == null or not is_instance_valid(e):
+			continue
+		var cur: int = int(e.get_meta("slash_mark", 0))
+		e.set_meta("slash_mark", min(cur + extra, cap))  # cap 클램프, 0뎀.
+		hit += 1
 
 
 # ══════════════ 광인(MARK_SPREAD) — 표식 전파 ══════════════
@@ -671,6 +878,9 @@ func _on_sheathe_kill(ctx) -> void:
 	_on_sheathe_kill_scatter(epicenter)     # 2 산화진(척력 링 + 취약표식 — 0뎀)
 	_on_sheathe_kill_gauge(tier)            # 3 발도충전분출(PC 일섬 자원 분출 — 0뎀)
 	_on_sheathe_kill_spirit(tier)           # 4 정기흡수(PC 흡수 스택 — 0뎀)
+
+	# ── M9-T6: 보조 — 집결의 잔향(SUPPORT_GATHER_FIELD). 처치 지점 흡인 감속장(SLOW_FIELD 엔진 위임·0뎀·동시≤2). ──
+	_support_gather_field(epicenter)
 
 	# ── baseline 6종 — 항상(카드 무관). 자원 클램프는 각 호출/HealthComponent 가 보장. ──
 	_baseline_ripple(epicenter)        # 1 납도 파문
@@ -946,6 +1156,15 @@ func _on_sheathe_kill_slow_field(epicenter: Vector3) -> void:
 		drift = max(drift, float(params.get("drift", _SLOW_FIELD_DRIFT_DEFAULT)))
 	)
 	if not has_card or radius <= 0.0 or lifetime <= 0.0:
+		return
+	_spawn_slow_field(epicenter, slow_mult, lifetime, radius, drift)
+
+
+## M9-T6: 재사용 감속장 엔진 — epicenter 에 흡인 감속장 1개 생성(0뎀·동시 ≤_SLOW_FIELD_MAX_ACTIVE·수명 한정).
+## SLOW_FIELD(낙화감)/SUPPORT_GATHER_FIELD(집결의 잔향)/SUPPORT_DASH_FIELD(질주잔영장) 공용.
+## ★take_hit 미호출 — 적을 죽이지 않음. _process 가 수명 동안 반경 적에 감속 메타(150ms 단명) + epicenter 드리프트.
+func _spawn_slow_field(epicenter: Vector3, slow_mult: float, lifetime: float, radius: float, drift: float) -> void:
+	if radius <= 0.0 or lifetime <= 0.0:
 		return
 	slow_mult = clampf(slow_mult, 0.1, 1.0)
 	# ── 동시 활성 ≤_SLOW_FIELD_MAX_ACTIVE 캡 — 초과 시 가장 오래된 것 제거(무한 누적/영구 감속 차단). ──

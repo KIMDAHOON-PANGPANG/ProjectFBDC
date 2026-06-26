@@ -128,6 +128,14 @@ var boon_haste_charge_mult: float = 0.0
 var boon_dash_dist_bonus: float = 0.0
 ## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
+# ── M9-T6 보조(support) 일시 보너스(런타임·런마다 _ready 리셋 — 공유 .tres 미변형) ──
+## 질주의 기(SUPPORT_DASH_HASTE) — 회피 후 일정 시간 이동속도 +pct. _t>0 동안 boon_move_speed_mult 적용.
+var boon_move_speed_mult: float = 1.0
+var _boon_move_speed_t: float = 0.0
+## 수확의 인력(SUPPORT_SHEATHE_MAGNET) — 납도 후 일정 시간 EXP젬 자석 반경 ×mult. _t>0 동안 적용.
+## ★permanent exp_magnet_mult(카드 스탯)와 별개 — ExpGem 이 둘을 곱해 읽는다(영구 스탯 미변형).
+var boon_exp_magnet_mult: float = 1.0
+var _boon_exp_magnet_t: float = 0.0
 # ── M9-S7 폭심 충전(EPICENTER_OVERCHARGE): 다음 일섬 1발 대버스트 예약(런타임 변수·런마다 리셋) ──
 ## 예약된 다음 일섬 사거리/폭 배수 + 열 환급 비율. _fire_slash 가 1발 소비 후 즉시 1.0/0 리셋.
 var boon_next_slash_range_mult: float = 1.0
@@ -346,6 +354,11 @@ func _ready() -> void:
 	_build_dust_emitter()
 
 	active_boons.clear()
+	# M9-T6 보조(support) 일시 보너스 리셋(런마다 1.0/0 — 공유 .tres 미변형).
+	boon_move_speed_mult = 1.0
+	_boon_move_speed_t = 0.0
+	boon_exp_magnet_mult = 1.0
+	_boon_exp_magnet_t = 0.0
 	# M9-S9 정기흡수 런타임 자원 리셋(런마다 0부터 — 공유 .tres 미변형).
 	_spirit_stacks = 0
 	_spirit_release_pending = false
@@ -415,6 +428,17 @@ func _physics_process(delta: float) -> void:
 	# 역수(IAIDO_HASTE) 윈도우 타이머 — 다음 일섬 발사 또는 시간 경과로 종료.
 	if boon_haste_t > 0.0:
 		boon_haste_t -= delta
+	# M9-T6 보조 일시 보너스 타이머 — 만료 시 1.0 복귀(영구 누적 방지).
+	if _boon_move_speed_t > 0.0:
+		_boon_move_speed_t -= delta
+		if _boon_move_speed_t <= 0.0:
+			_boon_move_speed_t = 0.0
+			boon_move_speed_mult = 1.0
+	if _boon_exp_magnet_t > 0.0:
+		_boon_exp_magnet_t -= delta
+		if _boon_exp_magnet_t <= 0.0:
+			_boon_exp_magnet_t = 0.0
+			boon_exp_magnet_mult = 1.0
 	# 쿨 가속 — 역수 윈도우 중이면 쿨다운이 ×(1+haste) 속도로 닳는다.
 	var _cd_step: float = delta * (1.0 + boon_haste_charge_mult) if boon_haste_t > 0.0 else delta
 	# 회피 스택 리필 — 가득 차지 않았으면 한 칸씩 차오른다(칸당 evade_refill_time 초).
@@ -478,6 +502,9 @@ func _handle_move(delta: float) -> void:
 	# 주술사 장판(SorcererZone) 안에 있는 동안 이동 감속 — PC 동선 방해.
 	if _zone_slow_t > 0.0:
 		speed_mult *= _zone_slow_mult
+	# M9-T6 질주의 기(SUPPORT_DASH_HASTE) — 회피 후 일시 이속 가산(런타임 배수, 공유 .tres 미변형).
+	if _boon_move_speed_t > 0.0:
+		speed_mult *= boon_move_speed_mult
 	# (3) 사격 중 이동 감속 기믹 제거 — 이동은 항상 정상 속도.
 	velocity.x = dir.x * data.move_speed * speed_mult
 	velocity.z = dir.z * data.move_speed * speed_mult
@@ -1225,6 +1252,24 @@ func boon_gauge_burst(frac: float) -> void:
 		_slash_fixed_cd_t = maxf(_slash_fixed_cd_t - frac * cd, 0.0)
 	else:
 		_refund_heat(frac * data.heat_overheat_threshold)
+
+
+## M9-T6 질주의 기(SUPPORT_DASH_HASTE) — BoonExecutor 가 회피 종료 시 호출. duration 동안 이동속도 +pct.
+## 누적 아님(항상 최댓값으로 세팅, 타이머 갱신). 만료 시 _physics_process 가 1.0 복귀. ★공유 .tres 미변형.
+func boon_add_move_speed(pct: float, duration: float) -> void:
+	if pct <= 0.0 or duration <= 0.0:
+		return
+	boon_move_speed_mult = max(boon_move_speed_mult, 1.0 + pct)
+	_boon_move_speed_t = max(_boon_move_speed_t, duration)
+
+
+## M9-T6 수확의 인력(SUPPORT_SHEATHE_MAGNET) — BoonExecutor 가 납도 시 호출. duration 동안 EXP젬 자석 반경 ×mult.
+## 누적 아님(항상 최댓값으로 세팅, 타이머 갱신). 만료 시 _physics_process 가 1.0 복귀. ★permanent exp_magnet_mult 와 별개.
+func boon_add_exp_magnet(mult: float, duration: float) -> void:
+	if mult <= 1.0 or duration <= 0.0:
+		return
+	boon_exp_magnet_mult = max(boon_exp_magnet_mult, mult)
+	_boon_exp_magnet_t = max(_boon_exp_magnet_t, duration)
 
 
 ## 일섬연장(SLASH_EXTEND) — BoonExecutor 가 add_boon 직후 호출(패시브 재계산). 누적 아님(세팅).

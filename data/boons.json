@@ -7,16 +7,37 @@
       "kind": "style",
       "skill_type": "발도술",
       "style_req": "iaido",
+      "pool": "pillar",
       "components": [
         {
           "trigger": "Passive",
           "effect": "STYLE_IAIDO",
           "params_by_rarity": {
-            "chosim": { "sheathe_range_bonus": 0.5, "sheathe_dmg_bonus": 0, "mark_cap": 5 },
-            "rare":   { "sheathe_range_bonus": 0.9, "sheathe_dmg_bonus": 0, "mark_cap": 5 },
-            "uniq":   { "sheathe_range_bonus": 1.2, "sheathe_dmg_bonus": 1, "mark_cap": 5 },
-            "legend": { "sheathe_range_bonus": 1.6, "sheathe_dmg_bonus": 1, "mark_cap": 5 },
-            "master": { "sheathe_range_bonus": 2.0, "sheathe_dmg_bonus": 2, "mark_cap": 5 }
+            "chosim": {
+              "sheathe_range_bonus": 0.5,
+              "sheathe_dmg_bonus": 0,
+              "mark_cap": 5
+            },
+            "rare": {
+              "sheathe_range_bonus": 0.9,
+              "sheathe_dmg_bonus": 0,
+              "mark_cap": 5
+            },
+            "uniq": {
+              "sheathe_range_bonus": 1.2,
+              "sheathe_dmg_bonus": 1,
+              "mark_cap": 5
+            },
+            "legend": {
+              "sheathe_range_bonus": 1.6,
+              "sheathe_dmg_bonus": 1,
+              "mark_cap": 5
+            },
+            "master": {
+              "sheathe_range_bonus": 2.0,
+              "sheathe_dmg_bonus": 2,
+              "mark_cap": 5
+            }
           }
         }
       ]
@@ -28,16 +49,42 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "IAIDO_PERFECT",
           "params_by_rarity": {
-            "chosim": { "perfect_window": 0.25, "range_mult": 1.4, "settle_mult": 1.6, "refund_mult": 1.5 },
-            "rare":   { "perfect_window": 0.28, "range_mult": 1.45, "settle_mult": 1.75, "refund_mult": 1.6 },
-            "uniq":   { "perfect_window": 0.32, "range_mult": 1.5, "settle_mult": 1.9, "refund_mult": 1.7 },
-            "legend": { "perfect_window": 0.36, "range_mult": 1.6, "settle_mult": 2.05, "refund_mult": 1.85 },
-            "master": { "perfect_window": 0.4, "range_mult": 1.7, "settle_mult": 2.2, "refund_mult": 2.0 }
+            "chosim": {
+              "perfect_window": 0.25,
+              "range_mult": 1.4,
+              "settle_mult": 1.6,
+              "refund_mult": 1.5
+            },
+            "rare": {
+              "perfect_window": 0.28,
+              "range_mult": 1.45,
+              "settle_mult": 1.75,
+              "refund_mult": 1.6
+            },
+            "uniq": {
+              "perfect_window": 0.32,
+              "range_mult": 1.5,
+              "settle_mult": 1.9,
+              "refund_mult": 1.7
+            },
+            "legend": {
+              "perfect_window": 0.36,
+              "range_mult": 1.6,
+              "settle_mult": 2.05,
+              "refund_mult": 1.85
+            },
+            "master": {
+              "perfect_window": 0.4,
+              "range_mult": 1.7,
+              "settle_mult": 2.2,
+              "refund_mult": 2.0
+            }
           }
         }
       ]
@@ -49,16 +96,32 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "DEEP_MARK",
           "params_by_rarity": {
-            "chosim": { "extra": 1, "per_hits": 1 },
-            "rare":   { "extra": 1, "per_hits": 1 },
-            "uniq":   { "extra": 1, "per_hits": 1 },
-            "legend": { "extra": 1, "per_hits": 1 },
-            "master": { "extra": 2, "per_hits": 1 }
+            "chosim": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "rare": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "uniq": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "legend": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "master": {
+              "extra": 2,
+              "per_hits": 1
+            }
           }
         }
       ]
@@ -70,16 +133,37 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "SHEATHE_REFUND",
           "params_by_rarity": {
-            "chosim": { "heat_per_mark_extra": 0.04, "hp_per_mark_extra": 0.3, "full_collect_mult": 2.0 },
-            "rare":   { "heat_per_mark_extra": 0.05, "hp_per_mark_extra": 0.38, "full_collect_mult": 2.0 },
-            "uniq":   { "heat_per_mark_extra": 0.06, "hp_per_mark_extra": 0.45, "full_collect_mult": 2.0 },
-            "legend": { "heat_per_mark_extra": 0.07, "hp_per_mark_extra": 0.52, "full_collect_mult": 2.0 },
-            "master": { "heat_per_mark_extra": 0.08, "hp_per_mark_extra": 0.6, "full_collect_mult": 2.0 }
+            "chosim": {
+              "heat_per_mark_extra": 0.04,
+              "hp_per_mark_extra": 0.3,
+              "full_collect_mult": 2.0
+            },
+            "rare": {
+              "heat_per_mark_extra": 0.05,
+              "hp_per_mark_extra": 0.38,
+              "full_collect_mult": 2.0
+            },
+            "uniq": {
+              "heat_per_mark_extra": 0.06,
+              "hp_per_mark_extra": 0.45,
+              "full_collect_mult": 2.0
+            },
+            "legend": {
+              "heat_per_mark_extra": 0.07,
+              "hp_per_mark_extra": 0.52,
+              "full_collect_mult": 2.0
+            },
+            "master": {
+              "heat_per_mark_extra": 0.08,
+              "hp_per_mark_extra": 0.6,
+              "full_collect_mult": 2.0
+            }
           }
         }
       ]
@@ -91,16 +175,32 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "MARK_SPREAD",
           "params_by_rarity": {
-            "chosim": { "spread_count": 1, "spread_radius": 2.5 },
-            "rare":   { "spread_count": 1, "spread_radius": 2.8 },
-            "uniq":   { "spread_count": 2, "spread_radius": 3.0 },
-            "legend": { "spread_count": 2, "spread_radius": 3.4 },
-            "master": { "spread_count": 2, "spread_radius": 3.8 }
+            "chosim": {
+              "spread_count": 1,
+              "spread_radius": 2.5
+            },
+            "rare": {
+              "spread_count": 1,
+              "spread_radius": 2.8
+            },
+            "uniq": {
+              "spread_count": 2,
+              "spread_radius": 3.0
+            },
+            "legend": {
+              "spread_count": 2,
+              "spread_radius": 3.4
+            },
+            "master": {
+              "spread_count": 2,
+              "spread_radius": 3.8
+            }
           }
         }
       ]
@@ -112,16 +212,37 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "IAIDO_CHAIN",
           "params_by_rarity": {
-            "chosim": { "combo_window": 2.0, "per_stage": 0.12, "max_stage": 4 },
-            "rare":   { "combo_window": 2.0, "per_stage": 0.12, "max_stage": 4 },
-            "uniq":   { "combo_window": 2.2, "per_stage": 0.14, "max_stage": 5 },
-            "legend": { "combo_window": 2.4, "per_stage": 0.16, "max_stage": 5 },
-            "master": { "combo_window": 2.6, "per_stage": 0.18, "max_stage": 6 }
+            "chosim": {
+              "combo_window": 2.0,
+              "per_stage": 0.12,
+              "max_stage": 4
+            },
+            "rare": {
+              "combo_window": 2.0,
+              "per_stage": 0.12,
+              "max_stage": 4
+            },
+            "uniq": {
+              "combo_window": 2.2,
+              "per_stage": 0.14,
+              "max_stage": 5
+            },
+            "legend": {
+              "combo_window": 2.4,
+              "per_stage": 0.16,
+              "max_stage": 5
+            },
+            "master": {
+              "combo_window": 2.6,
+              "per_stage": 0.18,
+              "max_stage": 6
+            }
           }
         }
       ]
@@ -133,16 +254,37 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "SHEATHE_DOMINO",
           "params_by_rarity": {
-            "chosim": { "chain_radius": 3.0, "chain_count": 2, "depth": 2 },
-            "rare":   { "chain_radius": 3.4, "chain_count": 2, "depth": 2 },
-            "uniq":   { "chain_radius": 3.8, "chain_count": 3, "depth": 2 },
-            "legend": { "chain_radius": 4.2, "chain_count": 3, "depth": 2 },
-            "master": { "chain_radius": 4.8, "chain_count": 4, "depth": 2 }
+            "chosim": {
+              "chain_radius": 3.0,
+              "chain_count": 2,
+              "depth": 2
+            },
+            "rare": {
+              "chain_radius": 3.4,
+              "chain_count": 2,
+              "depth": 2
+            },
+            "uniq": {
+              "chain_radius": 3.8,
+              "chain_count": 3,
+              "depth": 2
+            },
+            "legend": {
+              "chain_radius": 4.2,
+              "chain_count": 3,
+              "depth": 2
+            },
+            "master": {
+              "chain_radius": 4.8,
+              "chain_count": 4,
+              "depth": 2
+            }
           }
         }
       ]
@@ -154,16 +296,32 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "IAIDO_HASTE",
           "params_by_rarity": {
-            "chosim": { "haste_pct": 0.35, "dash_bonus": 1.0 },
-            "rare":   { "haste_pct": 0.4, "dash_bonus": 1.0 },
-            "uniq":   { "haste_pct": 0.45, "dash_bonus": 1.5 },
-            "legend": { "haste_pct": 0.5, "dash_bonus": 1.5 },
-            "master": { "haste_pct": 0.6, "dash_bonus": 2.0 }
+            "chosim": {
+              "haste_pct": 0.35,
+              "dash_bonus": 1.0
+            },
+            "rare": {
+              "haste_pct": 0.4,
+              "dash_bonus": 1.0
+            },
+            "uniq": {
+              "haste_pct": 0.45,
+              "dash_bonus": 1.5
+            },
+            "legend": {
+              "haste_pct": 0.5,
+              "dash_bonus": 1.5
+            },
+            "master": {
+              "haste_pct": 0.6,
+              "dash_bonus": 2.0
+            }
           }
         }
       ]
@@ -175,16 +333,32 @@
       "kind": "slash",
       "skill_type": "일섬",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "SLASH_EXTEND",
           "params_by_rarity": {
-            "chosim": { "range_mult": 1.25, "width_mult": 1.2 },
-            "rare":   { "range_mult": 1.3, "width_mult": 1.24 },
-            "uniq":   { "range_mult": 1.38, "width_mult": 1.3 },
-            "legend": { "range_mult": 1.45, "width_mult": 1.36 },
-            "master": { "range_mult": 1.55, "width_mult": 1.45 }
+            "chosim": {
+              "range_mult": 1.25,
+              "width_mult": 1.2
+            },
+            "rare": {
+              "range_mult": 1.3,
+              "width_mult": 1.24
+            },
+            "uniq": {
+              "range_mult": 1.38,
+              "width_mult": 1.3
+            },
+            "legend": {
+              "range_mult": 1.45,
+              "width_mult": 1.36
+            },
+            "master": {
+              "range_mult": 1.55,
+              "width_mult": 1.45
+            }
           }
         }
       ]
@@ -196,16 +370,27 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "IAIDO_FINISHER",
           "params_by_rarity": {
-            "chosim": { "extra_slashes": 1 },
-            "rare":   { "extra_slashes": 1 },
-            "uniq":   { "extra_slashes": 1 },
-            "legend": { "extra_slashes": 2 },
-            "master": { "extra_slashes": 2 }
+            "chosim": {
+              "extra_slashes": 1
+            },
+            "rare": {
+              "extra_slashes": 1
+            },
+            "uniq": {
+              "extra_slashes": 1
+            },
+            "legend": {
+              "extra_slashes": 2
+            },
+            "master": {
+              "extra_slashes": 2
+            }
           }
         }
       ]
@@ -217,16 +402,32 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "IAI_DOMINO",
           "params_by_rarity": {
-            "chosim": { "iai_radius": 4.0, "domino_count": 3 },
-            "rare":   { "iai_radius": 4.2, "domino_count": 3 },
-            "uniq":   { "iai_radius": 4.6, "domino_count": 4 },
-            "legend": { "iai_radius": 5.0, "domino_count": 4 },
-            "master": { "iai_radius": 5.4, "domino_count": 5 }
+            "chosim": {
+              "iai_radius": 4.0,
+              "domino_count": 3
+            },
+            "rare": {
+              "iai_radius": 4.2,
+              "domino_count": 3
+            },
+            "uniq": {
+              "iai_radius": 4.6,
+              "domino_count": 4
+            },
+            "legend": {
+              "iai_radius": 5.0,
+              "domino_count": 4
+            },
+            "master": {
+              "iai_radius": 5.4,
+              "domino_count": 5
+            }
           }
         }
       ]
@@ -238,16 +439,32 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "REAPING_CULL",
           "params_by_rarity": {
-            "chosim": { "cull_radius": 2.5, "per_mark_dmg": 2 },
-            "rare":   { "cull_radius": 2.8, "per_mark_dmg": 2 },
-            "uniq":   { "cull_radius": 3.2, "per_mark_dmg": 3 },
-            "legend": { "cull_radius": 3.6, "per_mark_dmg": 3 },
-            "master": { "cull_radius": 4.0, "per_mark_dmg": 4 }
+            "chosim": {
+              "cull_radius": 2.5,
+              "per_mark_dmg": 2
+            },
+            "rare": {
+              "cull_radius": 2.8,
+              "per_mark_dmg": 2
+            },
+            "uniq": {
+              "cull_radius": 3.2,
+              "per_mark_dmg": 3
+            },
+            "legend": {
+              "cull_radius": 3.6,
+              "per_mark_dmg": 3
+            },
+            "master": {
+              "cull_radius": 4.0,
+              "per_mark_dmg": 4
+            }
           }
         }
       ]
@@ -259,16 +476,42 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "EPICENTER_OVERCHARGE",
           "params_by_rarity": {
-            "chosim": { "range_mult": 1.5, "width_mult": 1.4, "heat_refund": 0.15, "window": 4.0 },
-            "rare":   { "range_mult": 1.55, "width_mult": 1.45, "heat_refund": 0.17, "window": 4.0 },
-            "uniq":   { "range_mult": 1.65, "width_mult": 1.55, "heat_refund": 0.2, "window": 4.0 },
-            "legend": { "range_mult": 1.75, "width_mult": 1.65, "heat_refund": 0.23, "window": 4.0 },
-            "master": { "range_mult": 1.9, "width_mult": 1.8, "heat_refund": 0.27, "window": 4.0 }
+            "chosim": {
+              "range_mult": 1.5,
+              "width_mult": 1.4,
+              "heat_refund": 0.15,
+              "window": 4.0
+            },
+            "rare": {
+              "range_mult": 1.55,
+              "width_mult": 1.45,
+              "heat_refund": 0.17,
+              "window": 4.0
+            },
+            "uniq": {
+              "range_mult": 1.65,
+              "width_mult": 1.55,
+              "heat_refund": 0.2,
+              "window": 4.0
+            },
+            "legend": {
+              "range_mult": 1.75,
+              "width_mult": 1.65,
+              "heat_refund": 0.23,
+              "window": 4.0
+            },
+            "master": {
+              "range_mult": 1.9,
+              "width_mult": 1.8,
+              "heat_refund": 0.27,
+              "window": 4.0
+            }
           }
         }
       ]
@@ -280,16 +523,27 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "MARK_CONTAGION",
           "params_by_rarity": {
-            "chosim": { "hops": 1 },
-            "rare":   { "hops": 1 },
-            "uniq":   { "hops": 1 },
-            "legend": { "hops": 2 },
-            "master": { "hops": 2 }
+            "chosim": {
+              "hops": 1
+            },
+            "rare": {
+              "hops": 1
+            },
+            "uniq": {
+              "hops": 1
+            },
+            "legend": {
+              "hops": 2
+            },
+            "master": {
+              "hops": 2
+            }
           }
         }
       ]
@@ -301,16 +555,42 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "SLOW_FIELD",
           "params_by_rarity": {
-            "chosim": { "slow_mult": 0.6, "lifetime": 1.0, "radius": 2.6, "drift": 0.5 },
-            "rare":   { "slow_mult": 0.57, "lifetime": 1.1, "radius": 2.8, "drift": 0.6 },
-            "uniq":   { "slow_mult": 0.55, "lifetime": 1.2, "radius": 3.0, "drift": 0.7 },
-            "legend": { "slow_mult": 0.52, "lifetime": 1.3, "radius": 3.2, "drift": 0.8 },
-            "master": { "slow_mult": 0.5, "lifetime": 1.4, "radius": 3.4, "drift": 0.9 }
+            "chosim": {
+              "slow_mult": 0.6,
+              "lifetime": 1.0,
+              "radius": 2.6,
+              "drift": 0.5
+            },
+            "rare": {
+              "slow_mult": 0.57,
+              "lifetime": 1.1,
+              "radius": 2.8,
+              "drift": 0.6
+            },
+            "uniq": {
+              "slow_mult": 0.55,
+              "lifetime": 1.2,
+              "radius": 3.0,
+              "drift": 0.7
+            },
+            "legend": {
+              "slow_mult": 0.52,
+              "lifetime": 1.3,
+              "radius": 3.2,
+              "drift": 0.8
+            },
+            "master": {
+              "slow_mult": 0.5,
+              "lifetime": 1.4,
+              "radius": 3.4,
+              "drift": 0.9
+            }
           }
         }
       ]
@@ -322,16 +602,37 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "SCATTER_RING",
           "params_by_rarity": {
-            "chosim": { "push_radius": 2.6, "push_speed": 5.0, "vuln_mult": 1.25 },
-            "rare":   { "push_radius": 2.8, "push_speed": 5.5, "vuln_mult": 1.3 },
-            "uniq":   { "push_radius": 3.0, "push_speed": 6.0, "vuln_mult": 1.3 },
-            "legend": { "push_radius": 3.2, "push_speed": 6.5, "vuln_mult": 1.4 },
-            "master": { "push_radius": 3.4, "push_speed": 7.0, "vuln_mult": 1.5 }
+            "chosim": {
+              "push_radius": 2.6,
+              "push_speed": 5.0,
+              "vuln_mult": 1.25
+            },
+            "rare": {
+              "push_radius": 2.8,
+              "push_speed": 5.5,
+              "vuln_mult": 1.3
+            },
+            "uniq": {
+              "push_radius": 3.0,
+              "push_speed": 6.0,
+              "vuln_mult": 1.3
+            },
+            "legend": {
+              "push_radius": 3.2,
+              "push_speed": 6.5,
+              "vuln_mult": 1.4
+            },
+            "master": {
+              "push_radius": 3.4,
+              "push_speed": 7.0,
+              "vuln_mult": 1.5
+            }
           }
         }
       ]
@@ -343,16 +644,32 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "GAUGE_BURST",
           "params_by_rarity": {
-            "chosim": { "base_frac": 0.12, "per_tier_frac": 0.06 },
-            "rare":   { "base_frac": 0.14, "per_tier_frac": 0.07 },
-            "uniq":   { "base_frac": 0.16, "per_tier_frac": 0.08 },
-            "legend": { "base_frac": 0.18, "per_tier_frac": 0.09 },
-            "master": { "base_frac": 0.2, "per_tier_frac": 0.11 }
+            "chosim": {
+              "base_frac": 0.12,
+              "per_tier_frac": 0.06
+            },
+            "rare": {
+              "base_frac": 0.14,
+              "per_tier_frac": 0.07
+            },
+            "uniq": {
+              "base_frac": 0.16,
+              "per_tier_frac": 0.08
+            },
+            "legend": {
+              "base_frac": 0.18,
+              "per_tier_frac": 0.09
+            },
+            "master": {
+              "base_frac": 0.2,
+              "per_tier_frac": 0.11
+            }
           }
         }
       ]
@@ -364,16 +681,42 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "iaido",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "SPIRIT_STACK",
           "params_by_rarity": {
-            "chosim": { "per_stack": 0.02, "max_stack": 8, "release_mult": 1.8, "tier_gain": 1 },
-            "rare":   { "per_stack": 0.022, "max_stack": 8, "release_mult": 1.9, "tier_gain": 1 },
-            "uniq":   { "per_stack": 0.025, "max_stack": 8, "release_mult": 2.0, "tier_gain": 2 },
-            "legend": { "per_stack": 0.028, "max_stack": 8, "release_mult": 2.1, "tier_gain": 2 },
-            "master": { "per_stack": 0.03, "max_stack": 8, "release_mult": 2.2, "tier_gain": 3 }
+            "chosim": {
+              "per_stack": 0.02,
+              "max_stack": 8,
+              "release_mult": 1.8,
+              "tier_gain": 1
+            },
+            "rare": {
+              "per_stack": 0.022,
+              "max_stack": 8,
+              "release_mult": 1.9,
+              "tier_gain": 1
+            },
+            "uniq": {
+              "per_stack": 0.025,
+              "max_stack": 8,
+              "release_mult": 2.0,
+              "tier_gain": 2
+            },
+            "legend": {
+              "per_stack": 0.028,
+              "max_stack": 8,
+              "release_mult": 2.1,
+              "tier_gain": 2
+            },
+            "master": {
+              "per_stack": 0.03,
+              "max_stack": 8,
+              "release_mult": 2.2,
+              "tier_gain": 3
+            }
           }
         }
       ]
@@ -385,16 +728,47 @@
       "kind": "style",
       "skill_type": "발도술",
       "style_req": "nuki",
+      "pool": "pillar",
       "components": [
         {
           "trigger": "Passive",
           "effect": "STYLE_NUKI",
           "params_by_rarity": {
-            "chosim": { "nuki_window": 0.32, "nuki_max": 3, "sweet_frac": 0.4, "retap_charge_frac": 0.7, "mark_cap": 3 },
-            "rare":   { "nuki_window": 0.34, "nuki_max": 3, "sweet_frac": 0.42, "retap_charge_frac": 0.72, "mark_cap": 3 },
-            "uniq":   { "nuki_window": 0.36, "nuki_max": 3, "sweet_frac": 0.44, "retap_charge_frac": 0.75, "mark_cap": 3 },
-            "legend": { "nuki_window": 0.38, "nuki_max": 4, "sweet_frac": 0.46, "retap_charge_frac": 0.78, "mark_cap": 3 },
-            "master": { "nuki_window": 0.4, "nuki_max": 4, "sweet_frac": 0.5, "retap_charge_frac": 0.8, "mark_cap": 3 }
+            "chosim": {
+              "nuki_window": 0.32,
+              "nuki_max": 3,
+              "sweet_frac": 0.4,
+              "retap_charge_frac": 0.7,
+              "mark_cap": 3
+            },
+            "rare": {
+              "nuki_window": 0.34,
+              "nuki_max": 3,
+              "sweet_frac": 0.42,
+              "retap_charge_frac": 0.72,
+              "mark_cap": 3
+            },
+            "uniq": {
+              "nuki_window": 0.36,
+              "nuki_max": 3,
+              "sweet_frac": 0.44,
+              "retap_charge_frac": 0.75,
+              "mark_cap": 3
+            },
+            "legend": {
+              "nuki_window": 0.38,
+              "nuki_max": 4,
+              "sweet_frac": 0.46,
+              "retap_charge_frac": 0.78,
+              "mark_cap": 3
+            },
+            "master": {
+              "nuki_window": 0.4,
+              "nuki_max": 4,
+              "sweet_frac": 0.5,
+              "retap_charge_frac": 0.8,
+              "mark_cap": 3
+            }
           }
         }
       ]
@@ -406,16 +780,27 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "NUKI_COMBO_EXT",
           "params_by_rarity": {
-            "chosim": { "max_bonus": 1 },
-            "rare":   { "max_bonus": 1 },
-            "uniq":   { "max_bonus": 2 },
-            "legend": { "max_bonus": 2 },
-            "master": { "max_bonus": 3 }
+            "chosim": {
+              "max_bonus": 1
+            },
+            "rare": {
+              "max_bonus": 1
+            },
+            "uniq": {
+              "max_bonus": 2
+            },
+            "legend": {
+              "max_bonus": 2
+            },
+            "master": {
+              "max_bonus": 3
+            }
           }
         }
       ]
@@ -427,16 +812,37 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "NUKI_ACCEL",
           "params_by_rarity": {
-            "chosim": { "haste_pct": 0.35, "dash_bonus": 0.8, "max_tier": 2 },
-            "rare":   { "haste_pct": 0.4, "dash_bonus": 0.9, "max_tier": 2 },
-            "uniq":   { "haste_pct": 0.45, "dash_bonus": 1.0, "max_tier": 2 },
-            "legend": { "haste_pct": 0.5, "dash_bonus": 1.2, "max_tier": 3 },
-            "master": { "haste_pct": 0.6, "dash_bonus": 1.4, "max_tier": 3 }
+            "chosim": {
+              "haste_pct": 0.35,
+              "dash_bonus": 0.8,
+              "max_tier": 2
+            },
+            "rare": {
+              "haste_pct": 0.4,
+              "dash_bonus": 0.9,
+              "max_tier": 2
+            },
+            "uniq": {
+              "haste_pct": 0.45,
+              "dash_bonus": 1.0,
+              "max_tier": 2
+            },
+            "legend": {
+              "haste_pct": 0.5,
+              "dash_bonus": 1.2,
+              "max_tier": 3
+            },
+            "master": {
+              "haste_pct": 0.6,
+              "dash_bonus": 1.4,
+              "max_tier": 3
+            }
           }
         }
       ]
@@ -448,16 +854,37 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "NUKI_RHYTHM",
           "params_by_rarity": {
-            "chosim": { "need": 3, "window_bonus": 0.06, "settle_mult": 1.3 },
-            "rare":   { "need": 3, "window_bonus": 0.07, "settle_mult": 1.35 },
-            "uniq":   { "need": 3, "window_bonus": 0.08, "settle_mult": 1.45 },
-            "legend": { "need": 2, "window_bonus": 0.09, "settle_mult": 1.55 },
-            "master": { "need": 2, "window_bonus": 0.1, "settle_mult": 1.7 }
+            "chosim": {
+              "need": 3,
+              "window_bonus": 0.06,
+              "settle_mult": 1.3
+            },
+            "rare": {
+              "need": 3,
+              "window_bonus": 0.07,
+              "settle_mult": 1.35
+            },
+            "uniq": {
+              "need": 3,
+              "window_bonus": 0.08,
+              "settle_mult": 1.45
+            },
+            "legend": {
+              "need": 2,
+              "window_bonus": 0.09,
+              "settle_mult": 1.55
+            },
+            "master": {
+              "need": 2,
+              "window_bonus": 0.1,
+              "settle_mult": 1.7
+            }
           }
         }
       ]
@@ -469,16 +896,32 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "DEEP_MARK",
           "params_by_rarity": {
-            "chosim": { "extra": 1, "per_hits": 1 },
-            "rare":   { "extra": 1, "per_hits": 1 },
-            "uniq":   { "extra": 1, "per_hits": 1 },
-            "legend": { "extra": 1, "per_hits": 1 },
-            "master": { "extra": 2, "per_hits": 1 }
+            "chosim": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "rare": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "uniq": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "legend": {
+              "extra": 1,
+              "per_hits": 1
+            },
+            "master": {
+              "extra": 2,
+              "per_hits": 1
+            }
           }
         }
       ]
@@ -490,16 +933,32 @@
       "kind": "mark",
       "skill_type": "표식",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "MARK_SPREAD",
           "params_by_rarity": {
-            "chosim": { "spread_count": 1, "spread_radius": 2.5 },
-            "rare":   { "spread_count": 1, "spread_radius": 2.8 },
-            "uniq":   { "spread_count": 2, "spread_radius": 3.0 },
-            "legend": { "spread_count": 2, "spread_radius": 3.4 },
-            "master": { "spread_count": 2, "spread_radius": 3.8 }
+            "chosim": {
+              "spread_count": 1,
+              "spread_radius": 2.5
+            },
+            "rare": {
+              "spread_count": 1,
+              "spread_radius": 2.8
+            },
+            "uniq": {
+              "spread_count": 2,
+              "spread_radius": 3.0
+            },
+            "legend": {
+              "spread_count": 2,
+              "spread_radius": 3.4
+            },
+            "master": {
+              "spread_count": 2,
+              "spread_radius": 3.8
+            }
           }
         }
       ]
@@ -511,16 +970,27 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "NUKI_SETTLE",
           "params_by_rarity": {
-            "chosim": { "enabled": 1 },
-            "rare":   { "enabled": 1 },
-            "uniq":   { "enabled": 1 },
-            "legend": { "enabled": 1 },
-            "master": { "enabled": 1 }
+            "chosim": {
+              "enabled": 1
+            },
+            "rare": {
+              "enabled": 1
+            },
+            "uniq": {
+              "enabled": 1
+            },
+            "legend": {
+              "enabled": 1
+            },
+            "master": {
+              "enabled": 1
+            }
           }
         }
       ]
@@ -532,16 +1002,32 @@
       "kind": "sheathe",
       "skill_type": "마무리",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Sheathe",
           "effect": "IAIDO_HASTE",
           "params_by_rarity": {
-            "chosim": { "haste_pct": 0.3, "dash_bonus": 0.8 },
-            "rare":   { "haste_pct": 0.35, "dash_bonus": 0.9 },
-            "uniq":   { "haste_pct": 0.4, "dash_bonus": 1.0 },
-            "legend": { "haste_pct": 0.45, "dash_bonus": 1.2 },
-            "master": { "haste_pct": 0.55, "dash_bonus": 1.4 }
+            "chosim": {
+              "haste_pct": 0.3,
+              "dash_bonus": 0.8
+            },
+            "rare": {
+              "haste_pct": 0.35,
+              "dash_bonus": 0.9
+            },
+            "uniq": {
+              "haste_pct": 0.4,
+              "dash_bonus": 1.0
+            },
+            "legend": {
+              "haste_pct": 0.45,
+              "dash_bonus": 1.2
+            },
+            "master": {
+              "haste_pct": 0.55,
+              "dash_bonus": 1.4
+            }
           }
         }
       ]
@@ -553,16 +1039,27 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "NUKI_CADENCE",
           "params_by_rarity": {
-            "chosim": { "kills_need": 2 },
-            "rare":   { "kills_need": 2 },
-            "uniq":   { "kills_need": 2 },
-            "legend": { "kills_need": 2 },
-            "master": { "kills_need": 2 }
+            "chosim": {
+              "kills_need": 2
+            },
+            "rare": {
+              "kills_need": 2
+            },
+            "uniq": {
+              "kills_need": 2
+            },
+            "legend": {
+              "kills_need": 2
+            },
+            "master": {
+              "kills_need": 2
+            }
           }
         }
       ]
@@ -574,16 +1071,32 @@
       "kind": "slash",
       "skill_type": "일섬",
       "style_req": "nuki",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "SLASH_EXTEND",
           "params_by_rarity": {
-            "chosim": { "range_mult": 1.25, "width_mult": 1.2 },
-            "rare":   { "range_mult": 1.3, "width_mult": 1.24 },
-            "uniq":   { "range_mult": 1.38, "width_mult": 1.3 },
-            "legend": { "range_mult": 1.45, "width_mult": 1.36 },
-            "master": { "range_mult": 1.55, "width_mult": 1.45 }
+            "chosim": {
+              "range_mult": 1.25,
+              "width_mult": 1.2
+            },
+            "rare": {
+              "range_mult": 1.3,
+              "width_mult": 1.24
+            },
+            "uniq": {
+              "range_mult": 1.38,
+              "width_mult": 1.3
+            },
+            "legend": {
+              "range_mult": 1.45,
+              "width_mult": 1.36
+            },
+            "master": {
+              "range_mult": 1.55,
+              "width_mult": 1.45
+            }
           }
         }
       ]
@@ -595,16 +1108,57 @@
       "kind": "style",
       "skill_type": "발도술",
       "style_req": "charge",
+      "pool": "pillar",
       "components": [
         {
           "trigger": "Passive",
           "effect": "STYLE_CHARGE",
           "params_by_rarity": {
-            "chosim": { "tier_lo": 0.4, "tier_hi": 0.85, "pierce_range_mult": 1.1, "pierce_width_mult": 1.05, "dash_speed_mult": 1.1, "mark_depth_base": 1, "mark_cap": 7 },
-            "rare":   { "tier_lo": 0.4, "tier_hi": 0.85, "pierce_range_mult": 1.14, "pierce_width_mult": 1.08, "dash_speed_mult": 1.12, "mark_depth_base": 1, "mark_cap": 7 },
-            "uniq":   { "tier_lo": 0.38, "tier_hi": 0.82, "pierce_range_mult": 1.2, "pierce_width_mult": 1.12, "dash_speed_mult": 1.16, "mark_depth_base": 1, "mark_cap": 7 },
-            "legend": { "tier_lo": 0.36, "tier_hi": 0.8, "pierce_range_mult": 1.26, "pierce_width_mult": 1.16, "dash_speed_mult": 1.2, "mark_depth_base": 2, "mark_cap": 7 },
-            "master": { "tier_lo": 0.34, "tier_hi": 0.78, "pierce_range_mult": 1.34, "pierce_width_mult": 1.22, "dash_speed_mult": 1.26, "mark_depth_base": 2, "mark_cap": 7 }
+            "chosim": {
+              "tier_lo": 0.4,
+              "tier_hi": 0.85,
+              "pierce_range_mult": 1.1,
+              "pierce_width_mult": 1.05,
+              "dash_speed_mult": 1.1,
+              "mark_depth_base": 1,
+              "mark_cap": 7
+            },
+            "rare": {
+              "tier_lo": 0.4,
+              "tier_hi": 0.85,
+              "pierce_range_mult": 1.14,
+              "pierce_width_mult": 1.08,
+              "dash_speed_mult": 1.12,
+              "mark_depth_base": 1,
+              "mark_cap": 7
+            },
+            "uniq": {
+              "tier_lo": 0.38,
+              "tier_hi": 0.82,
+              "pierce_range_mult": 1.2,
+              "pierce_width_mult": 1.12,
+              "dash_speed_mult": 1.16,
+              "mark_depth_base": 1,
+              "mark_cap": 7
+            },
+            "legend": {
+              "tier_lo": 0.36,
+              "tier_hi": 0.8,
+              "pierce_range_mult": 1.26,
+              "pierce_width_mult": 1.16,
+              "dash_speed_mult": 1.2,
+              "mark_depth_base": 2,
+              "mark_cap": 7
+            },
+            "master": {
+              "tier_lo": 0.34,
+              "tier_hi": 0.78,
+              "pierce_range_mult": 1.34,
+              "pierce_width_mult": 1.22,
+              "dash_speed_mult": 1.26,
+              "mark_depth_base": 2,
+              "mark_cap": 7
+            }
           }
         }
       ]
@@ -616,16 +1170,27 @@
       "kind": "control",
       "skill_type": "조작",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "CHARGE_HASTE",
           "params_by_rarity": {
-            "chosim": { "haste_pct": 0.25 },
-            "rare":   { "haste_pct": 0.3 },
-            "uniq":   { "haste_pct": 0.4 },
-            "legend": { "haste_pct": 0.5 },
-            "master": { "haste_pct": 0.65 }
+            "chosim": {
+              "haste_pct": 0.25
+            },
+            "rare": {
+              "haste_pct": 0.3
+            },
+            "uniq": {
+              "haste_pct": 0.4
+            },
+            "legend": {
+              "haste_pct": 0.5
+            },
+            "master": {
+              "haste_pct": 0.65
+            }
           }
         }
       ]
@@ -637,16 +1202,37 @@
       "kind": "control",
       "skill_type": "표식",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "CHARGE_PERFECT",
           "params_by_rarity": {
-            "chosim": { "window": 0.35, "range_mult": 1.15, "refund_mult": 1.2 },
-            "rare":   { "window": 0.38, "range_mult": 1.2, "refund_mult": 1.25 },
-            "uniq":   { "window": 0.42, "range_mult": 1.26, "refund_mult": 1.35 },
-            "legend": { "window": 0.46, "range_mult": 1.34, "refund_mult": 1.45 },
-            "master": { "window": 0.5, "range_mult": 1.42, "refund_mult": 1.6 }
+            "chosim": {
+              "window": 0.35,
+              "range_mult": 1.15,
+              "refund_mult": 1.2
+            },
+            "rare": {
+              "window": 0.38,
+              "range_mult": 1.2,
+              "refund_mult": 1.25
+            },
+            "uniq": {
+              "window": 0.42,
+              "range_mult": 1.26,
+              "refund_mult": 1.35
+            },
+            "legend": {
+              "window": 0.46,
+              "range_mult": 1.34,
+              "refund_mult": 1.45
+            },
+            "master": {
+              "window": 0.5,
+              "range_mult": 1.42,
+              "refund_mult": 1.6
+            }
           }
         }
       ]
@@ -658,16 +1244,32 @@
       "kind": "slash",
       "skill_type": "마무리",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "PIERCE_REAP",
           "params_by_rarity": {
-            "chosim": { "threshold": 3, "per_mark": 3 },
-            "rare":   { "threshold": 3, "per_mark": 3 },
-            "uniq":   { "threshold": 3, "per_mark": 4 },
-            "legend": { "threshold": 2, "per_mark": 4 },
-            "master": { "threshold": 2, "per_mark": 5 }
+            "chosim": {
+              "threshold": 3,
+              "per_mark": 3
+            },
+            "rare": {
+              "threshold": 3,
+              "per_mark": 3
+            },
+            "uniq": {
+              "threshold": 3,
+              "per_mark": 4
+            },
+            "legend": {
+              "threshold": 2,
+              "per_mark": 4
+            },
+            "master": {
+              "threshold": 2,
+              "per_mark": 5
+            }
           }
         }
       ]
@@ -679,16 +1281,27 @@
       "kind": "slash",
       "skill_type": "심도",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "DEEP_CHARGE_MARK",
           "params_by_rarity": {
-            "chosim": { "per_tier": 1 },
-            "rare":   { "per_tier": 1 },
-            "uniq":   { "per_tier": 1 },
-            "legend": { "per_tier": 2 },
-            "master": { "per_tier": 2 }
+            "chosim": {
+              "per_tier": 1
+            },
+            "rare": {
+              "per_tier": 1
+            },
+            "uniq": {
+              "per_tier": 1
+            },
+            "legend": {
+              "per_tier": 2
+            },
+            "master": {
+              "per_tier": 2
+            }
           }
         }
       ]
@@ -700,16 +1313,32 @@
       "kind": "slash",
       "skill_type": "일섬",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "SLASH_EXTEND",
           "params_by_rarity": {
-            "chosim": { "range_mult": 1.2, "width_mult": 1.15 },
-            "rare":   { "range_mult": 1.25, "width_mult": 1.2 },
-            "uniq":   { "range_mult": 1.32, "width_mult": 1.26 },
-            "legend": { "range_mult": 1.4, "width_mult": 1.32 },
-            "master": { "range_mult": 1.5, "width_mult": 1.4 }
+            "chosim": {
+              "range_mult": 1.2,
+              "width_mult": 1.15
+            },
+            "rare": {
+              "range_mult": 1.25,
+              "width_mult": 1.2
+            },
+            "uniq": {
+              "range_mult": 1.32,
+              "width_mult": 1.26
+            },
+            "legend": {
+              "range_mult": 1.4,
+              "width_mult": 1.32
+            },
+            "master": {
+              "range_mult": 1.5,
+              "width_mult": 1.4
+            }
           }
         }
       ]
@@ -721,16 +1350,27 @@
       "kind": "control",
       "skill_type": "패시브",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "CHARGE_ALIGN",
           "params_by_rarity": {
-            "chosim": { "highlight": 1 },
-            "rare":   { "highlight": 1 },
-            "uniq":   { "highlight": 1 },
-            "legend": { "highlight": 1 },
-            "master": { "highlight": 1 }
+            "chosim": {
+              "highlight": 1
+            },
+            "rare": {
+              "highlight": 1
+            },
+            "uniq": {
+              "highlight": 1
+            },
+            "legend": {
+              "highlight": 1
+            },
+            "master": {
+              "highlight": 1
+            }
           }
         }
       ]
@@ -742,16 +1382,32 @@
       "kind": "control",
       "skill_type": "회피",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "Passive",
           "effect": "CHARGE_DASH_CANCEL",
           "params_by_rarity": {
-            "chosim": { "haste_pct": 0.3, "dash_bonus": 0.5 },
-            "rare":   { "haste_pct": 0.35, "dash_bonus": 0.6 },
-            "uniq":   { "haste_pct": 0.42, "dash_bonus": 0.7 },
-            "legend": { "haste_pct": 0.5, "dash_bonus": 0.85 },
-            "master": { "haste_pct": 0.6, "dash_bonus": 1.0 }
+            "chosim": {
+              "haste_pct": 0.3,
+              "dash_bonus": 0.5
+            },
+            "rare": {
+              "haste_pct": 0.35,
+              "dash_bonus": 0.6
+            },
+            "uniq": {
+              "haste_pct": 0.42,
+              "dash_bonus": 0.7
+            },
+            "legend": {
+              "haste_pct": 0.5,
+              "dash_bonus": 0.85
+            },
+            "master": {
+              "haste_pct": 0.6,
+              "dash_bonus": 1.0
+            }
           }
         }
       ]
@@ -763,16 +1419,37 @@
       "kind": "control",
       "skill_type": "연출",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Kill_via_Slash",
           "effect": "CHARGE_AFTERGLOW",
           "params_by_rarity": {
-            "chosim": { "haste_pct": 0.25, "dash_bonus": 0.4, "gauge_frac": 0.12 },
-            "rare":   { "haste_pct": 0.3, "dash_bonus": 0.45, "gauge_frac": 0.14 },
-            "uniq":   { "haste_pct": 0.38, "dash_bonus": 0.55, "gauge_frac": 0.18 },
-            "legend": { "haste_pct": 0.46, "dash_bonus": 0.65, "gauge_frac": 0.22 },
-            "master": { "haste_pct": 0.56, "dash_bonus": 0.8, "gauge_frac": 0.28 }
+            "chosim": {
+              "haste_pct": 0.25,
+              "dash_bonus": 0.4,
+              "gauge_frac": 0.12
+            },
+            "rare": {
+              "haste_pct": 0.3,
+              "dash_bonus": 0.45,
+              "gauge_frac": 0.14
+            },
+            "uniq": {
+              "haste_pct": 0.38,
+              "dash_bonus": 0.55,
+              "gauge_frac": 0.18
+            },
+            "legend": {
+              "haste_pct": 0.46,
+              "dash_bonus": 0.65,
+              "gauge_frac": 0.22
+            },
+            "master": {
+              "haste_pct": 0.56,
+              "dash_bonus": 0.8,
+              "gauge_frac": 0.28
+            }
           }
         }
       ]
@@ -784,16 +1461,464 @@
       "kind": "slash",
       "skill_type": "거합",
       "style_req": "charge",
+      "pool": "style_kit",
       "components": [
         {
           "trigger": "On_Slash_Hit",
           "effect": "PIERCE_THUNDER",
           "params_by_rarity": {
-            "chosim": { "threshold": 2, "per_mark": 3, "radius": 2.5, "max_targets": 2 },
-            "rare":   { "threshold": 2, "per_mark": 3, "radius": 2.6, "max_targets": 2 },
-            "uniq":   { "threshold": 2, "per_mark": 4, "radius": 2.8, "max_targets": 3 },
-            "legend": { "threshold": 2, "per_mark": 4, "radius": 3.0, "max_targets": 3 },
-            "master": { "threshold": 1, "per_mark": 5, "radius": 3.2, "max_targets": 4 }
+            "chosim": {
+              "threshold": 2,
+              "per_mark": 3,
+              "radius": 2.5,
+              "max_targets": 2
+            },
+            "rare": {
+              "threshold": 2,
+              "per_mark": 3,
+              "radius": 2.6,
+              "max_targets": 2
+            },
+            "uniq": {
+              "threshold": 2,
+              "per_mark": 4,
+              "radius": 2.8,
+              "max_targets": 3
+            },
+            "legend": {
+              "threshold": 2,
+              "per_mark": 4,
+              "radius": 3.0,
+              "max_targets": 3
+            },
+            "master": {
+              "threshold": 1,
+              "per_mark": 5,
+              "radius": 3.2,
+              "max_targets": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gather_echo",
+      "name": "집결의 잔향(集結餘響)",
+      "desc": "적을 거두어 쓰러뜨린 자리에 잠시 끌어당기는 자리가 남는다. 안에 든 적은 가운데로 빨려든다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe_Kill",
+          "effect": "SUPPORT_GATHER_FIELD",
+          "params_by_rarity": {
+            "chosim": {
+              "slow_mult": 0.6,
+              "lifetime": 1.0,
+              "radius": 2.4,
+              "drift": 0.7
+            },
+            "rare": {
+              "slow_mult": 0.58,
+              "lifetime": 1.1,
+              "radius": 2.6,
+              "drift": 0.8
+            },
+            "uniq": {
+              "slow_mult": 0.55,
+              "lifetime": 1.2,
+              "radius": 2.8,
+              "drift": 0.9
+            },
+            "legend": {
+              "slow_mult": 0.52,
+              "lifetime": 1.3,
+              "radius": 3.0,
+              "drift": 1.0
+            },
+            "master": {
+              "slow_mult": 0.5,
+              "lifetime": 1.4,
+              "radius": 3.2,
+              "drift": 1.1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dash_afterimage",
+      "name": "질주잔영장(疾走殘影場)",
+      "desc": "회피를 마친 자리에 잠깐 끌어당기는 잔영이 남는다. 짧게 머물다 사라지며, 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Dash",
+          "effect": "SUPPORT_DASH_FIELD",
+          "params_by_rarity": {
+            "chosim": {
+              "slow_mult": 0.62,
+              "lifetime": 0.7,
+              "radius": 2.0,
+              "drift": 0.6
+            },
+            "rare": {
+              "slow_mult": 0.6,
+              "lifetime": 0.75,
+              "radius": 2.1,
+              "drift": 0.7
+            },
+            "uniq": {
+              "slow_mult": 0.57,
+              "lifetime": 0.8,
+              "radius": 2.3,
+              "drift": 0.8
+            },
+            "legend": {
+              "slow_mult": 0.54,
+              "lifetime": 0.9,
+              "radius": 2.5,
+              "drift": 0.9
+            },
+            "master": {
+              "slow_mult": 0.5,
+              "lifetime": 1.0,
+              "radius": 2.7,
+              "drift": 1.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gale_spirit",
+      "name": "질주의 기(疾走氣)",
+      "desc": "회피를 마치면 잠시 발이 빨라진다. 무리를 헤집고 빠져나가기 좋다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Dash",
+          "effect": "SUPPORT_DASH_HASTE",
+          "params_by_rarity": {
+            "chosim": {
+              "move_pct": 0.18,
+              "duration": 2.5
+            },
+            "rare": {
+              "move_pct": 0.2,
+              "duration": 2.6
+            },
+            "uniq": {
+              "move_pct": 0.24,
+              "duration": 2.8
+            },
+            "legend": {
+              "move_pct": 0.28,
+              "duration": 3.0
+            },
+            "master": {
+              "move_pct": 0.34,
+              "duration": 3.2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "vent_dash",
+      "name": "방열질주(放熱疾走)",
+      "desc": "회피할 때마다 달아오른 열기가 살짝 식고 다음 일섬이 조금 빨리 돌아온다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Dash",
+          "effect": "SUPPORT_DASH_VENT",
+          "params_by_rarity": {
+            "chosim": {
+              "gauge_frac": 0.08
+            },
+            "rare": {
+              "gauge_frac": 0.1
+            },
+            "uniq": {
+              "gauge_frac": 0.12
+            },
+            "legend": {
+              "gauge_frac": 0.15
+            },
+            "master": {
+              "gauge_frac": 0.18
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "calm_breath",
+      "name": "잔심의 호흡(殘心呼吸)",
+      "desc": "일섬을 베어낸 뒤 숨을 고르면 열기가 식고 다음 일섬이 조금 빨리 돌아온다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Slash_End",
+          "effect": "SUPPORT_SLASH_VENT",
+          "params_by_rarity": {
+            "chosim": {
+              "gauge_frac": 0.06
+            },
+            "rare": {
+              "gauge_frac": 0.08
+            },
+            "uniq": {
+              "gauge_frac": 0.1
+            },
+            "legend": {
+              "gauge_frac": 0.12
+            },
+            "master": {
+              "gauge_frac": 0.15
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "residual_heat",
+      "name": "여열환수(餘熱還收)",
+      "desc": "일섬으로 적을 베어 쓰러뜨릴 때마다 달아오른 열기가 조금씩 식는다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "SUPPORT_KILL_VENT",
+          "params_by_rarity": {
+            "chosim": {
+              "gauge_frac": 0.05
+            },
+            "rare": {
+              "gauge_frac": 0.06
+            },
+            "uniq": {
+              "gauge_frac": 0.08
+            },
+            "legend": {
+              "gauge_frac": 0.1
+            },
+            "master": {
+              "gauge_frac": 0.12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "soul_magnet",
+      "name": "혼불자석(魂火磁石)",
+      "desc": "일섬으로 적을 쓰러뜨리면 흩어진 혼불이 곧장 끌려온다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "SUPPORT_KILL_MAGNET",
+          "params_by_rarity": {
+            "chosim": {
+              "radius": 4.0
+            },
+            "rare": {
+              "radius": 4.5
+            },
+            "uniq": {
+              "radius": 5.0
+            },
+            "legend": {
+              "radius": 5.5
+            },
+            "master": {
+              "radius": 6.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "harvest_pull",
+      "name": "수확의 인력(收穫引力)",
+      "desc": "칼을 거둘 때마다 주변 혼불이 끌려오고 잠시 더 멀리서도 빨려든다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "iaido",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Sheathe",
+          "effect": "SUPPORT_SHEATHE_MAGNET",
+          "params_by_rarity": {
+            "chosim": {
+              "radius": 4.0,
+              "magnet_mult": 1.6,
+              "duration": 2.0
+            },
+            "rare": {
+              "radius": 4.5,
+              "magnet_mult": 1.7,
+              "duration": 2.0
+            },
+            "uniq": {
+              "radius": 5.0,
+              "magnet_mult": 1.8,
+              "duration": 2.2
+            },
+            "legend": {
+              "radius": 5.5,
+              "magnet_mult": 2.0,
+              "duration": 2.4
+            },
+            "master": {
+              "radius": 6.0,
+              "magnet_mult": 2.2,
+              "duration": 2.6
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mark_accel",
+      "name": "각인의 가속(刻印加速)",
+      "desc": "일섬을 거듭 적중시키면 이따금 표식이 한 겹 더 새겨진다. 표식이 더 빨리 차오른다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Slash_Hit",
+          "effect": "SUPPORT_MARK_ACCEL",
+          "params_by_rarity": {
+            "chosim": {
+              "per_hits": 3,
+              "extra": 1
+            },
+            "rare": {
+              "per_hits": 3,
+              "extra": 1
+            },
+            "uniq": {
+              "per_hits": 2,
+              "extra": 1
+            },
+            "legend": {
+              "per_hits": 2,
+              "extra": 1
+            },
+            "master": {
+              "per_hits": 2,
+              "extra": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dash_mark",
+      "name": "질주표식(疾走標識)",
+      "desc": "회피로 스쳐 지나간 적에게 표식이 한 겹 남는다. 무리를 헤집으며 표식을 흩뿌린다. 피해는 없다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "charge",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Dash",
+          "effect": "SUPPORT_DASH_MARK",
+          "params_by_rarity": {
+            "chosim": {
+              "radius": 1.6,
+              "extra": 1,
+              "max_targets": 3
+            },
+            "rare": {
+              "radius": 1.8,
+              "extra": 1,
+              "max_targets": 3
+            },
+            "uniq": {
+              "radius": 2.0,
+              "extra": 1,
+              "max_targets": 4
+            },
+            "legend": {
+              "radius": 2.2,
+              "extra": 1,
+              "max_targets": 4
+            },
+            "master": {
+              "radius": 2.4,
+              "extra": 2,
+              "max_targets": 5
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "draw_afterglow",
+      "name": "발도의 여운(拔刀餘韻)",
+      "desc": "일섬으로 적을 베어 쓰러뜨리면 다음 모으기가 빨라지고 더 멀리 꿰뚫으며 일섬의 기운이 돌아온다.",
+      "kind": "support",
+      "skill_type": "보조",
+      "style_req": "charge",
+      "pool": "support",
+      "components": [
+        {
+          "trigger": "On_Kill_via_Slash",
+          "effect": "SUPPORT_KILL_AFTERGLOW",
+          "params_by_rarity": {
+            "chosim": {
+              "haste_pct": 0.2,
+              "dash_bonus": 0.3,
+              "gauge_frac": 0.1
+            },
+            "rare": {
+              "haste_pct": 0.24,
+              "dash_bonus": 0.35,
+              "gauge_frac": 0.12
+            },
+            "uniq": {
+              "haste_pct": 0.3,
+              "dash_bonus": 0.45,
+              "gauge_frac": 0.15
+            },
+            "legend": {
+              "haste_pct": 0.38,
+              "dash_bonus": 0.55,
+              "gauge_frac": 0.18
+            },
+            "master": {
+              "haste_pct": 0.48,
+              "dash_bonus": 0.7,
+              "gauge_frac": 0.22
+            }
           }
         }
       ]
