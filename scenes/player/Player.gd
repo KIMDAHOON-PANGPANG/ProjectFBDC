@@ -33,6 +33,8 @@ const _BoonSystemScript := preload("res://scripts/managers/BoonSystem.gd")
 const _BoonExecutorScript := preload("res://scripts/managers/BoonExecutor.gd")
 ## 머리 위 상태 아이콘 스트립(굶주림 표시 — 적과 동일 공용 컴포넌트).
 const _StatusStripScript := preload("res://scenes/ui/StatusIconStrip3D.gd")
+## M9-T5 머리 위 퍼펙트 타이밍 바 — 코드 인스턴스(HeatBar3D 패턴).
+const _TimingBar3DScript := preload("res://scenes/ui/TimingBar3D.gd")
 
 # ── 납도(On_Sheathe) — RB 로 거둬 표식 정산(1차값 코드 상수, 공유 .tres 변형 금지) ──
 ## 정산 반경(m) — 이 안의 표식 적만 거둔다. BoonExecutor 도 동일값 보유(정산 주체).
@@ -207,6 +209,8 @@ var _charge_haste_mult: float = 0.0
 ## 발도완극(CHARGE_PERFECT) — 풀차지 후 오버차지 자동발사 윈도우 연장(퍼펙트 릴리즈) + 깊이/사거리 보강.
 var _charge_perfect_has: bool = false
 var _charge_perfect_window: float = 0.0
+## M9-T5 거합(IAIDO_PERFECT) perfect 윈도우(초) — 타이밍 바 표시용 읽기 캐시. 보유 시 _sync_iaido_mark_cap 가 세팅, 미보유=0(비활성).
+var _iaido_perfect_window: float = 0.0
 ## 다음 일섬 1발에 주입할 표식 깊이(SlashAttack.charge_mark_depth). _fire_slash 가 세팅·소비(1발 한정).
 var _charge_pending_mark_depth: int = 0
 ## 발도회천(CHARGE_DASH_CANCEL) — 차징 중 회피 시 재차지 가속/대시 가산. 보유 시 add_boon 에서 세팅.
@@ -361,6 +365,7 @@ func _ready() -> void:
 	_charge_pending_mark_depth = 0
 	_charge_perfect_has = false
 	_charge_mark_depth_per_tier = 0
+	_iaido_perfect_window = 0.0
 	# M9-S12 표식 cap 리셋 — 스타일 미선택 기본 5(미들·회귀 0). 스타일 카드 픽 시 refresh 가 3/5/7 로 세팅.
 	_mark_cap = 5
 	_boon_executor = _BoonExecutorScript.new()
@@ -375,6 +380,11 @@ func _ready() -> void:
 		strip.follow_offset = Vector3(0, 2.0, 0)
 	add_child(strip)
 	_status_strip = strip
+
+	# M9-T5 머리 위 타이밍 바 — HeatBar3D 보다 위(follow_offset y=2.25). PC 한정·표시 전용.
+	var tbar := _TimingBar3DScript.new()
+	tbar.name = "TimingBar3D"
+	add_child(tbar)
 
 func _physics_process(delta: float) -> void:
 	# 열관리(일섬 단일) — 탈진 타이머 + 지수 감소.
@@ -1763,6 +1773,7 @@ func _sync_iaido_mark_cap() -> void:
 	if _nuki_active or _charge_active:
 		return  # 연격/충전 refresh 가 이미 cap 세팅(상호배타 — 덮지 않음).
 	var cap: int = 5  # 미선택/유니버설 기본 = 미들 5(회귀 0).
+	_iaido_perfect_window = 0.0
 	for boon in active_boons:
 		if not (boon is Dictionary):
 			continue
@@ -1777,6 +1788,8 @@ func _sync_iaido_mark_cap() -> void:
 				continue
 			if String(comp.get("effect", "")) == "STYLE_IAIDO":
 				cap = max(1, int(p.get("mark_cap", 5)))  # 납도류 = 미들 5.
+			if String(comp.get("effect", "")) == "IAIDO_PERFECT":
+				_iaido_perfect_window = max(_iaido_perfect_window, float(p.get("perfect_window", 0.25)))
 	_mark_cap = cap
 
 ## 현재 차징 프랙(0~1). AIMING 이 아니면 0.
@@ -1795,6 +1808,46 @@ func get_charge_tier() -> int:
 	if f < _charge_tier_hi:
 		return 1
 	return 2
+
+
+## M9-T5 — 현재 활성 발도술의 '퍼펙트 입력 윈도우'를 통합 노출(읽기 전용, 게임플레이 무영향).
+## 머리 위 TimingBar3D 가 폴링. active=false 면 바 숨김.
+## frac: 윈도우 진행도/잔여(0~1). sweet_lo~sweet_hi: 같은 frac 축에서 '퍼펙트존' 구간(여기서 누르면 퍼펙트).
+## label: "거합"/"박자"/"완극"/"".
+func get_timing_window() -> Dictionary:
+	var out := {"active": false, "frac": 0.0, "sweet_lo": 0.0, "sweet_hi": 1.0, "label": ""}
+	# 1) 연격류 박자가속 — 재입력 윈도우 활성 중. frac=잔여(1→0), sweet=후반 sweet_frac 구간([0, sweet_frac]).
+	if _nuki_active and _nuki_window_t > 0.0 and _nuki_window_total > 0.0:
+		out.active = true
+		out.frac = clampf(_nuki_window_t / _nuki_window_total, 0.0, 1.0)
+		out.sweet_lo = 0.0
+		out.sweet_hi = clampf(_nuki_sweet_frac, 0.0, 1.0)
+		out.label = "박자"
+		return out
+	# 2) 충전류 발도완극 — 풀차지 후 오버차지 릴리즈 윈도우. _charge_perfect_has + AIMING + 풀차지일 때만.
+	if _charge_active and _charge_perfect_has and _state == State.AIMING and _charge_t >= data.max_charge_time and _charge_perfect_window > 0.0:
+		var auto_hold: float = max(data.instant_overcharge_hold, _charge_perfect_window)
+		if auto_hold > 0.0:
+			out.active = true
+			# frac = 잔여(1→0): 오버차지가 auto_hold 에 가까울수록 줄어듦.
+			out.frac = clampf(1.0 - _overcharge_t / auto_hold, 0.0, 1.0)
+			# 퍼펙트존 = 윈도우 전체(풀차지 후 자동발사 전 릴리즈면 퍼펙트). 전 구간 강조.
+			out.sweet_lo = 0.0
+			out.sweet_hi = 1.0
+			out.label = "완극"
+			return out
+	# 3) 납도류 거합 — 마지막 일섬 착지 직후 perfect_window 안. frac=잔여(1→0), 전 구간이 퍼펙트존.
+	if _iaido_perfect_window > 0.0 and last_slash_end_msec > 0:
+		var dt_ms: int = Time.get_ticks_msec() - last_slash_end_msec
+		var win_ms: int = int(round(_iaido_perfect_window * 1000.0))
+		if dt_ms >= 0 and dt_ms <= win_ms and win_ms > 0:
+			out.active = true
+			out.frac = clampf(1.0 - float(dt_ms) / float(win_ms), 0.0, 1.0)
+			out.sweet_lo = 0.0
+			out.sweet_hi = 1.0
+			out.label = "거합"
+			return out
+	return out
 
 
 ## 발도회천(CHARGE_DASH_CANCEL) — 차징(AIMING) 중 회피 입력이면 차지를 버리고 회피한다.
