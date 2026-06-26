@@ -308,13 +308,6 @@ func _on_sheathe(_ctx: Dictionary) -> void:
 		_sheathe_slowmo(is_perfect)
 		_sheathe_zoom(is_perfect)
 
-	# ── M9-S7 baseline④: 거합 추격 윈도우 — 이번 납도가 처치(ON_SHEATHE_KILL 1회 이상)를 냈으면
-	# Player 에 짧은 추격 윈도우(0.4s)를 1회 연다. 1차 정산이 적을 죽였을 때만(executed_pts 비어있지 않음
-	# = 1차 만개 처형 발생, 또는 _sheathe_kill_count>0 = 연쇄/신규카드 처형 발생). _on_sheathe 끝에서 1회만
-	# 호출해 다중 오픈 방지. open_sheathe_follow 가 _sheathe_follow_used 면 재오픈 거부(추격 1회 cap·무한 방지). ──
-	if (_sheathe_kill_count > 0 or not executed_pts.is_empty()) and _player != null \
-			and is_instance_valid(_player) and _player.has_method("open_sheathe_follow"):
-		_player.call("open_sheathe_follow")
 
 
 ## 거합 perfect 판정 — 마지막 일섬 착지 후 window(s) 이내 납도인가.

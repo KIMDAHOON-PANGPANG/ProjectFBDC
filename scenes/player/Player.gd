@@ -126,13 +126,6 @@ var boon_haste_charge_mult: float = 0.0
 var boon_dash_dist_bonus: float = 0.0
 ## 회피 스택 충전 시간 배수(중립 base 스탯, 기본 1.0). 작을수록 빨리 충전.
 var evade_refill_mult: float = 1.0
-# ── M9-S7 baseline④: 거합 추격 윈도우(코드 상수·항상 on) ──
-## 추격 윈도우 잔여(초). 납도가 처치를 내면 open_sheathe_follow 가 0.4 로 세팅, _physics_process 가 깎음.
-## > 0 동안 RB(slash) 재입력 시 납도 쿨 무시하고 즉시 추격 납도 1회.
-var _sheathe_follow_t: float = 0.0
-## 추격 1회 cap — 추격 납도가 또 추격 윈도우를 열지 못하게(open_sheathe_follow 가 used 면 return).
-## 일반 납도 시작 시에만 false 로 리셋. ★무한 추격 방지.
-var _sheathe_follow_used: bool = false
 # ── M9-S7 폭심 충전(EPICENTER_OVERCHARGE): 다음 일섬 1발 대버스트 예약(런타임 변수·런마다 리셋) ──
 ## 예약된 다음 일섬 사거리/폭 배수 + 열 환급 비율. _fire_slash 가 1발 소비 후 즉시 1.0/0 리셋.
 var boon_next_slash_range_mult: float = 1.0
@@ -394,10 +387,6 @@ func _physics_process(delta: float) -> void:
 	# 납도(RB) 쿨다운.
 	if _sheathe_cd_t > 0.0:
 		_sheathe_cd_t -= delta
-	# M9-S7 거합 추격 윈도우 — 미입력 시 시간 경과로 닫힘(자동 발동 0). _sheathe_follow_used 는
-	# 다음 일반 납도 시작 시 리셋(추격 1회 cap 유지).
-	if _sheathe_follow_t > 0.0:
-		_sheathe_follow_t -= delta
 	# M9-S10 연격류 연타 윈도우 — 미입력 시 시간 경과로 닫힘. 닫히면 콤보 마무리(자동 정산+리셋).
 	# ★_nuki_active(속발 보유) 일 때만 윈도우가 열려 있으므로, 미보유면 항상 0 = no-op(회귀 0).
 	if _nuki_window_t > 0.0:
@@ -558,35 +547,18 @@ func _check_instant_slash() -> void:
 ## RB(slash 액션) 입력 체크 — 쿨/UI 가드 통과 시 _do_sheathe. IDLE/COOLDOWN 에서만 호출됨
 ## (AIMING 차징·DASHING·EVADING 보호). LB(fire)=일섬과 분리된 입력이라 충돌 없음.
 func _check_sheathe() -> void:
-	# ── M9-S7 거합 추격 윈도우 — 처치 직후 짧은 윈도우 안 RB 재입력이면 쿨 무시 즉시 추격 납도 1회. ──
-	# ★_sheathe_follow_used=true 세팅 → 이 추격 납도가 일으킨 처치로 open_sheathe_follow 가 또 호출돼도
-	#   used 라 재오픈 거부 = 추격 1회 cap(무한 추격 방지). 일반 납도 경로에서만 used 가 false 로 리셋된다.
-	if _sheathe_follow_t > 0.0 and Input.is_action_just_pressed("slash") and not _is_pointer_over_ui():
-		_sheathe_follow_used = true
-		_sheathe_follow_t = 0.0
-		_sheathe_cd_t = 0.0  # 쿨 무시(추격 바이패스).
-		_do_sheathe()
-		return
 	if _sheathe_cd_t > 0.0:
 		return
 	if not Input.is_action_just_pressed("slash"):
 		return
 	if _is_pointer_over_ui():
 		return
-	# 일반(추격 아닌) 납도 시작 — 추격 1회 cap 리셋(이 납도가 처치를 내면 다시 추격 윈도우를 열 수 있게).
-	_sheathe_follow_used = false
 	_do_sheathe()
 
 
-## M9-S7 거합 추격 윈도우 오픈 — BoonExecutor 가 ON_SHEATHE_KILL(처치) 발생 납도 끝에서 1회 호출.
-## 이미 이번 추격 체인에서 한 번 열었으면(used) 재오픈 금지 → 추격은 연속 1회만(무한 방지).
-## 미입력 시 _sheathe_follow_t 가 _physics_process 에서 0 으로 닳아 윈도우가 자동으로 닫힌다(자동 발동 0).
+## 추격 윈도우 제거됨(쿨 단일 게이트). 호환용 no-op.
 func open_sheathe_follow() -> void:
-	if _sheathe_follow_used:
-		return
-	_sheathe_follow_t = 0.4
-	# 칼집 금빛 잔광 더미(선택) — 기존 섬광 재사용.
-	_spawn_sheathe_flash()
+	pass
 
 
 ## 납도 발동 — 짧은 거두기 모션 + 칼집 섬광 더미연출 + ON_SHEATHE 발행(BoonExecutor 가 정산).

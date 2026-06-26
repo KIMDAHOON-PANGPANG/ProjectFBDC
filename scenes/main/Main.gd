@@ -113,6 +113,10 @@ var _skill_viewer: CanvasLayer
 var _selected_cards: Array = []
 ## 레벨업 시 뽑힌 권속 카드 목록 — _on_upgrade_card_selected 에서 rarity 조회용.
 var _pending_boon_cards: Array = []
+## 대기 중 레벨업(new_level)들 — 화면이 1개씩 표시될 때 나머지를 보관.
+var _levelup_queue: Array = []
+## 현재 카드화면 표시 중.
+var _levelup_active: bool = false
 var _exp_system: Node
 var _exp_bar: CanvasLayer
 var _wave_mgr: Node
@@ -1299,8 +1303,7 @@ func _elapsed_seconds() -> float:
 		return float(_wave_mgr.call("elapsed"))
 	return _game_elapsed
 
-## ExpSystem fired leveled_up → pause world, show 3 upgrade cards, wait for
-## a pick, apply it, then resume.
+## ExpSystem fired leveled_up → 큐에 쌓고 아직 화면이 없으면 _show_next_levelup 시작.
 func _on_leveled_up(_new_level: int) -> void:
 	_play_log("레벨업 → Lv %d" % _new_level)
 	if _player != null and is_instance_valid(_player) and _player.has_method("grant_iframe"):
@@ -1308,31 +1311,44 @@ func _on_leveled_up(_new_level: int) -> void:
 		_player.call("grant_iframe", dur)
 	if level_up_screen_scene == null:
 		return
+	_levelup_queue.append(_new_level)
+	if not _levelup_active:
+		_show_next_levelup()
+
+
+## 레벨업 큐를 소비해 화면을 1개씩 표시. 큐 빌 때까지 paused 유지.
+func _show_next_levelup() -> void:
 	if not is_inside_tree():
 		return
 	var tree := get_tree()
 	if tree == null:
 		return
-	# Draw boon cards — if the pool is empty, skip the overlay entirely
-	# (tree stays unpaused, level already incremented by ExpSystem).
-	var owned: Array = []
-	if _player != null and is_instance_valid(_player):
-		for b in _player.get("active_boons"):
-			owned.append(b.get("id", ""))
-	var cards: Array = _BoonSystemScript.draw_boons(3, _new_level, owned)
-	if cards.is_empty():
+	while not _levelup_queue.is_empty():
+		var next_level: int = _levelup_queue.pop_front()
+		var owned: Array = []
+		if _player != null and is_instance_valid(_player):
+			for b in _player.get("active_boons"):
+				owned.append(b.get("id", ""))
+		var cards: Array = _BoonSystemScript.draw_boons(3, next_level, owned)
+		if cards.is_empty():
+			continue
+		_pending_boon_cards = cards
+		tree.paused = true
+		var screen := level_up_screen_scene.instantiate() as CanvasLayer
+		if screen == null:
+			tree.paused = false
+			return
+		add_child(screen)
+		if screen.has_method("show_cards"):
+			screen.call("show_cards", cards)
+		if screen.has_signal("card_selected"):
+			screen.card_selected.connect(_on_upgrade_card_selected, CONNECT_ONE_SHOT)
+		_levelup_active = true
 		return
-	_pending_boon_cards = cards
-	tree.paused = true
-	var screen := level_up_screen_scene.instantiate() as CanvasLayer
-	if screen == null:
+	# 큐 소진 — 재개.
+	_levelup_active = false
+	if tree != null:
 		tree.paused = false
-		return
-	add_child(screen)
-	if screen.has_method("show_cards"):
-		screen.call("show_cards", cards)
-	if screen.has_signal("card_selected"):
-		screen.card_selected.connect(_on_upgrade_card_selected, CONNECT_ONE_SHOT)
 
 func _on_upgrade_card_selected(card_id: String) -> void:
 	# 선택된 권속 카드의 rarity 조회 후 add_boon 호출.
@@ -1343,9 +1359,6 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 			break
 	if not card.is_empty() and _player != null and is_instance_valid(_player):
 		_player.call("add_boon", card_id, String(card.get("rarity", "chosim")))
-	var tree := get_tree()
-	if tree != null:
-		tree.paused = false
 	# 레벨업 직후 — 자기 중심 원형으로 적을 약하게 밀어낸다(피해 없음) + 링 연출.
 	if _player != null and is_instance_valid(_player) and _player.has_method("levelup_pushback"):
 		_player.call("levelup_pushback")
@@ -1354,6 +1367,8 @@ func _on_upgrade_card_selected(card_id: String) -> void:
 	_selected_cards.append({"id": card_id, "name": card_name, "skill_type": String(card.get("skill_type", "")), "desc": String(card.get("desc", "")), "yokai": String(card.get("yokai", "")), "rarity": String(card.get("rarity", ""))})
 	if _skill_viewer != null and _skill_viewer.has_method("refresh"):
 		_skill_viewer.call("refresh", _selected_cards)
+	_levelup_active = false
+	_show_next_levelup()
 
 ## --- Elite death payloads ---
 
