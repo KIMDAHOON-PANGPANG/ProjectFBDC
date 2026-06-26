@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-## 현재 런 카드 목록 반투명 오버레이. Tab 토글 · 정지 없음.
+## 현재 런 카드 목록 반투명 오버레이. Tab 토글 · 열리면 게임 일시정지.
 ## Main/Testplay 가 _on_upgrade_card_selected 마다 refresh(cards) 호출.
 ## layer=70 < PauseOverlay 80 — ESC 메뉴가 위에 그려짐.
 
@@ -20,6 +20,8 @@ var _panel: PanelContainer
 var _list: VBoxContainer
 var _tooltip: PanelContainer
 var _tooltip_label: Label
+var _dim: ColorRect
+var _paused_by_me: bool = false
 
 
 func _ready() -> void:
@@ -31,11 +33,51 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
-		visible = not visible
+		_toggle_view()
 		get_viewport().set_input_as_handled()
 
 
+func _toggle_view() -> void:
+	if visible:
+		_close_view()
+	else:
+		_open_view()
+
+
+func _open_view() -> void:
+	# ESC 메뉴 등 남이 이미 정지 소유 중이면 TAB 무시(충돌 방지).
+	if get_tree().paused and not _paused_by_me:
+		return
+	visible = true
+	if not get_tree().paused:
+		get_tree().paused = true
+		_paused_by_me = true
+
+
+func _close_view() -> void:
+	visible = false
+	if _paused_by_me:
+		get_tree().paused = false
+		_paused_by_me = false
+	# 툴팁도 닫음.
+	if _tooltip != null:
+		_tooltip.visible = false
+
+
+func _exit_tree() -> void:
+	if _paused_by_me and is_inside_tree():
+		get_tree().paused = false
+		_paused_by_me = false
+
+
 func _build() -> void:
+	# 딤 — 전체화면 반투명 검정. _panel 보다 먼저 add_child 해서 가장 아래 레이어.
+	_dim = ColorRect.new()
+	_dim.color = Color(0, 0, 0, 0.5)
+	_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_dim)
+
 	_panel = PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.08, 0.12, 0.82)
@@ -54,11 +96,11 @@ func _build() -> void:
 	_panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "카드 빌드 [TAB]"
+	title.text = "스킬 빌드 [TAB]"
 	title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.55))
 	title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	title.add_theme_constant_override("outline_size", 4)
-	title.add_theme_font_size_override("font_size", 15)
+	title.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(title)
 
 	_list = VBoxContainer.new()
